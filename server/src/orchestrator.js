@@ -109,6 +109,19 @@ async function makePlan(store, task, forced, template) {
 
 /** Deja solo dependencias válidas y sin ciclos (un paso solo depende de pasos anteriores). */
 export function sanitizeDeps(plan) {
+  // Primero ordena para que cada paso quede después de aquellos de los que
+  // depende (el plan puede venir desordenado); los ciclos se rompen en el orden original.
+  const ids = new Set(plan.subtasks.map((s) => s.agentId));
+  const placed = new Set();
+  const remaining = [...plan.subtasks];
+  const ordered = [];
+  while (remaining.length) {
+    const i = remaining.findIndex((s) => (s.dependsOn || []).every((d) => d === s.agentId || !ids.has(d) || placed.has(d)));
+    const [s] = remaining.splice(i === -1 ? 0 : i, 1);
+    ordered.push(s);
+    placed.add(s.agentId);
+  }
+  plan.subtasks = ordered;
   const seen = new Set();
   for (const s of plan.subtasks) {
     s.dependsOn = [...new Set((s.dependsOn || []).filter((d) => seen.has(d) && d !== s.agentId))];

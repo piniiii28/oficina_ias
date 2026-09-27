@@ -29,14 +29,18 @@ export function createApp(store) {
   if (!store.data.agents.length) {
     store.data.agents = structuredClone(DEFAULT_AGENTS);
     seedWelcome(notes);
+    store.data.settings.playbooksSeeded = true;
     store.flush();
-  } else {
-    // Oficinas creadas antes de los manuales: se los agregamos una vez.
+  } else if (!store.data.settings.playbooksSeeded) {
+    // Oficinas creadas antes de los manuales: se los agregamos una sola vez
+    // (si luego el usuario quita uno, no vuelve a aparecer).
     for (const a of store.data.agents) {
       const d = DEFAULT_AGENTS.find((x) => x.id === a.id);
       a.knowledge ||= [];
       if (d && !a.knowledge.some((k) => k.builtin)) a.knowledge.unshift(...structuredClone(d.knowledge));
     }
+    store.data.settings.playbooksSeeded = true;
+    store.save();
   }
 
   // Bóveda .md sincronizada para abrirla en Obsidian.
@@ -109,7 +113,11 @@ export function createApp(store) {
         if (!PROVIDERS[p]?.cli || !v) continue;
         s.cli[p] = { ...s.cli[p] };
         if (v.enabled !== undefined) s.cli[p].enabled = Boolean(v.enabled);
-        if (typeof v.command === 'string') s.cli[p].command = v.command.includes('{prompt}') ? v.command.trim() : s.cli[p].command;
+        // Sin {prompt} el texto va por la entrada estándar; vacío vuelve al comando por defecto.
+        if (typeof v.command === 'string') {
+          if (v.command.trim()) s.cli[p].command = v.command.trim();
+          else delete s.cli[p].command;
+        }
       }
     }
     if (apiKeys) {
@@ -368,8 +376,10 @@ export function createApp(store) {
   app.post('/api/import', (req, res) => {
     const b = req.body || {};
     if (!Array.isArray(b.agents) || !Array.isArray(b.notes)) return res.status(400).json({ error: 'Archivo de respaldo no válido' });
-    const apiKeys = store.data.settings.apiKeys;
-    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...b.settings, apiKeys } };
+    // Las claves y los comandos de las CLIs son de este computador: un respaldo ajeno no debe poder cambiarlos.
+    const { apiKeys, cli } = store.data.settings;
+    const { apiKeys: _k, cli: _c, ...importedSettings } = b.settings || {};
+    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli } };
     store.flush();
     bus.emit('event', { type: 'notes' });
     res.json({ ok: true });

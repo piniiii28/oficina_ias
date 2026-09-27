@@ -36,8 +36,12 @@ export class Vault {
         for (let i = 2; wanted.has(name); i++) name = `${safeName(n.title)} ${i}.md`;
         wanted.set(name, frontmatter(n) + n.content);
       }
+      // Solo borra archivos que escribió la oficina (frontmatter con id de nota);
+      // los que crees tú en Obsidian se respetan.
       for (const f of fs.readdirSync(this.dir)) {
-        if (f.endsWith('.md') && !wanted.has(f)) fs.rmSync(path.join(this.dir, f));
+        if (!f.endsWith('.md') || wanted.has(f)) continue;
+        const file = path.join(this.dir, f);
+        if (/^---\nid: n_/.test(fs.readFileSync(file, 'utf8').slice(0, 64))) fs.rmSync(file);
       }
       for (const [name, body] of wanted) {
         const file = path.join(this.dir, name);

@@ -14,15 +14,15 @@ export function Tasks() {
   const { tasks, agents, reloadTasks, openNote } = useOffice();
   const [openId, setOpenId] = useState<string | null>(null);
   const current = tasks.find((t) => t.id === openId) || tasks[0];
-  // Al lanzar una continuación, se abre la nueva tarea.
-  const [followOf, setFollowOf] = useState<string | null>(null);
+  // Al lanzar una continuación, se abre la nueva tarea (por su id, no por su padre:
+  // la misma tarea puede tener varias continuaciones).
+  const [followId, setFollowId] = useState<string | null>(null);
   useEffect(() => {
-    const child = followOf && tasks.find((t) => t.parentId === followOf);
-    if (child) {
-      setOpenId(child.id);
-      setFollowOf(null);
+    if (followId && tasks.some((t) => t.id === followId)) {
+      setOpenId(followId);
+      setFollowId(null);
     }
-  }, [tasks, followOf]);
+  }, [tasks, followId]);
   const agent = (id: string) => agents.find((a) => a.id === id);
 
   return (
@@ -39,14 +39,14 @@ export function Tasks() {
         ))}
       </aside>
       {!current && <div className="empty">Aquí verás el plan del cerebro, el aporte de cada IA y la respuesta integrada.</div>}
-      {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} onFollow={() => setFollowOf(current.id)} parent={tasks.find((t) => t.id === current.parentId)} onOpen={setOpenId} />}
+      {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} onFollow={setFollowId} parent={tasks.find((t) => t.id === current.parentId)} onOpen={setOpenId} />}
     </div>
   );
 }
 
 function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen }: {
   task: Task;
-  onFollow: () => void;
+  onFollow: (id: string) => void;
   parent?: Task;
   onOpen: (id: string) => void;
   agent: (id: string) => ReturnType<typeof useOffice>['agents'][number] | undefined;
@@ -103,7 +103,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
   );
 }
 
-function FollowUp({ task, onSent }: { task: Task; onSent: () => void }) {
+function FollowUp({ task, onSent }: { task: Task; onSent: (id: string) => void }) {
   const [text, setText] = useState('');
   const { toast } = useOffice();
   return (
@@ -113,9 +113,9 @@ function FollowUp({ task, onSent }: { task: Task; onSent: () => void }) {
       <div className="chat-input">
         <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ej.: Hazlo más corto y agrega un presupuesto…" />
         <button className="btn btn--primary" disabled={!text.trim()} onClick={async () => {
-          await api.runTask(text.trim(), undefined, task.id);
+          const { id } = await api.runTask(text.trim(), undefined, task.id);
           setText('');
-          onSent();
+          onSent(id);
           toast('🔁 El equipo retoma la tarea');
         }}>Continuar</button>
       </div>

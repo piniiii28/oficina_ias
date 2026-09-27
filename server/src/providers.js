@@ -217,9 +217,12 @@ async function callGemini(apiKey, model, system, messages, onDelta) {
   return text;
 }
 
-/** Protege un texto para cmd.exe (sin saltos de línea ni expansiones). */
+/**
+ * Protege un texto para cmd.exe: dentro de comillas dobles & | < > ^ son
+ * literales; solo hay que evitar saltos de línea, comillas y la expansión %VAR%.
+ */
 function winQuote(text) {
-  return `"${text.replace(/\r?\n/g, ' ').replace(/"/g, '""').replace(/%/g, ' por ciento').replace(/[\^&|<>!]/g, ' ')}"`;
+  return `"${text.replace(/\r?\n/g, ' ').replace(/"/g, "'").replace(/%/g, ' por ciento ')}"`;
 }
 
 /** Divide un comando en argumentos respetando comillas; {prompt} va como un solo argumento. */
@@ -242,9 +245,17 @@ function callCli(settings, provider, system, messages, onDelta) {
   // Si el comando no tiene {prompt}, el prompt se envía por la entrada estándar.
   const viaArg = command.includes('{prompt}');
   const win = process.platform === 'win32';
-  const argPrompt = viaArg && win ? winQuote(prompt) : prompt;
-  const [cmd, ...args] = splitCommand(command, argPrompt);
   fs.mkdirSync(CLI_DIR, { recursive: true });
+  // cmd.exe acepta ~8 mil caracteres y Linux ~128 mil por argumento: si el
+  // prompt es más largo, va a un archivo que la herramienta lee.
+  let argText = prompt;
+  if (viaArg && (prompt.length > (win ? 6000 : 100000) || (win && /\r?\n/.test(prompt) && prompt.length > 1500))) {
+    const file = path.join(CLI_DIR, `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`);
+    fs.writeFileSync(file, prompt);
+    argText = `Lee las instrucciones completas en el archivo ${path.basename(file)} de esta carpeta y respóndelas.`;
+  }
+  const argPrompt = viaArg && win ? winQuote(argText) : argText;
+  const [cmd, ...args] = splitCommand(command, argPrompt);
   return new Promise((resolve, reject) => {
     // En Windows las CLIs de npm son .cmd y requieren la consola.
     const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: process.env });
