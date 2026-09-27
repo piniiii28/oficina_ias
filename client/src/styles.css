@@ -872,3 +872,13 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .ollama-servers { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
 .ollama-servers h3 { margin: 4px 0; }
 .grant-list li .row.small { margin-top: 4px; flex-wrap: wrap; gap: 4px 12px; }
+
+/* Imágenes generadas */
+.md img, .markdown img { max-width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border); display: block; margin: 8px 0; }
+.image-services { display: grid; gap: 8px; margin: 10px 0; }
+.image-service { display: flex !important; flex-direction: row !important; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.image-service.on { border-color: var(--accent, #a78bfa); background: color-mix(in srgb, var(--accent, #a78bfa) 8%, transparent); }
+.image-service input { margin-top: 4px; width: auto !important; flex: none; }
+.image-service > span { flex: 1; text-align: left; }
+.image-preview { max-width: 100%; border-radius: 12px; margin-top: 10px; border: 1px solid var(--border); }
+.row .grow { flex: 1; min-width: 0; }

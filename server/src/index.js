@@ -12,6 +12,7 @@ import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
 import { addNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { IMAGE_SERVICES, generateImage, imageService, imagesDir, saveImage } from './images.js';
 import { MCP_SERVICES, mcpAdd, mcpLoginCommand, mcpRemove, mcpStatus } from './mcpServices.js';
 import { busyNow, ollamaModelsFor, ollamaPull, ollamaServer, ollamaServers, ollamaTags, hasModel, syncModels } from './ollama.js';
 import { requestAccess } from './access.js';
@@ -206,6 +207,8 @@ export function createApp(store) {
     delete rest.printer; // el código de acceso de la impresora no sale del servidor
     delete rest.nodes; // ni los códigos de enlace de los nodos
     delete rest.users; // las contraseñas (cifradas) tampoco
+    const img = rest.images || {};
+    rest.images = { service: img.service || null, enabled: img.enabled !== false, cloudflareAccount: img.cloudflareAccount || '', cloudflareToken: Boolean(img.cloudflareToken), pollinationsKey: Boolean(img.pollinationsKey), active: imageService(store.data.settings) || null };
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
     return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, onlyLive: rest.onlyLive !== false, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
@@ -276,6 +279,18 @@ export function createApp(store) {
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (req.body?.onlyLive !== undefined) s.onlyLive = Boolean(req.body.onlyLive);
+    if (req.body?.images && typeof req.body.images === 'object') {
+      const b = req.body.images;
+      const img = (s.images ||= {});
+      if (b.service !== undefined) img.service = IMAGE_SERVICES[b.service] ? b.service : null;
+      if (b.enabled !== undefined) img.enabled = Boolean(b.enabled);
+      if (b.cloudflareAccount !== undefined) img.cloudflareAccount = String(b.cloudflareAccount).trim().slice(0, 64);
+      // Las claves solo se cambian si llegan escritas (vacías = se conservan; null = se borran).
+      for (const k of ['cloudflareToken', 'pollinationsKey']) {
+        if (b[k] === null) delete img[k];
+        else if (typeof b[k] === 'string' && b[k].trim()) img[k] = b[k].trim();
+      }
+    }
     if (req.body?.headsReview !== undefined) s.headsReview = Boolean(req.body.headsReview);
     if (req.body?.ollamaNode !== undefined) {
       if (req.body.ollamaNode && !(s.nodes || []).some((n) => n.id === req.body.ollamaNode)) return res.status(400).json({ error: 'Ese nodo no existe' });
@@ -1399,6 +1414,32 @@ export function createApp(store) {
     res.json({ ok: true });
   });
 
+  // --- Imágenes generadas por las IAs ---
+  app.get('/api/images', (_req, res) => {
+    const dir = imagesDir(store.dir);
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^img-[\w-]+\.(jpg|png)$/.test(f)).sort().reverse().slice(0, 60) : [];
+    res.json({ services: IMAGE_SERVICES, active: imageService(store.data.settings) || null, files });
+  });
+  app.get('/api/images/:file', (req, res) => {
+    const f = req.params.file;
+    if (!/^img-[\w-]+\.(jpg|png)$/.test(f)) return res.status(400).json({ error: 'Nombre no válido' });
+    const file = path.join(imagesDir(store.dir), f);
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'No existe' });
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.sendFile(file);
+  });
+  app.post('/api/images', async (req, res) => {
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 2000);
+    if (prompt.length < 3) return res.status(400).json({ error: 'Describe la imagen' });
+    try {
+      const img = await generateImage(store.data.settings, { prompt, formato: req.body?.formato, service: IMAGE_SERVICES[req.body?.service] ? req.body.service : undefined });
+      const file = saveImage(store.dir, img);
+      res.json({ file, url: `/api/images/${file}`, service: img.service });
+    } catch (err) {
+      res.status(502).json({ error: err.message });
+    }
+  });
+
   // --- Taller de Impresión 3D ---
   app.get('/api/cad/detect', async (_req, res) => res.json(await detectCad(store.data.settings)));
   app.get('/api/cad/jobs', (_req, res) => res.json(store.data.cadJobs || []));
@@ -1521,7 +1562,7 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
   // --- Copia de seguridad ---
   app.get('/api/export', (_req, res) => {
     const { settings, sessions: _s, metrics: _m, ...rest } = store.data;
-    const { users: _u, remote: _r, nodes: _n, apiKeys: _omit, accounts: _acc, apiToken: _t, hookToken: _h, blenderToken: _b, printer: _pr, ...safeSettings } = settings;
+    const { users: _u, remote: _r, nodes: _n, apiKeys: _omit, accounts: _acc, apiToken: _t, hookToken: _h, blenderToken: _b, printer: _pr, images: _img, ...safeSettings } = settings;
     res.setHeader('Content-Disposition', 'attachment; filename="oficina-ias-respaldo.json"');
     res.json({ ...rest, settings: safeSettings, exportedAt: new Date().toISOString() });
   });
@@ -1530,9 +1571,9 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
     if (!Array.isArray(b.agents) || !Array.isArray(b.notes)) return res.status(400).json({ error: 'Archivo de respaldo no válido' });
     // Las claves y los comandos de las CLIs son de este computador: un respaldo ajeno no debe poder cambiarlos.
     // Los permisos de carpetas también son de este computador.
-    const { apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote, nodes, ollamaNode } = store.data.settings;
-    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, apiToken: _t, hookToken: _h, blenderToken: _b, automations: _au, printer: _pr, users: _us, remote: _re, nodes: _no, ollamaNode: _on, ...importedSettings } = b.settings || {};
-    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote, nodes, ollamaNode }, sessions: store.data.sessions };
+    const { apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote, nodes, ollamaNode, images } = store.data.settings;
+    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, apiToken: _t, hookToken: _h, blenderToken: _b, automations: _au, printer: _pr, users: _us, remote: _re, nodes: _no, ollamaNode: _on, images: _im, ...importedSettings } = b.settings || {};
+    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote, nodes, ollamaNode, images }, sessions: store.data.sessions };
     store.flush();
     bus.emit('event', { type: 'notes' });
     res.json({ ok: true });

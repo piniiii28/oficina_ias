@@ -1,6 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { AvatarConfig, McpService, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
+import type { AvatarConfig, ImagesInfo, McpService, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
@@ -36,6 +36,7 @@ export function Settings() {
       <ConnectCenter s={s} setS={setS} />
       <CliSection s={s} save={save} />
       <McpSection name="undermind" />
+      <ImagesSection s={s} setS={setS} />
       <AccessSection s={s} setS={setS} />
       <RemoteSection />
       <NodesSection />
@@ -161,6 +162,76 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
         })}
       </div>
     </details>
+  );
+}
+
+/** Imágenes: con qué servicio las generan las IAs. */
+function ImagesSection({ s, setS }: { s: SettingsT; setS: (s: SettingsT) => void }) {
+  const { toast } = useOffice();
+  const [info, setInfo] = useState<ImagesInfo | null>(null);
+  const [form, setForm] = useState({ cloudflareAccount: s.images?.cloudflareAccount || '', cloudflareToken: '', pollinationsKey: '' });
+  const [prompt, setPrompt] = useState('A cozy isometric pixel-art office with small robots working at desks, warm light');
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    api.images().then(setInfo).catch(() => {});
+  }, [s.images?.active]);
+  const img = s.images;
+  if (!info || !img) return null;
+  const save = async (patch: Record<string, unknown>, msg = '🎨 Guardado') => {
+    try {
+      setS(await api.saveSettings({ images: patch }));
+      toast(msg);
+    } catch (err) {
+      toast(`❌ ${(err as Error).message}`);
+    }
+  };
+  const chosen = img.service || img.active || 'pollinations';
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>🎨 Imágenes</h2>
+        <span className={`pill ${img.active && img.enabled ? 'pill--done' : ''}`}>{img.enabled ? `● ${info.services[img.active || 'pollinations']?.label.split(' (')[0]}` : 'Apagado'}</span>
+      </div>
+      <p className="muted small">Cuando le pides una imagen a una IA (por ejemplo a Pixel), la oficina la genera con este servicio y la pone en la respuesta. Se guardan en tu carpeta de datos, en <code>imagenes/</code>.</p>
+      <label className="check"><input type="checkbox" checked={img.enabled} onChange={(e) => save({ enabled: e.target.checked })} /> Las IAs pueden generar imágenes</label>
+      <div className="image-services">
+        {Object.entries(info.services).map(([id, svc]) => (
+          <label key={id} className={`image-service ${chosen === id ? 'on' : ''}`}>
+            <input type="radio" name="img-service" checked={chosen === id} onChange={() => save({ service: id }, `🎨 Ahora se usa ${svc.label.split(' (')[0]}`)} />
+            <span><b>{svc.label}</b> <span className={`tier tier--${svc.tier}`}>{svc.tier === 'gratis' ? 'Gratis' : 'De pago'}</span><br /><small className="muted">{svc.hint} <a href={svc.keyUrl} target="_blank" rel="noreferrer">sacar clave ↗</a></small></span>
+          </label>
+        ))}
+      </div>
+      {chosen === 'cloudflare' && (
+        <div className="grid2">
+          <label>Account ID de Cloudflare<input value={form.cloudflareAccount} onChange={(e) => setForm({ ...form, cloudflareAccount: e.target.value })} placeholder="en dash.cloudflare.com, a la derecha" /></label>
+          <label>Token de API (Workers AI)<input type="password" value={form.cloudflareToken} onChange={(e) => setForm({ ...form, cloudflareToken: e.target.value })} placeholder={img.cloudflareToken ? 'guardado' : 'pega el token'} /></label>
+          <button className="btn btn--primary small" disabled={!form.cloudflareAccount || (!form.cloudflareToken && !img.cloudflareToken)} onClick={() => save({ service: 'cloudflare', cloudflareAccount: form.cloudflareAccount, cloudflareToken: form.cloudflareToken })}>Guardar</button>
+        </div>
+      )}
+      {chosen === 'pollinations' && (
+        <div className="grid2">
+          <label>Clave de Pollinations (opcional, mejor calidad)<input type="password" value={form.pollinationsKey} onChange={(e) => setForm({ ...form, pollinationsKey: e.target.value })} placeholder={img.pollinationsKey ? 'guardada' : 'sin clave funciona igual'} /></label>
+          <button className="btn btn--ghost small" disabled={!form.pollinationsKey} onClick={() => save({ pollinationsKey: form.pollinationsKey })}>Guardar clave</button>
+        </div>
+      )}
+      {(chosen === 'huggingface' || chosen === 'google') && <p className="small muted">Usa la clave de {chosen === 'google' ? 'Gemini' : 'Hugging Face'} que pusiste en «Conectar las IAs».{chosen === 'google' ? ' Necesita facturación activa.' : ''}</p>}
+      <div className="row">
+        <input className="grow" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe una imagen para probar" />
+        <button className="btn btn--primary small" disabled={busy || prompt.trim().length < 3} onClick={async () => {
+          setBusy(true);
+          try {
+            const r = await api.generateImage(prompt, '16:9', chosen);
+            setPreview(r.url);
+          } catch (err) {
+            toast(`❌ ${(err as Error).message}`);
+          }
+          setBusy(false);
+        }}>{busy ? 'Generando…' : '🎨 Probar'}</button>
+      </div>
+      {preview && <img className="image-preview" src={preview} alt="Imagen de prueba" />}
+    </section>
   );
 }
 

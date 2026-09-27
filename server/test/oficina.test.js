@@ -1895,3 +1895,74 @@ test('MiniMax (compatible con OpenAI), el modelo en las CLIs y «Usar mi Gemini 
     process.env.PATH = oldPath;
   }
 });
+
+test('imágenes: la IA escribe <<imagen …>>, la oficina la genera, la guarda y la pone en la respuesta', async () => {
+  const http = await import('node:http');
+  const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
+  const seen = [];
+  let sawGuide = false;
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      seen.push({ url: req.url, auth: req.headers.authorization, body: b });
+      if (req.url.startsWith('/prompt/')) {
+        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+        return res.end(JPG);
+      }
+      if (req.url.includes('/ai/run/')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ result: { image: JPG.toString('base64') }, success: true }));
+      }
+      // Ollama falso: responde pidiendo una imagen.
+      sawGuide ||= JSON.parse(b).messages[0].content.includes('## Imágenes');
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Aquí está:\n<<imagen prompt="black angular game console, studio light" formato="16:9">>\nListo.' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const base = `http://127.0.0.1:${fake.address().port}`;
+  process.env.POLLINATIONS_BASE = base;
+  process.env.CLOUDFLARE_AI_BASE = base;
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call, appBase) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `${base}/v1` };
+      assert.equal((await call('GET', '/api/images')).data.active, 'pollinations', 'sin claves funciona con Pollinations');
+      await call('PUT', '/api/agents/gemini-visual', { provider: 'ollama', model: 'm' });
+      const chat = await call('POST', '/api/agents/gemini-visual/chat', { message: 'hazme una imagen de una consola' });
+      assert.ok(sawGuide, 'las IAs saben que pueden generar imágenes');
+      const m = chat.data.reply.match(/!\[[^\]]*\]\(\/api\/images\/(img-[\w-]+\.jpg)\)/);
+      assert.ok(m, chat.data.reply);
+      assert.ok(!chat.data.reply.includes('<<imagen'));
+      assert.match(decodeURIComponent(seen.find((x) => x.url.startsWith('/prompt/')).url), /width=1344&height=768/);
+      const img = await fetch(`${appBase}/api/images/${m[1]}`);
+      assert.equal(img.status, 200);
+      assert.deepEqual(Buffer.from(await img.arrayBuffer()), JPG);
+      assert.equal((await fetch(`${appBase}/api/images/..%2Foficina.json`)).status, 400);
+
+      // Cloudflare: con Account ID y token, pasa a ser el servicio; el token no sale en los ajustes.
+      const s = (await call('PUT', '/api/settings', { images: { service: 'cloudflare', cloudflareAccount: 'cuenta1', cloudflareToken: 'cf-secreto' } })).data;
+      assert.equal(s.images.active, 'cloudflare');
+      assert.equal(s.images.cloudflareToken, true);
+      assert.ok(!JSON.stringify(s).includes('cf-secreto'));
+      const gen = await call('POST', '/api/images', { prompt: 'a cat', formato: '1:1' });
+      assert.equal(gen.data.service, 'cloudflare');
+      const cf = seen.find((x) => x.url.includes('/ai/run/'));
+      assert.match(cf.url, /accounts\/cuenta1\/ai\/run\/@cf\/black-forest-labs\/flux-1-schnell/);
+      assert.equal(cf.auth, 'Bearer cf-secreto');
+      assert.ok((await call('GET', '/api/images')).data.files.length >= 2);
+
+      // Apagado: las IAs ya no reciben la guía.
+      await call('PUT', '/api/settings', { images: { enabled: false } });
+      sawGuide = false;
+      await call('POST', '/api/agents/gemini-visual/chat', { message: 'otra' });
+      assert.equal(sawGuide, false);
+    });
+  } finally {
+    fake.close();
+    delete process.env.POLLINATIONS_BASE;
+    delete process.env.CLOUDFLARE_AI_BASE;
+  }
+});

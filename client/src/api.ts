@@ -47,6 +47,8 @@ export type Meter = {
 };
 
 export type PrinterState = { estado: string; codigo: string | null; archivo: string | null; progreso: number | null; restante: number | null; capa: number | null; capas: number | null; boquilla: number | null; boquillaMeta: number | null; cama: number | null; camaMeta: number | null; luz: boolean | null; error: string | null };
+export type ImageService = { label: string; tier: string; hint: string; keyUrl: string; model: string };
+export type ImagesInfo = { services: Record<string, ImageService>; active: string | null; files: string[] };
 export type McpService = { name: string; label: string; what: string; url: string; site: string; plan: string; status: 'conectado' | 'falta-sesion' | 'no-agregado' | 'sin-claude'; detail: string; claudeEnabled: boolean; login: string };
 export type ModelSync = { running: boolean; current: string | null; done: string[]; failed: { model: string; error: string }[]; at: string | null; error: string | null };
 export type NodeInfo = {
@@ -182,6 +184,7 @@ export type Settings = {
   grants: Grant[];
   accessEnabled: boolean;
   onlyLive: boolean;
+  images?: { service: string | null; enabled: boolean; cloudflareAccount: string; cloudflareToken: boolean; pollinationsKey: boolean; active: string | null };
   blenderControl?: boolean;
   headsReview?: boolean;
   verifySteps?: boolean;
@@ -346,6 +349,8 @@ export const api = {
   remote: () => req<RemoteInfo>('GET', '/api/remote'),
   setRemote: (enabled: boolean, extraHosts?: string[]) => req<RemoteInfo>('PUT', '/api/remote', { enabled, extraHosts }),
 
+  images: () => req<ImagesInfo>('GET', '/api/images'),
+  generateImage: (prompt: string, formato?: string, service?: string) => req<{ file: string; url: string; service: string }>('POST', '/api/images', { prompt, formato, service }),
   mcpService: (name: string) => req<McpService>('GET', `/api/mcp/${name}`),
   mcpConnect: (name: string) => req<{ ok: boolean; opened: boolean; login: string; already: boolean }>('POST', `/api/mcp/${name}/connect`),
   mcpRemove: (name: string) => req('DELETE', `/api/mcp/${name}`),

@@ -336,6 +336,9 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     });
     synthDelta.end();
     task.final = synth.simulated ? demoSynthesis(prompt, ok, names) : synth.text;
+    // Las imágenes que generaron las IAs no se pierden en el resumen final.
+    const imgs = [...new Set(ok.flatMap((s) => (s.output || '').match(/!\[[^\]]*\]\(\/api\/images\/[\w.-]+\)/g) || []))].filter((m) => !task.final.includes(m.match(/\(([^)]+)\)/)[1]));
+    if (imgs.length) task.final = `${imgs.join('\n\n')}\n\n${task.final}`;
 
     // Revisión de calidad opcional por un verificador antes de entregar.
     const reviewer = settings.reviewFinal

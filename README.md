@@ -209,6 +209,15 @@ La suscripción no es una API, pero sirve en la oficina a través de **Gemini CL
 
 En el perfil de cualquier IA de Claude Code, Codex o Gemini CLI puedes escribir un modelo (por ejemplo `gemini-3.8-flash`); vacío, la herramienta elige.
 
+## 🎨 Imágenes
+
+Las IAs pueden generar imágenes: pídele una a Pixel (o a cualquiera) y aparece en la respuesta. Se guardan en tu carpeta de datos, en `imagenes/`. En **Ajustes → 🎨 Imágenes** eliges el servicio:
+
+- **Pollinations**: funciona sin cuenta (calidad básica).
+- **Cloudflare Workers AI** (recomendado): gratis, unas decenas de imágenes FLUX al día. Necesita tu Account ID y un token con permiso «Workers AI».
+- **Hugging Face**: usa tu clave; los créditos gratis dan para pocas.
+- **Gemini**: la mejor calidad, pero de pago.
+
 ## Undermind: artículos científicos
 
 [Undermind](https://www.undermind.ai) busca a fondo en la literatura científica. No da clave de API: se conecta a tu **Claude Code** por MCP (plan gratis con límite de búsquedas).

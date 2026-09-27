@@ -16,6 +16,7 @@ import { blenderCall, blenderStatus, sceneText } from './blender.js';
 import { runAutomation } from './automations.js';
 import { PRINTER_COMMANDS } from './bambu.js';
 import { printerNow, printerCommand, printerCamera } from './devices.js';
+import { imageGuide, renderImages, IMAGE_RE } from './images.js';
 
 const win = process.platform === 'win32';
 export const MODES = ['leer', 'escribir'];
@@ -384,9 +385,18 @@ async function runAction(store, agent, act, onceGrants) {
  */
 export async function callWithAccess(store, params) {
   const settings = store.data.settings;
-  if (settings.accessEnabled === false) return callModel(settings, params);
+  // Imágenes: cada <<imagen …>> de la respuesta se genera y se pone en su lugar.
+  const withImages = async (r) => {
+    if (r.simulated || !IMAGE_RE.test(r.text)) return r;
+    IMAGE_RE.lastIndex = 0;
+    if (params.agent) agentStatus(params.agent.id, 'working', '🎨 Generando la imagen…');
+    const { text, images } = await renderImages(settings, store.dir, r.text);
+    return { ...r, text, images };
+  };
+  const imgGuide = imageGuide(settings);
+  if (settings.accessEnabled === false) return withImages(await callModel(settings, { ...params, system: params.system + imgGuide }));
   const blender = await blenderStatus(store);
-  const system = params.system + accessGuide(settings, store.dir, blender);
+  const system = params.system + accessGuide(settings, store.dir, blender) + imgGuide;
   const messages = [...params.messages];
   const log = [];
   const onceGrants = [];
@@ -406,7 +416,7 @@ export async function callWithAccess(store, params) {
     params.onDelta?.('\n\n');
   }
   if (log.length) res = { ...res, text: `${res.text}\n\n<details><summary>🔐 Accesos usados (${log.length})</summary>\n\n${log.map((l) => `- ${l}`).join('\n')}\n</details>`, accessLog: log };
-  return res;
+  return withImages(res);
 }
 
 /** Carpetas permitidas para leer, para pasárselas a Claude Code o Gemini CLI. */
