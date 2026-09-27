@@ -163,7 +163,7 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
         <Chibi avatar={a.avatar} size={CHIBI} legs walking={w.moving} seed={idx} state={w.moving ? 'idle' : state} />
       </span>
-      <span className="walker-name">{a.name}{!me && <em> · Nv {levelOf(a)}</em>}</span>
+      <span className="walker-name">{a.name}{!me && <em> · Nv {levelOf(a)} · ⚡{Math.round(w.energy ?? 100)}</em>}</span>
     </button>
   );
 }

@@ -19,6 +19,7 @@ export type Walker = {
   emote?: string;
   running?: boolean;
   greeted?: boolean;
+  energy?: number; // 0-100: se gasta trabajando y se recupera en la cafetería o la azotea
 };
 
 export const TICK_MS = 340;
@@ -89,6 +90,14 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
         const status = live[a.id]?.status || 'idle';
         const busy = status === 'working' || status === 'thinking';
         const seat = seatOf(a.id);
+        w.energy ??= 60 + Math.random() * 40;
+        const resting = !w.goal && (w.floor === 'lobby' || w.floor === 'azotea') && w.reason === 'cafe';
+        if (busy) w.energy -= 0.5;
+        else if (w.moving) w.energy -= 0.12;
+        else if (resting) w.energy += 2.5;
+        else w.energy += 0.05;
+        w.energy = Math.max(0, Math.min(100, w.energy));
+        if (resting && w.energy > 95) w.wait = 0; // recargado: vuelve a sus cosas
 
         // Prioridades: reunión > trabajo > tiempo libre.
         if (seat && w.reason !== 'reunion') w.goal = seat, w.reason = 'reunion';
@@ -115,7 +124,13 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           // Decide qué hacer en su tiempo libre.
           const r = Math.random();
           const cur = floorById.get(w.floor)!;
-          if (w.floor !== home.id && r < 0.5) {
+          if ((w.energy ?? 100) < 25 && w.floor !== 'lobby' && w.floor !== 'azotea') {
+            const dest = floorById.get(Math.random() < 0.7 ? 'lobby' : 'azotea')!;
+            const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
+            w.goal = { floor: dest.id, ...spot };
+            w.reason = 'cafe';
+            w.emote = '🪫';
+          } else if (w.floor !== home.id && r < 0.5 && (w.energy ?? 100) > 60) {
             w.goal = desk || { floor: home.id, ...randomWalkable(home) };
             w.reason = 'volver';
           } else if (w.floor === home.id && r < 0.14) {
@@ -149,8 +164,10 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           const stay = w.reason === 'escritorio' || w.reason === 'reunion';
           if (!stay || (!busy && !seat && w.reason === 'escritorio')) {
             w.goal = null;
-            w.wait = w.reason === 'escritorio' ? 15 + Math.floor(Math.random() * 25) : 4 + Math.floor(Math.random() * 14);
-            w.reason = 'pasear';
+            const tired = w.reason === 'cafe' && (w.energy ?? 100) < 60;
+            w.wait = w.reason === 'escritorio' ? 15 + Math.floor(Math.random() * 25) : tired ? 30 + Math.floor(Math.random() * 20) : 4 + Math.floor(Math.random() * 14);
+            if (tired) w.emote = '☕';
+            if (!tired) w.reason = 'pasear';
           }
           continue;
         }
