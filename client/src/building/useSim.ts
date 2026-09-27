@@ -18,6 +18,7 @@ export type Walker = {
   inElevator: number; // ticks dentro del ascensor
   emote?: string;
   running?: boolean;
+  greeted?: boolean;
 };
 
 export const TICK_MS = 340;
@@ -173,6 +174,21 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
         }
         w.running = hurry > 1;
       }
+      // Te saludan cuando pasas al lado.
+      const me = ws[ME];
+      for (const a of agents) {
+        const w = ws[a.id];
+        if (!w || w.floor !== me.floor || w.inElevator || me.inElevator) continue;
+        if (Math.abs(w.i - me.i) + Math.abs(w.j - me.j) === 1 && !w.greeted && !['working', 'thinking'].includes(live[a.id]?.status || '')) {
+          w.greeted = true;
+          w.goal = null;
+          w.wait = 6;
+          w.moving = false;
+          w.dir = me.i - w.i - (me.j - w.j) >= 0 ? 1 : -1;
+          w.emote = ['👋 ¡Hola!', '¡Hola, jefe! 😄', '¿Te ayudo en algo?', '☕ ¿Un café?'][Math.floor(Math.random() * 4)];
+        } else if (Math.abs(w.i - me.i) + Math.abs(w.j - me.j) > 3) w.greeted = false;
+      }
+
       // Charlas espontáneas entre IAs libres que se cruzan.
       const idle = agents.filter((a) => {
         const w = ws[a.id];
