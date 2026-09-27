@@ -26,6 +26,12 @@ const pts = (list: { x: number; y: number }[]) => list.map((p) => `${p.x},${p.y}
 const up = (p: { x: number; y: number }, z: number) => ({ x: p.x, y: p.y - z });
 
 const LOOK: Record<Furniture['kind'], { z: number; color: string; emoji?: string; size?: number }> = {
+  pool: { z: 4, color: '#22d3ee', emoji: '🏊', size: 22 },
+  bench: { z: 12, color: '#a16207' },
+  gym: { z: 8, color: '#52525b', emoji: '🏋️', size: 24 },
+  telescope: { z: 6, color: '#334155', emoji: '🔭', size: 24 },
+  grill: { z: 22, color: '#27272a', emoji: '🍖', size: 16 },
+  umbrella: { z: 4, color: '#f8fafc', emoji: '⛱️', size: 30 },
   desk: { z: 20, color: '#c8a27a' },
   plant: { z: 12, color: '#a16207', emoji: '🪴', size: 26 },
   coffee: { z: 34, color: '#71717a', emoji: '☕', size: 18 },
@@ -59,7 +65,7 @@ function Box({ f, m }: { f: FloorDef; m: Furniture }) {
       <polygon points={pts([D, C, up(C, z), up(D, z)])} fill={shade(look.color, -0.18)} />
       <polygon points={pts([C, B, up(B, z), up(C, z)])} fill={shade(look.color, -0.3)} />
       <polygon points={pts(top)} fill={look.color} stroke={shade(look.color, -0.35)} strokeWidth="0.6" />
-      {m.kind === 'aquarium' && <polygon points={pts(top)} fill="rgba(255,255,255,0.25)" />}
+      {(m.kind === 'aquarium' || m.kind === 'pool') && <polygon className={m.kind === 'pool' ? 'water' : undefined} points={pts(top)} fill="rgba(255,255,255,0.25)" />}
       {emoji && (
         <text x={cx} y={cy - (m.kind === 'desk' || m.kind === 'reception' || m.kind === 'bigtable' ? 4 : 2)} fontSize={look.size || 18} textAnchor="middle" className={m.kind === 'server' ? 'blink' : undefined}>
           {emoji}
@@ -88,17 +94,19 @@ function Room({ f, night }: { f: FloorDef; night: boolean }) {
   }
   const e = f.elevator;
   const d1 = P(f, 0, e.j), d2 = P(f, 0, e.j + 1);
+  const wallH = f.open ? 22 : WALL;
   return (
     <svg className="iso-room" width={W} height={H} aria-hidden>
       <defs>
         <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#7dd3fc" /><stop offset="1" stopColor="#e0f2fe" /></linearGradient>
         <linearGradient id="night" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#1e1b4b" /><stop offset="1" stopColor="#4338ca" /></linearGradient>
       </defs>
-      <polygon points={pts([left, top, up(top, WALL), up(left, WALL)])} fill={shade(f.wall, -0.12)} />
-      <polygon points={pts([top, right, up(right, WALL), up(top, WALL)])} fill={f.wall} />
-      <polygon points={pts([up(left, WALL), up(top, WALL), up(top, WALL + 8), up(left, WALL + 8)])} fill={shade(f.wall, 0.15)} />
-      <polygon points={pts([up(top, WALL), up(right, WALL), up(right, WALL + 8), up(top, WALL + 8)])} fill={shade(f.wall, 0.2)} />
-      {windows}
+      {f.open && <circle cx={W - 60} cy={30} r={night ? 16 : 22} fill={night ? '#e5e7eb' : '#fde047'} opacity="0.9" />}
+      <polygon points={pts([left, top, up(top, wallH), up(left, wallH)])} fill={shade(f.wall, -0.12)} opacity={f.open ? 0.8 : 1} />
+      <polygon points={pts([top, right, up(right, wallH), up(top, wallH)])} fill={f.wall} opacity={f.open ? 0.8 : 1} />
+      <polygon points={pts([up(left, wallH), up(top, wallH), up(top, wallH + 6), up(left, wallH + 6)])} fill={shade(f.wall, 0.15)} />
+      <polygon points={pts([up(top, wallH), up(right, wallH), up(right, wallH + 6), up(top, wallH + 6)])} fill={shade(f.wall, 0.2)} />
+      {!f.open && windows}
       {/* Ascensor */}
       <polygon points={pts([d1, d2, up(d2, 62), up(d1, 62)])} fill="#9ca3af" stroke="#4b5563" strokeWidth="2" />
       <line x1={(d1.x + d2.x) / 2} y1={(d1.y + d2.y) / 2} x2={(d1.x + d2.x) / 2} y2={(d1.y + d2.y) / 2 - 62} stroke="#4b5563" strokeWidth="2" />
@@ -122,7 +130,7 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
   const msg = state === 'working' ? '⌨️' : state === 'thinking' ? '💭' : state === 'done' ? '✅' : state === 'error' ? '💥' : state === 'talking' ? '💬' : w.emote;
   return (
     <button className={`walker ${w.moving ? 'walker--moving' : ''} ${me ? 'walker--me' : ''}`} style={style} onClick={(e) => { e.stopPropagation(); onClick(); }} title={`${a.name} · ${a.role}`}>
-      {msg && <span className="walker-emote">{msg}</span>}
+      {state === 'talking' && l?.message ? <span className="walker-say">{l.message.slice(0, 60)}{l.message.length > 60 ? '…' : ''}</span> : msg && <span className="walker-emote">{msg}</span>}
       <span className="walker-shadow" />
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
         <Chibi avatar={a.avatar} size={CHIBI} legs walking={w.moving} seed={idx} state={w.moving ? 'idle' : state} />
@@ -156,7 +164,7 @@ function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: 
   const here = agents.filter((a) => walkers[a.id]?.floor === f.id && !walkers[a.id]?.inElevator);
   const working = here.filter((a) => ['working', 'thinking'].includes(live[a.id]?.status || '')).length;
   return (
-    <section className="bfloor" id={`piso-${f.id}`} style={{ ['--wall' as string]: f.wall }}>
+    <section className={`bfloor ${f.open ? 'bfloor--open' : ''}`} id={`piso-${f.id}`} style={{ ['--wall' as string]: f.wall }}>
       <header className="bfloor-head">
         <span className="bfloor-num">{number}</span>
         <strong>{f.emoji} {f.name}</strong>
@@ -217,7 +225,7 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
   const walkers = useSim(active, live, meetings, hidden);
   const hour = new Date().getHours();
   const night = hour < 6 || hour >= 19;
-  const numbers = FLOORS.map((f, k) => (f.id === 'lobby' ? 'PB' : f.id === 'penthouse' ? 'PH' : String(FLOORS.length - 1 - k)));
+  const numbers = FLOORS.map((f, k) => (f.id === 'lobby' ? 'PB' : f.id === 'penthouse' ? 'PH' : f.id === 'azotea' ? 'AZ' : String(FLOORS.length - 1 - k)));
   const inElevator = active.filter((a) => walkers[a.id]?.inElevator);
 
   return (

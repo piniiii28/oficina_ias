@@ -97,10 +97,11 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           if (w.floor !== home.id && r < 0.5) {
             w.goal = desk || { floor: home.id, ...randomWalkable(home) };
             w.reason = 'volver';
-          } else if (w.floor === home.id && r < 0.12) {
-            const lobby = floorById.get('lobby')!;
-            const spot = lobby.hangouts![Math.floor(Math.random() * lobby.hangouts!.length)];
-            w.goal = { floor: 'lobby', ...spot };
+          } else if (w.floor === home.id && r < 0.14) {
+            // Descanso: cafetería del lobby o la azotea.
+            const dest = floorById.get(Math.random() < 0.6 ? 'lobby' : 'azotea')!;
+            const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
+            w.goal = { floor: dest.id, ...spot };
             w.reason = 'cafe';
           } else if (r < 0.35 && desk && w.floor === home.id) {
             w.goal = desk;

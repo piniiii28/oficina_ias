@@ -4,7 +4,7 @@
 export type Furniture = {
   i: number;
   j: number;
-  kind: 'desk' | 'plant' | 'coffee' | 'sofa' | 'shelf' | 'board' | 'server' | 'easel' | 'table' | 'vending' | 'reception' | 'arcade' | 'globe' | 'cabinet' | 'bigtable' | 'piano' | 'aquarium';
+  kind: 'pool' | 'bench' | 'gym' | 'telescope' | 'grill' | 'umbrella' | 'desk' | 'plant' | 'coffee' | 'sofa' | 'shelf' | 'board' | 'server' | 'easel' | 'table' | 'vending' | 'reception' | 'arcade' | 'globe' | 'cabinet' | 'bigtable' | 'piano' | 'aquarium';
   w?: number; // ancho en casillas (eje i)
   h?: number; // fondo en casillas (eje j)
   label?: string;
@@ -24,11 +24,26 @@ export type FloorDef = {
   desks: { i: number; j: number }[]; // cada escritorio; el asiento está en (i, j - 1)
   elevator: { i: number; j: number }; // casilla frente a la puerta del ascensor
   hangouts?: { i: number; j: number }[]; // lugares preferidos para pasear
+  open?: boolean; // al aire libre: barandas en vez de paredes
 };
 
 const deskRow = (j: number, from: number, n: number, gap = 2) => Array.from({ length: n }, (_, k) => ({ i: from + k * gap, j }));
 
 export const FLOORS: FloorDef[] = [
+  {
+    id: 'azotea', name: 'Azotea · Jardín, gimnasio y piscina', emoji: '🌤️',
+    cols: 12, rows: 6, floorA: '#3f7d3a', floorB: '#4a8c44', wall: '#94a3b8', open: true,
+    desks: [],
+    furniture: [
+      { i: 7, j: 2, kind: 'pool', w: 3, h: 2 },
+      { i: 1, j: 0, kind: 'gym' }, { i: 2, j: 0, kind: 'gym' },
+      { i: 0, j: 5, kind: 'bench', w: 2 }, { i: 11, j: 0, kind: 'telescope' },
+      { i: 4, j: 0, kind: 'grill' }, { i: 11, j: 5, kind: 'umbrella' },
+      { i: 5, j: 5, kind: 'plant' }, { i: 0, j: 0, kind: 'plant' }, { i: 9, j: 0, kind: 'plant' },
+    ],
+    elevator: { i: 0, j: 3 },
+    hangouts: [{ i: 1, j: 1 }, { i: 2, j: 1 }, { i: 6, j: 3 }, { i: 10, j: 1 }, { i: 1, j: 4 }, { i: 10, j: 5 }, { i: 4, j: 1 }],
+  },
   {
     id: 'penthouse', name: 'Penthouse del Cerebro', emoji: '🧠', department: 'direccion',
     cols: 10, rows: 6, floorA: '#3d2f5c', floorB: '#4a3a6e', wall: '#7c5cc4',
