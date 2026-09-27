@@ -10,11 +10,28 @@ export function seedWelcome(notes) {
 Soy **Claude**, el cerebro central. Coordino a más de 25 IAs especializadas.
 
 - Escríbeme una tarea en [[Cómo pedir tareas]] y reparto el trabajo.
+- Recorre el [[Edificio de la oficina]]: 9 pisos donde el equipo vive y trabaja.
+- Organiza proyectos en el **Tablero** y reúne a varias IAs en **Reuniones**.
 - Todo lo que hacemos se guarda como notas conectadas: mira el [[Grafo de ideas]].
 - Cada IA puede aprender: revisa [[Entrenar a una IA]].
 - Para respuestas reales, pon tus claves en [[Conectar las IAs]].
 
 #guia #inicio`,
+  });
+  notes.create({
+    title: 'Edificio de la oficina',
+    type: 'nota',
+    tags: ['guia'],
+    content: `El edificio es estilo Habbo:
+
+- **Azotea**: jardín, gimnasio y piscina (con clima).
+- **Penthouse**: la oficina de Claude.
+- **Pisos 6 a 1**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, Personas.
+- **Planta baja**: lobby, cafetería y la mesa de reuniones.
+
+Haz clic en una baldosa para mover tu avatar o en un mueble para usarlo. Pasa el mouse sobre una IA para ver qué hace y su energía; haz clic para hablar con ella. Usa el botón 🎨 de cada piso para cambiar su skin y 📹 para la cámara automática.
+
+Volver a [[Bienvenida a la Oficina]] #guia`,
   });
   notes.create({
     title: 'Cómo pedir tareas',
@@ -24,7 +41,7 @@ Soy **Claude**, el cerebro central. Coordino a más de 25 IAs especializadas.
 
 > Crea un plan de negocio para una cafetería con app de pedidos y campaña en Instagram.
 
-El cerebro elige a los especialistas (estrategia, código, marketing…), trabajan en paralelo y al final integro todo. El resultado queda en una nota de tipo *tarea*, enlazada a cada aporte y a las ideas clave.
+El cerebro elige a los especialistas (estrategia, código, marketing…), trabajan en paralelo o en relevos y al final integro todo. También puedes elegir un **flujo** predefinido, adjuntar archivos, pegar enlaces o dictar por voz. El resultado queda en una nota de tipo *tarea*, enlazada a cada aporte y a las ideas clave.
 
 También puedes hacer clic en cualquier IA para hablar con ella directamente.
 
