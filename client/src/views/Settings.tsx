@@ -1,7 +1,7 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
 import type { AvatarConfig, Settings as SettingsT } from '../api';
-import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES } from '../components/Chibi';
+import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
 import { ConnectCenter, CLI_MATCH } from '../components/ConnectCenter';
@@ -283,6 +283,20 @@ function MeSection() {
   return (
     <section className="card">
       <h2>🙋 Tu avatar en el edificio</h2>
+      <label className="check" style={{ marginBottom: 8 }}>
+        Estilo de los avatares{' '}
+        <select defaultValue={avatarStyle()} onChange={(e) => {
+          try {
+            localStorage.setItem('oficina.avatares', e.target.value);
+          } catch {
+            /* sin almacenamiento local */
+          }
+          location.reload();
+        }}>
+          <option value="habbo">Pixel (estilo Habbo)</option>
+          <option value="chibi">Chibi (clásico)</option>
+        </select>
+      </label>
       <p className="muted small">Apareces en el lobby. Haz clic en cualquier baldosa del edificio para caminar hasta allí; si es otro piso, tomas el ascensor.</p>
       <div className="avatar-editor">
         <Chibi avatar={me.avatar} size={90} legs />

@@ -777,3 +777,43 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .blender-live > .row input { flex: 1; min-width: 200px; }
 .blender-reply { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); }
 .blender-live > .row select { width: auto; flex: none; }
+
+/* --- Avatares pixel estilo Habbo --- */
+.habbo { overflow: visible; image-rendering: pixelated; }
+.habbo--walking .habbo-leg-l { animation: habboStep 0.34s steps(2) infinite; }
+.habbo--walking .habbo-leg-r { animation: habboStep 0.34s steps(2) infinite reverse; }
+.habbo--walking .habbo-arm-l, .habbo--walking .habbo-arm-r { animation: habboStep 0.34s steps(2) infinite reverse; }
+.habbo-typing { animation: habboType 0.3s steps(2) infinite; }
+.habbo--talking .habbo-mouth { animation: habboType 0.25s steps(2) infinite; }
+.habbo--done { animation: habboHop 0.5s ease-out 2; }
+.habbo--error { animation: habboShake 0.12s linear 6; }
+.habbo--idle, .habbo--thinking { animation: habboIdle 3s steps(2) infinite; animation-delay: var(--delay); }
+.habbo-think { animation: pulse 1.2s infinite; }
+@keyframes habboStep { 0% { transform: translateY(0); } 100% { transform: translateY(-1.5px); } }
+@keyframes habboType { 0% { transform: translateY(0); } 100% { transform: translateY(1px); } }
+@keyframes habboHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-4px); } }
+@keyframes habboShake { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(1.5px); } }
+@keyframes habboIdle { 0%, 90% { transform: translateY(0); } 95% { transform: translateY(-0.6px); } }
+
+/* --- Edificio continuo estilo Habbo --- */
+.building { background-color: #151024; background-image: radial-gradient(circle at 20% 10%, rgba(99, 102, 241, 0.16), transparent 45%), radial-gradient(circle at 80% 60%, rgba(236, 72, 153, 0.1), transparent 40%); padding: 18px 10px 0; }
+.building--night { background-color: #0d0a18; }
+.blevel { position: relative; margin: 0; }
+.blevel + .blevel, div + div > .blevel { margin-top: -6px; }
+.blevel-stage { position: relative; overflow: visible; }
+.blevel-inner { position: absolute; left: 50%; top: 0; transform-origin: top center; }
+.broom { position: absolute; }
+.broom .bfloor-room { position: absolute; left: 0; top: 0; transform: none; }
+.broom--open { background: none; }
+.broom-sign { position: absolute; z-index: 400; display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border-radius: 6px; background: rgba(27, 19, 32, 0.82); border: 2px solid #1b1320; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); color: #fff; font: 700 11px/1.2 system-ui, sans-serif; white-space: nowrap; transform: translateX(-4px); pointer-events: auto; }
+.broom-sign strong { font-size: 11px; }
+.broom-sign small { color: #d4d4d8; font-weight: 600; }
+.broom-sign .bfloor-num { min-width: 24px; height: 18px; font-size: 10px; }
+.broom-sign .skin-btn { padding: 0 2px; background: none; border: 0; cursor: pointer; font-size: 12px; }
+.broom-sign .bfloor-tv { max-width: 180px; }
+.building .street { margin-top: 6px; }
+.broom { isolation: isolate; }
+.blevel-wrap { position: relative; }
+.blevel + .blevel, div + div > .blevel { margin-top: 0; }
+.broom-sign { transform: skewY(26.565deg); transform-origin: left top; overflow: hidden; background: #2a1d33; border-color: #1b1320; border-radius: 3px; padding: 2px 6px 2px 3px; }
+.broom-sign .bfloor-tv { display: none; }

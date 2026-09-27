@@ -124,6 +124,8 @@ Los nombres, emojis y colores se cambian en **Ajustes → Núcleos del grafo**.
 
 ## El edificio
 
+Es un solo edificio en pixel art (estilo Habbo, con dibujos propios): paredes de madera, ventanales, losas y dos salas por nivel separadas por un vidrio. Cada sala tiene su placa en la fachada. Los avatares también son pixel art, con piezas combinables (pelo, ropa, accesorios y disfraces); si prefieres los chibi de antes, cámbialo en **Ajustes → Tu avatar**.
+
 - **Azotea**: jardín, gimnasio y piscina para los descansos.
 - **Penthouse**: la oficina de Claude, el cerebro central.
 - **Pisos 7 a 2**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, y Personas y Conocimiento.

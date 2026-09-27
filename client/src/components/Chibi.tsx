@@ -1,6 +1,17 @@
 // Avatar chibi en SVG: cabeza grande, cuerpo pequeño y animaciones por estado
 // (reposo, pensando, trabajando, hablando, listo, error).
 import type { AgentState, AvatarConfig } from '../api';
+import { HabboAvatar } from './HabboAvatar';
+
+/** Estilo de los avatares: 'habbo' (pixel art, por defecto) o 'chibi'. */
+export function avatarStyle(): 'habbo' | 'chibi' {
+  try {
+    return localStorage.getItem('oficina.avatares') === 'chibi' ? 'chibi' : 'habbo';
+  } catch {
+    return 'habbo';
+  }
+}
+const STYLE = avatarStyle();
 
 type Props = {
   avatar: AvatarConfig;
@@ -280,7 +291,13 @@ const HELD: Record<string, string> = {
   book: '📘', clipboard: '📋', megaphone: '📣', magnifier: '🔍', pencil: '✏️', whistle: '📯',
 };
 
-export function Chibi({ avatar, state = 'idle', size = 96, legs = false, seed = 0, walking = false }: Props) {
+export function Chibi(props: Props) {
+  // Mismo alto que el chibi con piernas, para que encaje en todas las vistas.
+  if (STYLE === 'habbo') return <HabboAvatar avatar={props.avatar} state={props.state} size={(props.size || 96) * 0.66} walking={props.walking} seed={props.seed} />;
+  return <ChibiSvg {...props} />;
+}
+
+function ChibiSvg({ avatar, state = 'idle', size = 96, legs = false, seed = 0, walking = false }: Props) {
   const { skin, hair, hairStyle, eyes, accessory } = avatar;
   const costume = avatar.costume || 'none';
   const outfit = COSTUME_OUTFIT[costume] || avatar.outfit;

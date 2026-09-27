@@ -201,6 +201,43 @@ export const FLOORS: FloorDef[] = [
   },
 ];
 
+/**
+ * Niveles del edificio, de arriba abajo. Las salas de un mismo nivel quedan una
+ * al lado de la otra (separadas por un vidrio), como un solo edificio grande.
+ */
+export const LEVELS: string[][] = [
+  ['azotea'],
+  ['penthouse', 'codigo'],
+  ['datos', 'creatividad'],
+  ['investigacion', 'negocios'],
+  ['personas', 'impresion3d'],
+  ['lobby'],
+  ['sotano'],
+];
+
+/** Posición de cada sala dentro de su nivel (en píxeles, sin escalar). */
+export function levelPlacement(ids: string[]) {
+  const floors = ids.map((id) => floorById.get(id)!).filter(Boolean);
+  // El vértice del fondo de cada sala sigue la línea de la pared del fondo de la anterior.
+  let tx = 0, ty = 0;
+  const placed = floors.map((f, k) => {
+    if (k > 0) {
+      const prev = floors[k - 1];
+      tx += (prev.cols * TW) / 2;
+      ty += (prev.cols * TH) / 2;
+    }
+    return { f, x: tx - (f.rows * TW) / 2, y: ty - WALL };
+  });
+  const minX = Math.min(...placed.map((p) => p.x)), minY = Math.min(...placed.map((p) => p.y));
+  for (const p of placed) {
+    p.x -= minX;
+    p.y -= minY;
+  }
+  const width = Math.max(...placed.map((p) => p.x + roomSize(p.f).w));
+  const height = Math.max(...placed.map((p) => p.y + roomSize(p.f).h));
+  return { placed, width, height };
+}
+
 /** Asientos alrededor de la mesa de reuniones del lobby. */
 export const MEETING_SEATS = [
   { i: 9, j: 1 }, { i: 10, j: 1 }, { i: 11, j: 2 }, { i: 11, j: 3 }, { i: 10, j: 4 }, { i: 9, j: 4 }, { i: 8, j: 3 },
