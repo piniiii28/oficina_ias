@@ -123,6 +123,16 @@ export function Notes() {
               ⬆️ .md
               <input type="file" accept=".md,.markdown,.txt" multiple hidden onChange={(e) => e.target.files && importFiles(e.target.files)} />
             </label>
+            <label className="btn btn--ghost small" title="Importar una carpeta completa (por ejemplo, tu bóveda de Obsidian)">
+              📁 Carpeta
+              <input type="file" multiple hidden {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={(e) => {
+                const files = [...(e.target.files || [])].filter((f) => /\.(md|markdown)$/i.test(f.name) && !/(^|\/)\.(obsidian|trash)\//.test((f as File & { webkitRelativePath?: string }).webkitRelativePath || ''));
+                const dt = new DataTransfer();
+                files.forEach((f) => dt.items.add(f));
+                if (files.length) importFiles(dt.files);
+                else toast('No encontré archivos .md en esa carpeta');
+              }} />
+            </label>
           </div>
           <select value="" onChange={(e) => {
             const t = TEMPLATES[Number(e.target.value)];
