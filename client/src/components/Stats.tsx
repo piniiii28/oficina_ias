@@ -4,9 +4,11 @@ import { api, type NoteSummary } from '../api';
 import { useOffice } from '../state';
 
 export function Stats() {
-  const { agents, tasks, meetings, notesVersion } = useOffice();
+  const { agents, tasks, meetings, notesVersion, providers } = useOffice();
   const [notes, setNotes] = useState<NoteSummary[]>([]);
-  useEffect(() => { api.notes().then(setNotes); }, [notesVersion]);
+  const [usage, setUsage] = useState<Record<string, { calls: number; inChars: number; outChars: number }>>({});
+  useEffect(() => { api.notes().then(setNotes); api.usage().then(setUsage); }, [notesVersion]);
+  const usageRows = Object.entries(usage).sort((a, b) => b[1].calls - a[1].calls);
 
   const done = tasks.filter((t) => t.status === 'done').length;
   const ideas = notes.filter((n) => n.type === 'idea').length;
@@ -30,6 +32,24 @@ export function Stats() {
         ))}
       </div>
       <div className="ranking">
+        {usageRows.length > 0 && (
+          <>
+            <h3>Uso real por proveedor</h3>
+            <table className="usage">
+              <thead><tr><th>Proveedor</th><th>Llamadas</th><th>Tokens aprox. (entrada / salida)</th></tr></thead>
+              <tbody>
+                {usageRows.map(([p, u]) => (
+                  <tr key={p}>
+                    <td>{providers.find((x) => x.id === p)?.label || p}</td>
+                    <td>{u.calls}</td>
+                    <td>{Math.round(u.inChars / 4).toLocaleString()} / {Math.round(u.outChars / 4).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted small">Estimado (≈4 caracteres por token). Revisa el costo exacto en el panel de cada proveedor. <button className="link" onClick={async () => { await api.resetUsage(); setUsage({}); }}>Reiniciar</button></p>
+          </>
+        )}
         <h3>IAs más activas</h3>
         {!ranking.length && <p className="muted small">Aún nadie ha trabajado. Envía una tarea desde la Oficina.</p>}
         {ranking.map((a) => {

@@ -100,6 +100,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string; at: str
 export type Settings = {
   demoMode: 'auto' | 'always';
   reviewFinal?: boolean;
+  maxTeam?: number;
   maxParallel: number;
   keys: Record<string, { configured: boolean; preview: string | null }>;
   ollamaEnabled: boolean;
@@ -189,6 +190,8 @@ export const api = {
   connect: (connections: Suggestion[]) => req<{ applied: number }>('POST', '/api/graph/connect', { connections }),
 
   testProvider: (id: string) => req<{ ok: boolean; model: string; ms: number; reply: string }>('POST', `/api/providers/${id}/test`, {}),
+  usage: () => req<Record<string, { calls: number; inChars: number; outChars: number }>>('GET', '/api/usage'),
+  resetUsage: () => req('DELETE', '/api/usage'),
   detectClis: () => req<Record<string, string | null>>('GET', '/api/cli/detect'),
   settings: () => req<Settings>('GET', '/api/settings'),
   saveSettings: (s: Record<string, unknown>) => req<Settings>('PUT', '/api/settings', s),

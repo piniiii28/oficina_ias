@@ -70,6 +70,12 @@ function keyFor(settings, provider) {
   return settings.apiKeys?.[provider] || envKey(provider);
 }
 
+// Contador de uso (lo conecta el servidor para guardarlo en disco).
+let usageSink = null;
+export function setUsageSink(fn) {
+  usageSink = fn;
+}
+
 /**
  * Llama a un modelo. Devuelve { text, simulated, provider, model }.
  * messages: [{ role: 'user' | 'assistant', content: string }]
@@ -88,6 +94,8 @@ export async function callModel(settings, { provider, model, system, messages, a
   else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit);
   else if (provider === 'google') text = await callGemini(keyFor(settings, provider), model, system, messages, emit);
   else text = await callOpenAICompatible(provider, keyFor(settings, provider), model, system, messages, settings, emit);
+  const inChars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
+  usageSink?.({ provider, model, calls: 1, inChars, outChars: text.length });
   return { text, simulated: false, provider, model };
 }
 

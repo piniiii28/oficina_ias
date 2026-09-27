@@ -86,6 +86,9 @@ export function Settings() {
               <option value="always">Siempre simular (no gasta créditos)</option>
             </select>
           </label>
+          <label>Máximo de IAs por tarea
+            <input type="number" min={1} max={8} value={s.maxTeam || 5} onChange={(e) => save({ maxTeam: Number(e.target.value) })} />
+          </label>
           <label>IAs trabajando a la vez
             <input type="number" min={1} max={10} value={s.maxParallel} onChange={(e) => save({ maxParallel: Number(e.target.value) })} />
           </label>

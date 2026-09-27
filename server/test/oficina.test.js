@@ -367,3 +367,16 @@ test('resumen del día: nota de diario enlazada a las tareas de hoy', async () =
   assert.equal(n.type, 'diario');
   assert.ok(n.content.includes(`[[${notes.get(t.noteId).title}]]`));
 });
+
+test('uso por proveedor y tamaño máximo del equipo', async () => {
+  const { demoPlan } = await import('../src/demo.js');
+  const plan = demoPlan('código react pruebas marketing seo finanzas presupuesto investigar diseño ui', DEFAULT_AGENTS, 2);
+  assert.equal(plan.subtasks.length, 2);
+  const { setUsageSink, callModel } = await import('../src/providers.js');
+  const got = [];
+  setUsageSink((u) => got.push(u));
+  await callModel({ apiKeys: {}, cli: { 'cli-claude': { enabled: true, command: 'cat' } } }, { provider: 'cli-claude', model: '', system: 'SYS', messages: [{ role: 'user', content: 'hola' }] });
+  assert.equal(got.length, 1);
+  assert.equal(got[0].calls, 1);
+  setUsageSink(null);
+});

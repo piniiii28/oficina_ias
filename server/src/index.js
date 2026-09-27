@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
-import { PROVIDERS, hasKey, detectClis, cliCommand, callModel } from './providers.js';
+import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink } from './providers.js';
 import { bus, runTask, chatWithAgent, selfTrain, dailySummary } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
@@ -42,6 +42,15 @@ export function createApp(store) {
     store.data.settings.playbooksSeeded = true;
     store.save();
   }
+
+  // Uso por proveedor (llamadas reales, no simuladas).
+  setUsageSink(({ provider, calls, inChars, outChars }) => {
+    const u = ((store.data.usage ||= {})[provider] ||= { calls: 0, inChars: 0, outChars: 0 });
+    u.calls += calls;
+    u.inChars += inChars;
+    u.outChars += outChars;
+    store.save();
+  });
 
   // Bóveda .md sincronizada para abrirla en Obsidian.
   const vault = new Vault(path.join(store.dir, 'boveda'));
@@ -103,10 +112,17 @@ export function createApp(store) {
       res.status(502).json({ ok: false, model, error: err.message });
     }
   });
+  app.get('/api/usage', (_req, res) => res.json(store.data.usage || {}));
+  app.delete('/api/usage', (_req, res) => {
+    store.data.usage = {};
+    store.save();
+    res.json({ ok: true });
+  });
   app.get('/api/cli/detect', async (_req, res) => res.json(await detectClis()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;
-    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal } = req.body || {};
+    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam } = req.body || {};
+    if (maxTeam) s.maxTeam = Math.max(1, Math.min(8, Number(maxTeam)));
     if (reviewFinal !== undefined) s.reviewFinal = Boolean(reviewFinal);
     if (cli && typeof cli === 'object') {
       s.cli ||= {};

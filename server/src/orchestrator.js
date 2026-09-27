@@ -82,12 +82,13 @@ async function makePlan(store, task, forced, template) {
   }
   const brain = brainOf(store);
   const live = settings.demoMode !== 'always' && hasKey(settings, brain.provider);
-  if (!live) return demoPlan(task, pool);
+  const maxTeam = settings.maxTeam || 5;
+  if (!live) return demoPlan(task, pool, maxTeam);
 
   const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}. Habilidades: ${a.skills.join(', ')}`).join('\n');
   const prompt =
     `Tarea del usuario:\n"""${task}"""\n\nEquipo disponible:\n${roster}\n\n` +
-    'Elige entre 2 y 6 especialistas (solo los necesarios) y escribe una instrucción concreta para cada uno. ' +
+    `Elige entre ${Math.min(2, maxTeam)} y ${maxTeam} especialistas (solo los necesarios)`+ ' y escribe una instrucción concreta para cada uno. ' +
     'Si alguien necesita el trabajo de otro (p. ej. el tester necesita el código, el redactor necesita la investigación), ' +
     'indícalo en "dependsOn" con los agentId de los que depende; los demás trabajan en paralelo. ' +
     'Responde SOLO con JSON: {"analysis": "una frase", "subtasks": [{"agentId": "...", "instruction": "...", "dependsOn": []}]}';
@@ -98,12 +99,12 @@ async function makePlan(store, task, forced, template) {
       messages: [{ role: 'user', content: prompt }],
     });
     const plan = parseJson(text);
-    plan.subtasks = (plan.subtasks || []).filter((s) => pool.some((a) => a.id === s.agentId)).slice(0, 8);
+    plan.subtasks = (plan.subtasks || []).filter((s) => pool.some((a) => a.id === s.agentId)).slice(0, maxTeam);
     if (!plan.subtasks.length) throw new Error('Plan vacío');
     return sanitizeDeps(plan);
   } catch (err) {
     console.warn('[cerebro] Plan en vivo falló, uso planificador local:', err.message);
-    return demoPlan(task, pool);
+    return demoPlan(task, pool, maxTeam);
   }
 }
 
