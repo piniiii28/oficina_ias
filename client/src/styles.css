@@ -510,3 +510,8 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
   .elevator-panel { display: none; }
   .building { padding: 0 6px; }
 }
+.bfloor-room { cursor: pointer; }
+.tile-marker { position: absolute; left: 0; top: 0; width: 28px; height: 14px; border: 2px solid #fde047; border-radius: 50%; pointer-events: none; z-index: 2; animation: pulse 1s infinite; }
+.walker--me .walker-name { opacity: 1; background: #f59e0b; color: #111; }
+.walker--me::after { content: '▼'; position: absolute; left: 50%; top: -30px; transform: translateX(-50%); color: #fde047; font-size: 12px; animation: float 1.2s ease-in-out infinite; }
+.walker--me .walker-emote { top: -44px; }

@@ -1,6 +1,7 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { Settings as SettingsT } from '../api';
+import type { AvatarConfig, Settings as SettingsT } from '../api';
+import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
 
@@ -72,6 +73,7 @@ export function Settings() {
       </section>
 
       <CliSection s={s} save={save} />
+      <MeSection />
 
       <section className="card">
         <h2>⚙️ Comportamiento</h2>
@@ -168,6 +170,47 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function MeSection() {
+  const { toast } = useOffice();
+  const [me, setMe] = useState<{ name: string; avatar: AvatarConfig }>(() => {
+    try {
+      const raw = localStorage.getItem('oficina.yo');
+      if (raw) return JSON.parse(raw);
+    } catch {
+      /* sin almacenamiento local */
+    }
+    return { name: 'Tú', avatar: { skin: '#f1c7a5', hair: '#3f2a1d', hairStyle: 'messy', eyes: 'happy', outfit: '#f59e0b', accessory: 'headphones', prop: '🙋', costume: 'none' } };
+  });
+  const set = (k: keyof AvatarConfig, v: string) => setMe({ ...me, avatar: { ...me.avatar, [k]: v } });
+  return (
+    <section className="card">
+      <h2>🙋 Tu avatar en el edificio</h2>
+      <p className="muted small">Apareces en el lobby. Haz clic en cualquier baldosa del edificio para caminar hasta allí; si es otro piso, tomas el ascensor.</p>
+      <div className="avatar-editor">
+        <Chibi avatar={me.avatar} size={90} legs />
+        <div className="grid2">
+          <label>Nombre<input value={me.name} maxLength={16} onChange={(e) => setMe({ ...me, name: e.target.value })} /></label>
+          <label>Pelo <input type="color" value={me.avatar.hair} onChange={(e) => set('hair', e.target.value)} /></label>
+          <label>Ropa <input type="color" value={me.avatar.outfit} onChange={(e) => set('outfit', e.target.value)} /></label>
+          <label>Piel <input type="color" value={me.avatar.skin} onChange={(e) => set('skin', e.target.value)} /></label>
+          <label>Peinado<select value={me.avatar.hairStyle} onChange={(e) => set('hairStyle', e.target.value)}>{HAIR_STYLES.map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label>Ojos<select value={me.avatar.eyes} onChange={(e) => set('eyes', e.target.value)}>{EYE_STYLES.map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label>Accesorio<select value={me.avatar.accessory} onChange={(e) => set('accessory', e.target.value)}>{ACCESSORIES.map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label>Skin<select value={me.avatar.costume || 'none'} onChange={(e) => set('costume', e.target.value)}>{Object.entries(COSTUMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        </div>
+      </div>
+      <button className="btn btn--primary" onClick={() => {
+        try {
+          localStorage.setItem('oficina.yo', JSON.stringify({ ...me, name: me.name.trim() || 'Tú' }));
+          toast('🙋 Avatar guardado');
+        } catch {
+          toast('Tu navegador no permite guardar el avatar');
+        }
+      }}>Guardar mi avatar</button>
     </section>
   );
 }

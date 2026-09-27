@@ -20,6 +20,8 @@ export type Walker = {
 };
 
 export const TICK_MS = 340;
+export const ME = '__yo';
+const CHATS = ['¡Hola!', '¿Café?', 'Buen trabajo 👏', 'Jaja 😂', '¿Viste la tarea nueva?', '¡Qué idea!', 'Te paso el dato', '🤝'];
 const EMOTES = ['☕', '💭', '🎵', '💡', '😄', '📱', '🍪', '👋', '✨', '📚'];
 
 function homeFloor(a: Agent): FloorDef {
@@ -36,6 +38,11 @@ function deskOf(a: Agent, agents: Agent[]) {
 
 export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Meeting[], paused: boolean) {
   const walkers = useRef<Record<string, Walker>>({});
+  // Tu avatar: aparece en el lobby y solo se mueve cuando haces clic.
+  if (!walkers.current[ME]) {
+    const lobby = floorById.get('lobby')!;
+    walkers.current[ME] = { floor: 'lobby', i: lobby.cols - 3, j: lobby.rows - 2, dir: -1, moving: false, goal: null, reason: 'pasear', wait: 0, inElevator: 0 };
+  }
   const [, force] = useState(0);
   const ctx = useRef({ agents, live, meetings });
   ctx.current = { agents, live, meetings };
@@ -50,6 +57,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
         return k >= 0 ? { floor: 'lobby', ...MEETING_SEATS[k % MEETING_SEATS.length] } : null;
       };
       const ws = walkers.current;
+      step(ws[ME]);
       for (const a of agents) {
         let w = ws[a.id];
         const home = homeFloor(a);
@@ -137,10 +145,64 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
         w.j = step.j;
         w.moving = true;
       }
+      // Charlas espontáneas entre IAs libres que se cruzan.
+      const idle = agents.filter((a) => {
+        const w = ws[a.id];
+        return w && !w.inElevator && (w.reason === 'pasear' || w.reason === 'cafe') && !['working', 'thinking'].includes(live[a.id]?.status || '');
+      });
+      for (let x = 0; x < idle.length; x++) {
+        for (let y = x + 1; y < idle.length; y++) {
+          const A = ws[idle[x].id], B = ws[idle[y].id];
+          if (A.floor !== B.floor || Math.abs(A.i - B.i) + Math.abs(A.j - B.j) !== 1 || Math.random() > 0.08) continue;
+          for (const [w, o] of [[A, B], [B, A]] as const) {
+            w.goal = null;
+            w.wait = 8 + Math.floor(Math.random() * 6);
+            w.moving = false;
+            w.dir = o.i - w.i - (o.j - w.j) >= 0 ? 1 : -1;
+          }
+          A.emote = CHATS[Math.floor(Math.random() * CHATS.length)];
+          B.emote = CHATS[Math.floor(Math.random() * CHATS.length)];
+        }
+      }
       force((n) => n + 1);
     }, TICK_MS);
     return () => clearInterval(id);
   }, [paused]);
 
   return walkers.current;
+}
+
+/** Un paso de tu avatar hacia donde hiciste clic (con ascensor si cambias de piso). */
+function step(w: Walker) {
+  if (w.inElevator > 0) {
+    w.inElevator--;
+    if (w.inElevator === 0 && w.goal) {
+      const f = floorById.get(w.goal.floor)!;
+      Object.assign(w, { floor: f.id, i: f.elevator.i, j: f.elevator.j });
+    }
+    return;
+  }
+  if (!w.goal) {
+    w.moving = false;
+    return;
+  }
+  const f = floorById.get(w.floor)!;
+  const target = w.goal.floor === w.floor ? w.goal : { floor: w.floor, ...f.elevator };
+  if (w.i === target.i && w.j === target.j) {
+    w.moving = false;
+    if (w.goal.floor !== w.floor) w.inElevator = 4;
+    else w.goal = null;
+    return;
+  }
+  const n = nextStep(f, w, target);
+  if (!n) {
+    w.goal = null;
+    w.moving = false;
+    return;
+  }
+  const dx = n.i - w.i - (n.j - w.j);
+  if (dx !== 0) w.dir = dx > 0 ? 1 : -1;
+  w.i = n.i;
+  w.j = n.j;
+  w.moving = true;
 }

@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Agent } from '../api';
 import { Chibi } from '../components/Chibi';
 import { useOffice } from '../state';
-import { FLOORS, TH, TW, WALL, roomSize, tileCenter, type FloorDef, type Furniture } from './layout';
-import { TICK_MS, useSim, type Walker } from './useSim';
+import { FLOORS, TH, TW, WALL, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
+import { ME, TICK_MS, useSim, type Walker } from './useSim';
+import type { AvatarConfig } from '../api';
 
 const CHIBI = 40;
 const CHIBI_H = (CHIBI * 166) / 120;
@@ -108,7 +109,7 @@ function Room({ f, night }: { f: FloorDef; night: boolean }) {
   );
 }
 
-function Person({ f, a, w, onClick, idx }: { f: FloorDef; a: Agent; w: Walker; onClick: () => void; idx: number }) {
+function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; w: Walker; onClick: () => void; idx: number; me?: boolean }) {
   const { live } = useOffice();
   const c = tileCenter(f, w.i, w.j);
   const l = live[a.id];
@@ -120,7 +121,7 @@ function Person({ f, a, w, onClick, idx }: { f: FloorDef; a: Agent; w: Walker; o
   };
   const msg = state === 'working' ? '⌨️' : state === 'thinking' ? '💭' : state === 'done' ? '✅' : state === 'error' ? '💥' : state === 'talking' ? '💬' : w.emote;
   return (
-    <button className={`walker ${w.moving ? 'walker--moving' : ''}`} style={style} onClick={onClick} title={`${a.name} · ${a.role}`}>
+    <button className={`walker ${w.moving ? 'walker--moving' : ''} ${me ? 'walker--me' : ''}`} style={style} onClick={(e) => { e.stopPropagation(); onClick(); }} title={`${a.name} · ${a.role}`}>
       {msg && <span className="walker-emote">{msg}</span>}
       <span className="walker-shadow" />
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
@@ -145,8 +146,9 @@ function useFit(width: number) {
   return { ref, scale };
 }
 
-function FloorView({ f, number, walkers, agents, onSelect, night }: {
+function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: {
   f: FloorDef; number: string; walkers: Record<string, Walker>; agents: Agent[]; onSelect: (a: Agent) => void; night: boolean;
+  me: Agent; onTile: (floor: string, i: number, j: number) => void;
 }) {
   const { live } = useOffice();
   const { w: W, h: H } = roomSize(f);
@@ -161,18 +163,50 @@ function FloorView({ f, number, walkers, agents, onSelect, night }: {
         <small className="muted">{here.length} aquí{working ? ` · ${working} trabajando` : ''}</small>
       </header>
       <div className="bfloor-stage" ref={ref} style={{ height: H * scale }}>
-        <div className="bfloor-room" style={{ width: W, height: H, transform: `translateX(-50%) scale(${scale})` }}>
+        <div
+          className="bfloor-room"
+          style={{ width: W, height: H, transform: `translateX(-50%) scale(${scale})` }}
+          onClick={(e) => {
+            // De la posición del clic a la casilla isométrica.
+            const r = e.currentTarget.getBoundingClientRect();
+            const k = r.width / W;
+            const x = (e.clientX - r.left) / k - (f.rows * TW) / 2;
+            const y = (e.clientY - r.top) / k - WALL;
+            const i = Math.floor((x / (TW / 2) + y / (TH / 2)) / 2);
+            const j = Math.floor((y / (TH / 2) - x / (TW / 2)) / 2);
+            if (walkable(f, i, j)) onTile(f.id, i, j);
+          }}
+        >
           <Room f={f} night={night} />
           {f.furniture.map((m, k) => <Box key={k} f={f} m={m} />)}
           {here.map((a) => <Person key={a.id} f={f} a={a} w={walkers[a.id]} onClick={() => onSelect(a)} idx={agents.indexOf(a)} />)}
+          {walkers[ME]?.floor === f.id && !walkers[ME].inElevator && <Person f={f} a={me} w={walkers[ME]} onClick={() => {}} idx={99} me />}
+          {walkers[ME]?.goal?.floor === f.id && <span className="tile-marker" style={{ transform: `translate(${tileCenter(f, walkers[ME].goal!.i, walkers[ME].goal!.j).x - 14}px, ${tileCenter(f, walkers[ME].goal!.i, walkers[ME].goal!.j).y - 7}px)` }} />}
         </div>
       </div>
     </section>
   );
 }
 
+const DEFAULT_ME: AvatarConfig = { skin: '#f1c7a5', hair: '#3f2a1d', hairStyle: 'messy', eyes: 'happy', outfit: '#f59e0b', accessory: 'headphones', prop: '🙋', costume: 'none' };
+
+function loadMe(): { name: string; avatar: AvatarConfig } {
+  try {
+    const raw = localStorage.getItem('oficina.yo');
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* sin almacenamiento local */
+  }
+  return { name: 'Tú', avatar: DEFAULT_ME };
+}
+
 export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
   const { agents, live, meetings } = useOffice();
+  const [meCfg] = useState(loadMe);
+  const me = useMemo<Agent>(() => ({
+    id: ME, name: meCfg.name, role: 'Visitante (haz clic en el piso para caminar)', department: 'lobby', provider: '', model: '', skills: [], system: '',
+    avatar: meCfg.avatar, knowledge: [], memory: [], stats: { tasks: 0, lastActive: null }, enabled: true,
+  }), [meCfg]);
   const [hidden, setHidden] = useState(document.hidden);
   useEffect(() => {
     const on = () => setHidden(document.hidden);
@@ -203,7 +237,8 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
           <div className="roof-sign">🧠 OFICINA DE IAS</div>
         </div>
         {FLOORS.map((f, k) => (
-          <FloorView key={f.id} f={f} number={numbers[k]} walkers={walkers} agents={active} onSelect={onSelect} night={night} />
+          <FloorView key={f.id} f={f} number={numbers[k]} walkers={walkers} agents={active} onSelect={onSelect} night={night} me={me}
+            onTile={(floor, i, j) => { walkers[ME].goal = { floor, i, j }; }} />
         ))}
         <div className="street">
           <span>🌳</span><span>🚲</span><span className="street-door">🚪 Entrada</span><span>🚕</span><span>🌳</span>
