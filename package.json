@@ -1,0 +1,17 @@
+{
+  "name": "oficina-ias",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Oficina de IAs: un cerebro central (Claude) que coordina más de 20 agentes especializados, con notas y grafo de ideas.",
+  "type": "module",
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run build && npm run start -w server",
+    "test": "npm test -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
