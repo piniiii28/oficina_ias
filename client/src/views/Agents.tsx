@@ -4,6 +4,7 @@ import { api, type Agent } from '../api';
 import { Chibi, ACCESSORIES, HAIR_STYLES, EYE_STYLES } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
 import { Stats } from '../components/Stats';
+import { CATALOG } from '../catalog';
 import { useOffice } from '../state';
 
 const COLORS = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
@@ -25,6 +26,7 @@ export function Agents() {
   const { agents, departments, providers, reloadAgents, toast, live } = useOffice();
   const [selected, setSelected] = useState<Agent | null>(null);
   const [creating, setCreating] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'openrouter', model: '', skills: '', system: '' });
   const [avatar, setAvatar] = useState(randomAvatar);
   const dept = (id: string) => departments.find((d) => d.id === id);
@@ -59,11 +61,39 @@ export function Agents() {
             await api.resetAgents();
             reloadAgents();
           }}>Restaurar plantilla</button>
-          <button className="btn btn--primary" onClick={() => setCreating((c) => !c)}>＋ Contratar IA</button>
+          <button className="btn btn--ghost" onClick={() => setBrowsing((c) => !c)}>📇 Catálogo</button>
+          <button className="btn btn--primary" onClick={() => setCreating((c) => !c)}>＋ Crear IA</button>
         </div>
       </header>
 
       <Stats />
+
+      {browsing && (
+        <section className="card">
+          <h3 style={{ marginTop: 0 }}>Catálogo de IAs</h3>
+          <p className="muted small">Contrata especialistas extra con un clic. Llegan a su piso del edificio y el cerebro podrá asignarles tareas.</p>
+          <div className="agent-cards">
+            {CATALOG.map((c, i) => {
+              const hired = agents.some((a) => a.name === c.name);
+              return (
+                <div key={c.name} className="agent-card" style={{ ['--room' as string]: dept(c.department)?.color }}>
+                  <Chibi avatar={c.avatar} size={56} seed={i} />
+                  <div>
+                    <strong>{c.name}</strong>
+                    <small>{c.role}</small>
+                    <small className="muted">{dept(c.department)?.emoji} {dept(c.department)?.name} · {c.provider}</small>
+                    <button className="btn btn--primary small" disabled={hired} onClick={async () => {
+                      await api.createAgent(c);
+                      await reloadAgents();
+                      toast(`🎉 ${c.name} se unió a la oficina`);
+                    }}>{hired ? 'Ya trabaja aquí' : 'Contratar'}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {creating && (
         <section className="card new-agent">
