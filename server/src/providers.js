@@ -107,12 +107,32 @@ export function setUsageSink(fn) {
   usageSink = fn;
 }
 
+// Medidores por IA (acierto y carga): se registra cada llamada, buena o fallida.
+let callSink = null;
+export function setCallSink(fn) {
+  callSink = fn;
+}
+
 /**
  * Llama a un modelo. Devuelve { text, simulated, provider, model }.
  * messages: [{ role: 'user' | 'assistant', content: string }]
  * onDelta(fragmento): se llama con cada trozo de texto a medida que llega.
  */
-export async function callModel(settings, { provider, model, system, messages, agent, account, effort = 'medium', onDelta, signal }) {
+export async function callModel(settings, params) {
+  const t0 = Date.now();
+  const inChars = (params.system?.length || 0) + (params.messages || []).reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
+  const agentId = params.agent?.id;
+  try {
+    const r = await callModelInner(settings, params);
+    if (agentId) callSink?.({ agentId, ok: true, simulated: r.simulated, inChars, ms: Date.now() - t0 });
+    return r;
+  } catch (err) {
+    if (agentId && err.message !== 'Cancelada') callSink?.({ agentId, ok: false, quota: isQuotaError(err.message), error: err.message.slice(0, 200), inChars, ms: Date.now() - t0 });
+    throw err;
+  }
+}
+
+async function callModelInner(settings, { provider, model, system, messages, agent, account, effort = 'medium', onDelta, signal }) {
   if (signal?.aborted) throw new Error('Cancelada');
   const live = settings.demoMode !== 'always' && hasKey(settings, provider);
   if (!live) {

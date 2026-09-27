@@ -10,6 +10,7 @@ import { relatedNotes } from './librarian.js';
 import { readLinks } from './links.js';
 import { callWithAccess } from './access.js';
 import { callWithAssistants } from './assistants.js';
+import { verifyStep } from './metrics.js';
 
 export const bus = new EventEmitter();
 /** Controladores para cancelar tareas en curso (id de tarea → AbortController). */
@@ -286,6 +287,11 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         step.simulated = res.simulated;
         step.status = 'done';
         remember(store, agent, `Tarea "${task.title}": ${step.instruction}`);
+        // Opcional: un verificador le pone nota al aporte (alimenta el medidor de acierto).
+        if (settings.verifySteps && !signal.aborted) {
+          const v = await verifyStep(store, task, step);
+          if (v) step.verify = v;
+        }
         agentStatus(agent.id, 'done', res.text.replace(/[#*>`]/g, '').slice(0, 140));
       } catch (err) {
         step.status = 'error';

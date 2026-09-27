@@ -1,5 +1,6 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
+import { Meters } from './Meters';
 import { api, levelOf, TIER_LABEL, type Account, type Agent, type AssistantDef, type ChatMessage } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
@@ -28,6 +29,7 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
             <p className="small">
               <span className={`dot ${agent.live ? 'dot--live' : 'dot--demo'}`} /> {agent.live ? 'Conectada' : 'Modo demo'} · {agent.provider} / <code>{agent.model || '—'}</code>
             </p>
+            <Meters agentId={agent.id} full />
             <p className="small muted">{status} · {agent.stats?.tasks || 0} trabajos · {agent.knowledge?.length || 0} {agent.knowledge?.length === 1 ? 'lección' : 'lecciones'}</p>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Cerrar">✕</button>

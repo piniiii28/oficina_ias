@@ -826,3 +826,18 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .walker-mini--0 { left: -14px; }
 .walker-mini--1 { right: -14px; }
 .walker--moving .walker-mini { animation: walkbob 0.34s ease-in-out infinite; }
+
+/* --- Medidores de acierto y carga --- */
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 3px 0; min-width: 120px; }
+.meter { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: inherit; cursor: help; }
+.meter span { white-space: nowrap; }
+.meter i { display: block; height: 4px; border-radius: 3px; background: rgba(148, 163, 184, 0.25); overflow: hidden; }
+.meter em { display: block; height: 100%; border-radius: 3px; transition: width 0.4s; }
+.meters--full { max-width: 420px; margin: 6px 0; }
+.meters--full .meter { font-size: 12px; }
+.meters--full .meter i { height: 7px; }
+.meter-detail { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; }
+.meter-detail > div { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.meter-detail ul { margin: 0; padding-left: 18px; }
+.walker-card .meters { min-width: 140px; }
+.walker-card .meter span { color: #e5e7eb; }

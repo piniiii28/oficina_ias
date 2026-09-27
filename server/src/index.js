@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
-import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink } from './providers.js';
+import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
+import { recordCall, accuracyOf, loadOf } from './metrics.js';
 import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
 import { FREE_MODELS, freePlan } from './freeModels.js';
 import { CAD_TOOLS, detectCad, runCad, openInApp, sliceJob, extractCadBlocks, listFiles } from './cad.js';
@@ -103,6 +104,9 @@ export function createApp(store) {
     store.save();
   });
 
+  // Medidores de acierto y carga de cada IA.
+  setCallSink((c) => recordCall(store, c));
+
   // Bóveda .md sincronizada para abrirla en Obsidian.
   const vault = new Vault(path.join(store.dir, 'boveda'));
   const onEvent = (e) => e.type === 'notes' && vault.schedule(store.data.notes);
@@ -176,6 +180,14 @@ export function createApp(store) {
     }
   });
   app.get('/api/usage', (_req, res) => res.json(store.data.usage || {}));
+  app.get('/api/metrics', (_req, res) => {
+    const busy = new Map();
+    for (const t of store.data.tasks) {
+      if (t.status === 'done' || t.status === 'error') continue;
+      for (const st of t.steps) if (st.status === 'working') busy.set(st.agentId, (busy.get(st.agentId) || 0) + 1);
+    }
+    res.json(Object.fromEntries(store.data.agents.map((a) => [a.id, { accuracy: accuracyOf(store, a), load: loadOf(store, a, busy.get(a.id) || 0) }])));
+  });
   app.delete('/api/usage', (_req, res) => {
     store.data.usage = {};
     store.save();
@@ -187,6 +199,7 @@ export function createApp(store) {
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (req.body?.headsReview !== undefined) s.headsReview = Boolean(req.body.headsReview);
+    if (req.body?.verifySteps !== undefined) s.verifySteps = Boolean(req.body.verifySteps);
     if (req.body?.blenderControl !== undefined) s.blenderControl = Boolean(req.body.blenderControl);
     if (hubs !== undefined) s.hubs = normalizeHubs(hubs);
     if (cadPaths && typeof cadPaths === 'object') {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { levelOf, type Agent } from '../api';
 import { Chibi } from '../components/Chibi';
+import { Meters } from '../components/Meters';
 import { useOffice } from '../state';
 import { FLOORS, LEVELS, TH, TW, WALL, USE, levelPlacement, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
 
@@ -259,7 +260,7 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
           <small>{a.role}</small>
           <small className={a.live ? 'ok' : 'muted'}>{a.live ? `● Conectada · ${a.provider}` : '○ Modo demo (sin conectar)'}</small>
           <small>{ACTIVITY[state] || ACTIVITY[w.inElevator ? 'ascensor' : w.reason] || 'Paseando'}</small>
-          <span className="energy"><i style={{ width: `${Math.round(w.energy ?? 100)}%` }} /></span>
+          <Meters agentId={a.id} />
         </span>
       )}
     </button>

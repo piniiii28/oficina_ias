@@ -147,6 +147,13 @@ Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y 
 
 No conviene ponerle asistentes a todas: cada uno suma llamadas y los planes gratis tienen límites por minuto.
 
+## Medidores de cada IA
+
+Cada IA muestra dos medidores (en **Equipo**, en su perfil y al pasar el mouse sobre ella en el edificio):
+
+- **🎯 Acierto (0–100):** qué tan buenas resultan sus respuestas. Sale de tus 👍/👎, de cuántas tareas termina sin fallar y, si activas **Ajustes → Verificador**, de la nota de 1 a 5 que Sonnet (o el cerebro) le pone a cada aporte. Sin datos parte de 70 y se mueve poco hasta tener varias señales.
+- **🔥 Carga (0–100):** la IA no se estresa como una persona, pero sí responde peor cuando recibe textos muy largos, hace varias tareas a la vez, tiene errores recientes (por ejemplo, sin cupo) o su memoria y su chat son muy largos. El medidor suma esas causas y da consejos para bajarla.
+
 ## Entrenamiento y memoria
 
 Los modelos de las empresas no se pueden reentrenar desde aquí. Lo que hace la oficina es **especializar** a cada IA en tres capas:

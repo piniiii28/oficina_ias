@@ -38,6 +38,11 @@ export type Agent = {
   assistants?: AssistantDef[];
 };
 
+export type Meter = {
+  accuracy: { score: number; signals: number; parts: Record<string, { value: number; n: number } | null> };
+  load: { score: number; level: 'tranquila' | 'ocupada' | 'cargada' | 'saturada'; parts: Record<string, number>; avgInChars: number; errorsLastHour: number; lastError: string | null; tips: string[] };
+};
+
 export type AssistantDef = { id: string; name: string; focus: string; provider: string; model: string };
 
 export type Flow = { id: string; name: string; agentIds: string[] };
@@ -68,6 +73,7 @@ export type Step = {
   dependsOn?: string[];
   rating?: { value: number; comment: string; at: string };
   review?: boolean;
+  verify?: { score: number; reason: string; by: string };
   assistants?: { name: string; focus: string; task: string; output: string; simulated?: boolean; error?: string }[];
   status: 'pending' | 'working' | 'done' | 'error';
   output: string;
@@ -146,6 +152,7 @@ export type Settings = {
   accessEnabled: boolean;
   blenderControl?: boolean;
   headsReview?: boolean;
+  verifySteps?: boolean;
   hubs: Hub[];
   cadPaths: Record<string, string>;
 };
@@ -248,6 +255,7 @@ export const api = {
   connect: (connections: Suggestion[]) => req<{ applied: number }>('POST', '/api/graph/connect', { connections }),
 
   testProvider: (id: string) => req<{ ok: boolean; model: string; ms: number; reply: string }>('POST', `/api/providers/${id}/test`, {}),
+  metrics: () => req<Record<string, Meter>>('GET', '/api/metrics'),
   usage: () => req<Record<string, { calls: number; inChars: number; outChars: number }>>('GET', '/api/usage'),
   resetUsage: () => req('DELETE', '/api/usage'),
   detectClis: () => req<Record<string, string | null>>('GET', '/api/cli/detect'),

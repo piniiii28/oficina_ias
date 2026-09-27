@@ -1044,3 +1044,58 @@ test('IAs nuevas con proveedores gratis llegan una sola vez a oficinas existente
   createApp(s3);
   assert.ok(!s3.data.agents.some((a) => a.id === 'clip'), 'si la despides no vuelve');
 });
+
+test('medidores: el acierto sube con 👍 y el verificador; la carga sube con textos largos y errores', async () => {
+  const http = await import('node:http');
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const data = JSON.parse(body);
+      if (data.model === 'sin-cupo') {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Rate limit reached' } }));
+      }
+      const reply = /verificador estricto/.test(data.messages[0].content) ? '{"nota": 4, "motivo": "correcta"}' : 'Aquí está mi aporte';
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      let m = (await call('GET', '/api/metrics')).data;
+      assert.equal(m.opencode.accuracy.score, 70, 'sin datos parte neutral');
+      assert.equal(m.opencode.accuracy.signals, 0);
+      assert.equal(m.opencode.load.level, 'tranquila');
+
+      await call('PUT', '/api/agents/opencode', { provider: 'ollama', model: 'm' });
+      await call('PUT', '/api/agents/sonnet-qa', { provider: 'ollama', model: 'm' });
+      await call('PUT', '/api/settings', { verifySteps: true });
+      const task = await runTask(store, new Notes(store), { prompt: 'Haz un script', agentIds: ['opencode'] });
+      assert.equal(task.steps[0].verify.score, 4);
+      assert.equal(task.steps[0].verify.by, 'Sonnet');
+      await call('POST', `/api/tasks/${task.id}/steps/opencode/rate`, { value: 1 });
+      m = (await call('GET', '/api/metrics')).data;
+      assert.equal(m.opencode.accuracy.parts.verificador.value, 75);
+      assert.ok(m.opencode.accuracy.score > 70, `sube con buenas señales (${m.opencode.accuracy.score})`);
+      await call('POST', `/api/tasks/${task.id}/steps/opencode/rate`, { value: -1 });
+      assert.ok((await call('GET', '/api/metrics')).data.opencode.accuracy.score < m.opencode.accuracy.score, 'baja con 👎');
+
+      // Carga: mensajes enormes y errores por falta de cupo.
+      await call('POST', '/api/agents/opencode/chat', { message: 'x'.repeat(150000) });
+      await call('PUT', '/api/agents/opencode', { model: 'sin-cupo' });
+      for (let i = 0; i < 2; i++) await call('POST', '/api/agents/opencode/chat', { message: 'hola' });
+      const load = (await call('GET', '/api/metrics')).data.opencode.load;
+      assert.ok(load.parts.contexto > 0);
+      assert.ok(load.parts.errores >= 25);
+      assert.ok(load.score >= 30, `carga ${load.score}`);
+      assert.ok(load.tips.some((t) => /cupo/.test(t)));
+    });
+  } finally {
+    fake.close();
+  }
+});
