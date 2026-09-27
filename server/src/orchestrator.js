@@ -3,7 +3,7 @@
 // conectadas en el grafo. Emite eventos para animar la oficina en vivo.
 import { EventEmitter } from 'node:events';
 import { Store } from './store.js';
-import { callModel, hasKey } from './providers.js';
+import { callModel, hasKey, usableFilter } from './providers.js';
 import { demoPlan } from './demo.js';
 import { extractKeyIdeas } from './notes.js';
 import { relatedNotes } from './librarian.js';
@@ -73,7 +73,10 @@ function parseJson(text) {
 
 async function makePlan(store, task, forced, template) {
   const { settings, agents } = store.data;
-  const pool = agents.filter((a) => !a.isBrain && a.enabled && (!forced?.length || forced.includes(a.id)));
+  const usable = usableFilter(settings, agents);
+  // Las IAs en modo demo no trabajan (salvo que se desactive «solo IAs conectadas»).
+  if (forced?.length) forced = forced.filter((id) => usable(agents.find((a) => a.id === id)));
+  const pool = agents.filter((a) => !a.isBrain && a.enabled && usable(a) && (!forced?.length || forced.includes(a.id)));
   if (forced?.length) {
     // Respeta el orden elegido (y, al continuar una tarea, sus dependencias).
     const byId = new Map(pool.map((a) => [a.id, a]));
@@ -408,7 +411,7 @@ async function headsReview(store, task, settings, signal, emitTask, nameOf) {
   }
   for (const [dept, steps] of byDept) {
     const head = store.data.agents.find((a) => a.isHead && a.enabled && a.department === dept);
-    if (!head || steps.length < 2 || task.steps.some((s) => s.agentId === head.id)) continue;
+    if (!head || !usableFilter(settings, store.data.agents)(head) || steps.length < 2 || task.steps.some((s) => s.agentId === head.id)) continue;
     const step = { agentId: head.id, instruction: `Como jefe del departamento, revisa y unifica lo que entregó tu equipo (${steps.map((s) => nameOf(s.agentId)).join(', ')}).`, dependsOn: steps.map((s) => s.agentId), status: 'working', output: '', simulated: false, error: null, review: true };
     task.steps.push(step);
     emitTask();

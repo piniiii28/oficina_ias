@@ -31,6 +31,8 @@ export type Agent = {
   isBrain?: boolean;
   isLibrarian?: boolean;
   live?: boolean;
+  /** Trabaja en tareas y se ve en el edificio (con «solo IAs conectadas», las demo no). */
+  usable?: boolean;
   account?: string;
   paidBackup?: { provider: string; model: string };
   isHead?: boolean;
@@ -177,6 +179,7 @@ export type Settings = {
   accounts: Account[];
   grants: Grant[];
   accessEnabled: boolean;
+  onlyLive: boolean;
   blenderControl?: boolean;
   headsReview?: boolean;
   verifySteps?: boolean;

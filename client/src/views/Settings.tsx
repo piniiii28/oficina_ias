@@ -60,6 +60,10 @@ export function Settings() {
           </label>
         </div>
         <label className="check" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={s.onlyLive !== false} onChange={(e) => save({ onlyLive: e.target.checked }, e.target.checked ? '🟢 Solo trabajan las IAs conectadas' : '✅ Ajustes guardados')} />
+          Solo IAs conectadas: las de modo demo no trabajan en tareas ni reuniones y no aparecen en la oficina hasta que las conectes (si aún no hay ninguna conectada, trabajan todas en demo)
+        </label>
+        <label className="check" style={{ marginTop: 6 }}>
           <input type="checkbox" checked={Boolean(s.reviewFinal)} onChange={(e) => save({ reviewFinal: e.target.checked })} />
           Revisión de calidad final: Sonar verifica la respuesta integrada antes de entregarla (una llamada extra por tarea)
         </label>

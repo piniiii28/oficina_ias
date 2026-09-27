@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
-import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
+import { PROVIDERS, hasKey, isLive, usableFilter, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
@@ -195,7 +195,7 @@ export function createApp(store) {
     delete rest.nodes; // ni los códigos de enlace de los nodos
     delete rest.users; // las contraseñas (cifradas) tampoco
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
-    return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
+    return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, onlyLive: rest.onlyLive !== false, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
 
   // --- Meta ---
@@ -263,6 +263,7 @@ export function createApp(store) {
     const s = store.data.settings;
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
+    if (req.body?.onlyLive !== undefined) s.onlyLive = Boolean(req.body.onlyLive);
     if (req.body?.headsReview !== undefined) s.headsReview = Boolean(req.body.headsReview);
     if (req.body?.ollamaNode !== undefined) {
       if (req.body.ollamaNode && !(s.nodes || []).some((n) => n.id === req.body.ollamaNode)) return res.status(400).json({ error: 'Ese nodo no existe' });
@@ -317,7 +318,9 @@ export function createApp(store) {
   // --- Agentes ---
   app.get('/api/agents', (_req, res) => {
     const s = store.data.settings;
-    res.json(store.data.agents.map((a) => ({ ...a, live: s.demoMode !== 'always' && hasKey(s, a.provider) })));
+    const usable = usableFilter(s, store.data.agents);
+    // usable: trabaja en tareas y se ve en el edificio (con «solo IAs conectadas», las demo no).
+    res.json(store.data.agents.map((a) => ({ ...a, live: isLive(s, a), usable: a.isBrain || usable(a) })));
   });
   app.post('/api/agents', (req, res) => {
     const b = req.body || {};
@@ -550,6 +553,8 @@ export function createApp(store) {
     const topic = String(req.body?.topic || '').trim();
     const agentIds = Array.isArray(req.body?.agentIds) ? req.body.agentIds.slice(0, 6) : [];
     if (!topic || agentIds.length < 2) return res.status(400).json({ error: 'Escribe un tema y elige al menos 2 IAs' });
+    const usable = usableFilter(store.data.settings, store.data.agents);
+    if (agentIds.filter((id) => usable(agentById(id))).length < 2) return res.status(400).json({ error: 'Elige al menos 2 IAs conectadas (las de modo demo no participan; puedes cambiarlo en Ajustes)' });
     runMeeting(store, notes, { topic, agentIds, hub: req.hub, rounds: Number(req.body.rounds) || 2 }).catch((err) => console.error('[reunión]', err));
     res.status(202).json({ id: store.data.meetings[0].id });
   });

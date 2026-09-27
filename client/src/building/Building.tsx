@@ -1,7 +1,7 @@
 // El edificio de la oficina (estilo Habbo): pisos isométricos apilados, con
 // muebles, ventanas, ascensor y las IAs caminando libremente.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { levelOf, type Agent } from '../api';
+import { api, levelOf, type Agent } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Meters } from '../components/Meters';
 import { useOffice } from '../state';
@@ -405,7 +405,7 @@ function loadMe(): { name: string; avatar: AvatarConfig } {
 }
 
 export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
-  const { agents, live, meetings } = useOffice();
+  const { agents, live, meetings, reloadAgents, toast } = useOffice();
   const [meCfg] = useState(loadMe);
   const me = useMemo<Agent>(() => ({
     id: ME, name: meCfg.name, role: 'Visitante (haz clic en el piso para caminar)', department: 'lobby', provider: '', model: '', skills: [], system: '',
@@ -417,16 +417,13 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
     document.addEventListener('visibilitychange', on);
     return () => document.removeEventListener('visibilitychange', on);
   }, []);
-  // Opción de ver solo las IAs conectadas (las que responden de verdad).
-  const [onlyLive, setOnlyLive] = useState(() => {
-    try {
-      return localStorage.getItem('oficina.soloConectadas') === '1';
-    } catch {
-      return false;
-    }
-  });
+  // «Solo IAs conectadas» (Ajustes): las de modo demo no se ven hasta conectarlas.
+  const [onlyLive, setOnlyLive] = useState(true);
+  useEffect(() => {
+    api.settings().then((s) => setOnlyLive(s.onlyLive !== false)).catch(() => {});
+  }, []);
   const liveCount = agents.filter((a) => a.enabled && a.live).length;
-  const active = useMemo(() => agents.filter((a) => a.enabled && (!onlyLive || a.live)), [agents, onlyLive]);
+  const active = useMemo(() => agents.filter((a) => a.enabled && a.usable !== false), [agents]);
   const walkers = useSim(active, live, meetings, hidden);
   const hour = new Date().getHours();
   const night = hour < 6 || hour >= 19;
@@ -457,15 +454,15 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
       <nav className="elevator-panel" aria-label="Ir a un piso">
         <button title="Pantalla completa" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : wrap.current?.requestFullscreen?.())}>🖥️</button>
         <button title={tour ? 'Detener recorrido' : 'Recorrido automático por los pisos'} className={tour ? 'on' : ''} onClick={() => setTour((t) => !t)}>📹</button>
-        <button className={onlyLive ? 'on' : ''} title={onlyLive ? 'Mostrar todas las IAs' : `Mostrar solo las ${liveCount} IAs conectadas`} onClick={() => {
-          setOnlyLive((v) => {
-            try {
-              localStorage.setItem('oficina.soloConectadas', v ? '0' : '1');
-            } catch {
-              /* sin almacenamiento local */
-            }
-            return !v;
-          });
+        <button className={onlyLive ? 'on' : ''} title={onlyLive ? 'Solo trabajan y se ven las IAs conectadas. Clic: mostrar y usar también las de modo demo' : `Clic: usar y mostrar solo las ${liveCount} IAs conectadas`} onClick={async () => {
+          try {
+            await api.saveSettings({ onlyLive: !onlyLive });
+            setOnlyLive(!onlyLive);
+            await reloadAgents();
+            toast(onlyLive ? '👥 Ahora trabajan todas, también las de modo demo' : `🟢 Solo trabajan las ${liveCount} IAs conectadas`);
+          } catch (err) {
+            toast(`❌ ${(err as Error).message}`);
+          }
         }}>🟢<small>{liveCount}</small></button>
         <span>🛗</span>
         {LEVELS.map((ids, k) => (

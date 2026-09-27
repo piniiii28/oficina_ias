@@ -122,7 +122,7 @@ export function Office() {
   };
 
   const brain = agents.find((a) => a.isBrain);
-  const staff = agents.filter((a) => !a.isBrain);
+  const staff = agents.filter((a) => !a.isBrain && a.usable !== false);
   const active = tasks.filter((t) => t.status !== 'done' && t.status !== 'error');
   const latest = active[0] || tasks[0];
   const busy = active.length > 0;

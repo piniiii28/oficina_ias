@@ -65,6 +65,20 @@ export function hasKey(settings, provider) {
   return credentials(settings, provider).length > 0;
 }
 
+/** ¿Esta IA responde de verdad (no en modo demo)? */
+export const isLive = (settings, agent) => Boolean(agent) && settings.demoMode !== 'always' && hasKey(settings, agent.provider);
+
+/**
+ * «Solo IAs conectadas» (activado por defecto): las IAs en modo demo no
+ * trabajan en tareas, reuniones ni como asistentes. Si todavía no hay
+ * ninguna conectada, trabajan todas en demo para que la oficina se pueda probar.
+ */
+export function usableFilter(settings, agents) {
+  if (settings.onlyLive === false) return () => true;
+  const anyLive = agents.some((a) => !a.isBrain && a.enabled && isLive(settings, a));
+  return anyLive ? (a) => isLive(settings, a) : () => true;
+}
+
 /**
  * Cuentas de un proveedor, en orden de uso: primero la elegida para la IA,
  * luego las demás. Si una cuenta se queda sin cupo, la oficina prueba con la

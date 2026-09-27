@@ -4,7 +4,7 @@
 // compleja, les reparte partes, ellos trabajan en paralelo con modelos rápidos
 // y gratis, y la jefa revisa e integra sus entregas.
 import { Store } from './store.js';
-import { callModel } from './providers.js';
+import { callModel, isLive } from './providers.js';
 import { callWithAccess } from './access.js';
 import { agentStatus, streamer } from './orchestrator.js';
 
@@ -67,7 +67,9 @@ Cuando entreguen, revisas su trabajo y escribes la respuesta final integrada.`;
  */
 export async function callWithAssistants(store, params, { taskKey = null, allowDemoDelegation = false } = {}) {
   const agent = params.agent;
-  const team = agent?.delegate === false ? [] : agent?.assistants || [];
+  const s = store.data.settings;
+  // Con «solo IAs conectadas», un jefe conectado no delega en asistentes en modo demo.
+  const team = (agent?.delegate === false ? [] : agent?.assistants || []).filter((a) => s.onlyLive === false || !isLive(s, agent) || isLive(s, a));
   if (!team.length) return callWithAccess(store, params);
   const first = await callWithAccess(store, { ...params, system: params.system + bossGuide(agent) });
   let orders = [...first.text.matchAll(DELEGATE_RE)]

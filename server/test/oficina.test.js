@@ -1675,3 +1675,55 @@ test('Gemma 4 (12B, local) llega a las oficinas que ya existían', async () => {
   createApp(store).locals.stop?.();
   assert.ok(!store.data.agents.some((a) => a.id === 'gemma4'));
 });
+
+test('solo IAs conectadas: las de modo demo no trabajan ni se ven, salvo que no haya ninguna conectada', async () => {
+  const http = await import('node:http');
+  const fake = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'respuesta real' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      // Sin ninguna conectada, trabajan todas en demo (para poder probar la oficina).
+      let agents = (await call('GET', '/api/agents')).data;
+      assert.ok(agents.every((a) => a.usable));
+      assert.equal((await call('GET', '/api/settings')).data.onlyLive, true, 'viene activado');
+
+      // Se conecta Ollama: Gemma, Phi y Gemma 4 quedan conectadas; las demás, en demo.
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      agents = (await call('GET', '/api/agents')).data;
+      const live = agents.filter((a) => a.usable && !a.isBrain).map((a) => a.id).sort();
+      assert.deepEqual(live, ['gemma-salud', 'gemma4', 'phi-tutor']);
+      assert.ok(agents.find((a) => a.isBrain).usable, 'el cerebro siempre se ve');
+
+      // El cerebro (en demo) solo reparte entre las conectadas, y si eliges una en demo se ignora.
+      const t1 = await runTask(store, new Notes(store), { prompt: 'Explícame un tema de salud y hábitos de estudio' });
+      assert.ok(t1.steps.length > 0);
+      assert.ok(t1.steps.every((s) => live.includes(s.agentId)), `trabajaron: ${t1.steps.map((s) => s.agentId)}`);
+      const t2 = await runTask(store, new Notes(store), { prompt: 'Haz un script', agentIds: ['opencode', 'phi-tutor'] });
+      assert.deepEqual(t2.steps.map((s) => s.agentId), ['phi-tutor']);
+
+      // Asistentes en demo: un jefe conectado no les delega.
+      await call('PUT', '/api/agents/phi-tutor', { assistants: [{ name: 'Demo', focus: 'Python', provider: 'groq', model: 'x' }] });
+      const chat = await call('POST', '/api/agents/phi-tutor/chat', { message: 'hola' });
+      assert.equal(chat.data.reply, 'respuesta real');
+
+      // Reuniones: hacen falta 2 conectadas.
+      assert.equal((await call('POST', '/api/meetings', { topic: 'x', agentIds: ['opencode', 'phi-tutor'] })).status, 400);
+
+      // Desactivado, vuelven a trabajar todas.
+      await call('PUT', '/api/settings', { onlyLive: false });
+      assert.ok((await call('GET', '/api/agents')).data.every((a) => a.usable));
+      const t3 = await runTask(store, new Notes(store), { prompt: 'Haz un script', agentIds: ['opencode', 'phi-tutor'] });
+      assert.deepEqual(t3.steps.map((s) => s.agentId), ['opencode', 'phi-tutor']);
+    });
+  } finally {
+    fake.close();
+  }
+});

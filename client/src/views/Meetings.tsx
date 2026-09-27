@@ -19,7 +19,7 @@ export function Meetings() {
   const [rounds, setRounds] = useState(2);
   const [openId, setOpenId] = useState<string | null>(null);
   const current = meetings.find((m) => m.id === openId) || meetings[0];
-  const staff = agents.filter((a) => !a.isBrain && a.enabled);
+  const staff = agents.filter((a) => !a.isBrain && a.enabled && a.usable !== false);
   const brain = agents.find((a) => a.isBrain);
 
   async function start() {
