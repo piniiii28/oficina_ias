@@ -1518,5 +1518,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   app.listen(PORT, HOST, () => {
     console.log(`\n  🧠 Oficina de IAs lista en http://localhost:${PORT}`);
     console.log(`  📁 Datos guardados en ${DATA_DIR}\n`);
+  }).on('error', (err) => {
+    // Casi siempre es otra oficina (por ejemplo, una versión vieja) que sigue abierta.
+    if (err.code !== 'EADDRINUSE') throw err;
+    console.error(`\n  ⚠️ Ya hay otra oficina abierta en el puerto ${PORT} (puede ser una versión vieja).`);
+    console.error('  Cierra las otras ventanas negras de la oficina (o en el Administrador de tareas termina «Node.js»)');
+    console.error('  y vuelve a abrir el acceso directo «Oficina de IAs».\n');
+    process.exit(1);
   });
 }

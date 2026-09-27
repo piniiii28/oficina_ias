@@ -23,7 +23,10 @@ where node >nul 2>nul || (
 
 if exist "%DESTINO%\.git" (
   echo La oficina ya estaba instalada en %DESTINO%. Actualizando...
-  cd /d "%DESTINO%" && git pull --ff-only
+  cd /d "%DESTINO%"
+  git fetch origin %RAMA%
+  git checkout %RAMA% || git checkout -b %RAMA% origin/%RAMA%
+  git pull --ff-only origin %RAMA%
 ) else (
   echo Descargando la oficina en %DESTINO% ...
   echo Si GitHub te pide iniciar sesion, hazlo: queda guardado para las actualizaciones.

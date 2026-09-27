@@ -11,7 +11,9 @@ command -v git >/dev/null || { echo "Instala git (https://git-scm.com) y vuelve 
 command -v node >/dev/null || { echo "Instala Node.js 20 o superior (https://nodejs.org) y vuelve a ejecutar este instalador."; exit 1; }
 if [ -d "$DESTINO/.git" ]; then
   echo "Ya estaba instalada en $DESTINO. Actualizando..."
-  git -C "$DESTINO" pull --ff-only
+  git -C "$DESTINO" fetch origin "$RAMA"
+  git -C "$DESTINO" checkout "$RAMA" 2>/dev/null || git -C "$DESTINO" checkout -b "$RAMA" "origin/$RAMA"
+  git -C "$DESTINO" pull --ff-only origin "$RAMA"
 else
   echo "Descargando la oficina en $DESTINO ..."
   git clone -b "$RAMA" "$REPO" "$DESTINO"
