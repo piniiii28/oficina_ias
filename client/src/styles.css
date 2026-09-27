@@ -817,3 +817,12 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .blevel + .blevel, div + div > .blevel { margin-top: 0; }
 .broom-sign { transform: skewY(26.565deg); transform-origin: left top; overflow: hidden; background: #2a1d33; border-color: #1b1320; border-radius: 3px; padding: 2px 6px 2px 3px; }
 .broom-sign .bfloor-tv { display: none; }
+
+/* --- Jefes y asistentes --- */
+.level.head { background: #fde047; color: #111; margin-left: 6px; }
+.assistant-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: var(--panel-2); }
+.assistant-outputs { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+.walker-mini { position: absolute; bottom: 0; pointer-events: none; }
+.walker-mini--0 { left: -14px; }
+.walker-mini--1 { right: -14px; }
+.walker--moving .walker-mini { animation: walkbob 0.34s ease-in-out infinite; }

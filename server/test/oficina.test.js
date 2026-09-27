@@ -954,3 +954,68 @@ console.log('OFICINA_LISTO:' + ${JSON.stringify(addons)});
   assert.ok(installed.includes(`TOKEN = "${store.data.settings.blenderToken}"`));
   assert.match(installed, /PORT = \d+/);
 });
+
+test('asistentes: el jefe delega, ellos trabajan y él integra', async () => {
+  const http = await import('node:http');
+  const calls = [];
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const data = JSON.parse(body);
+      const last = data.messages.at(-1).content;
+      calls.push(data.model);
+      let reply;
+      if (data.model === 'asis') reply = 'Componente React listo';
+      else if (/Entregas de tus asistentes/.test(last)) reply = `Integré: ${/Componente React listo/.test(last) ? 'el componente de Reactito' : 'nada'}`;
+      else reply = 'Esto tiene dos partes.\n<<delegar asistente="Reactito" tarea="Haz el componente de login en React">>';
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      const put = await call('PUT', '/api/agents/opencode', { provider: 'ollama', model: 'jefe', assistants: [{ name: 'Reactito', focus: 'React', provider: 'ollama', model: 'asis' }, { focus: 'Python' }, { focus: 'sobra' }] });
+      assert.equal(put.data.assistants.length, 2, 'máximo 2 asistentes');
+      assert.equal(put.data.assistants[1].name, 'Asistente de Python');
+      const task = await runTask(store, new Notes(store), { prompt: 'Haz un login', agentIds: ['opencode'] });
+      const step = task.steps[0];
+      assert.equal(step.output, 'Integré: el componente de Reactito');
+      assert.equal(step.assistants.length, 1, 'solo trabajó el asistente al que delegó');
+      assert.equal(step.assistants[0].name, 'Reactito');
+      assert.deepEqual(calls, ['jefe', 'asis', 'jefe']);
+    });
+  } finally {
+    fake.close();
+  }
+});
+
+test('asistentes en modo demo y jefes de departamento que revisan a su equipo', async () => {
+  const store = new Store(tmp());
+  await withApp(store, async (call) => {
+    const depts = new Set(DEFAULT_AGENTS.filter((a) => a.isHead).map((a) => a.department));
+    assert.equal(depts.size, DEFAULT_AGENTS.filter((a) => a.isHead).length, 'un jefe por departamento');
+    assert.ok(depts.size >= 7);
+    // Cambiar de jefe deja uno solo.
+    await call('PUT', '/api/agents/opencode', { isHead: true });
+    assert.deepEqual(store.data.agents.filter((a) => a.isHead && a.department === 'codigo').map((a) => a.id), ['opencode']);
+    await call('PUT', '/api/agents/opencode', { isHead: false });
+    await call('PUT', '/api/agents/codex', { isHead: true });
+
+    store.data.settings.demoMode = 'always';
+    store.data.settings.headsReview = true;
+    await call('PUT', '/api/agents/codestral', { assistants: [{ focus: 'Seguridad' }, { focus: 'Rendimiento' }] });
+    const task = await runTask(store, new Notes(store), { prompt: 'Revisa mi código', agentIds: ['opencode', 'codestral'] });
+    const reviewed = task.steps.find((s) => s.agentId === 'codestral');
+    assert.equal(reviewed.assistants.length, 2, 'en demo, sus dos asistentes aportan');
+    assert.match(reviewed.output, /Aportes de mi equipo/);
+    const head = task.steps.find((s) => s.agentId === 'codex');
+    assert.ok(head?.review, 'el jefe de Ingeniería revisó');
+    assert.equal(head.status, 'done');
+    assert.match(task.final, /.+/);
+  });
+});

@@ -13,6 +13,7 @@ type Ctx = {
   flows: Flow[];
   freeModels: Record<string, FreeModel[]>;
   cadTools: CadTool[];
+  suggestedAssistants: Record<string, string[]>;
   hubs: Hub[];
   reloadHubs: () => Promise<void>;
   hub: string;
@@ -55,6 +56,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [freeModels, setFreeModels] = useState<Record<string, FreeModel[]>>({});
   const [cadTools, setCadTools] = useState<CadTool[]>([]);
+  const [suggestedAssistants, setSuggestedAssistants] = useState<Record<string, string[]>>({});
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [cadVersion, setCadVersion] = useState(0);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
@@ -125,6 +127,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setFlows(m.flows || []);
       setFreeModels(m.freeModels || {});
       setCadTools(m.cadTools || []);
+      setSuggestedAssistants(m.suggestedAssistants || {});
     });
     reloadHubs();
     api.access().then((a) => setAccessRequests(a.requests)).catch(() => {});
@@ -203,11 +206,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
+      agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

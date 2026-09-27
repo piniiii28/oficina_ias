@@ -106,13 +106,24 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
             <summary>
               {a && <Chibi avatar={a.avatar} size={36} state={s.status === 'working' ? 'working' : s.status === 'error' ? 'error' : 'idle'} />}
               <div>
-                <strong>{a?.name || s.agentId}</strong> <small className="muted">{a?.role}</small>
+                <strong>{a?.name || s.agentId}</strong> {a?.isHead && <span title="Jefe de departamento">👑</span>} <small className="muted">{s.review ? 'Revisión del jefe de departamento' : a?.role}</small>
                 <div className="small muted">{s.instruction}</div>
                 {s.dependsOn?.length ? <div className="small">↳ Trabajó sobre la entrega de {s.dependsOn.map((d) => agent(d)?.name || d).join(', ')}</div> : null}
               </div>
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
             {s.error ? <p className="danger">{s.error}</p> : <div className={s.status === 'working' ? 'streaming' : ''}><Markdown text={s.output || streams[`task:${task.id}:${s.agentId}`] || '…'} onLink={(t) => openNote({ title: t })} /></div>}
+            {/* Lo que entregaron sus asistentes (o lo que escriben en vivo) */}
+            {(s.assistants?.length || (s.status === 'working' && a?.assistants?.some((_, i) => streams[`task:${task.id}:${s.agentId}:asist:${i}`]))) ? (
+              <div className="assistant-outputs">
+                {(s.assistants || a?.assistants?.map((x, i) => ({ name: x.name, focus: x.focus, task: '', output: streams[`task:${task.id}:${s.agentId}:asist:${i}`] || '', error: undefined as string | undefined })) || []).filter((x) => x.output || x.error).map((x, i) => (
+                  <details key={i}>
+                    <summary className="small">👥 <b>{x.name}</b> · asistente en {x.focus}{x.task ? ` — ${x.task}` : ''}</summary>
+                    {x.error ? <p className="danger small">{x.error}</p> : <Markdown text={x.output} />}
+                  </details>
+                ))}
+              </div>
+            ) : null}
             {s.status === 'done' && (
               <div className="rate">
                 <span className="muted small">¿Te sirvió? {a?.name} lo recordará:</span>

@@ -168,8 +168,8 @@ export function Agents() {
           <button key={a.id} className={`agent-card ${a.enabled ? '' : 'off'}`} onClick={() => setSelected(a)} style={{ ['--room' as string]: dept(a.department)?.color }}>
             <Chibi avatar={a.avatar} size={70} seed={i} state={live[a.id]?.status || 'idle'} />
             <div>
-              <strong>{a.name}</strong>
-              <small>{a.role}</small>
+              <strong>{a.name}{a.isHead && <span title="Jefe de departamento"> 👑</span>}</strong>
+              <small>{a.role}{a.assistants?.length ? ` · 👥 ${a.assistants.map((x) => x.focus).join(', ')}` : ''}</small>
               <small className="muted"><span className={`dot ${a.live ? 'dot--live' : 'dot--demo'}`} /> {a.provider} · {a.model}</small>
               <small className="muted">{dept(a.department)?.emoji} {dept(a.department)?.name} · {a.stats?.tasks || 0} {a.stats?.tasks === 1 ? 'trabajo' : 'trabajos'} · {a.knowledge?.length || 0} {a.knowledge?.length === 1 ? 'lección' : 'lecciones'}</small>
             </div>

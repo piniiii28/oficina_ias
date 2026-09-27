@@ -65,6 +65,10 @@ export function Settings() {
           Búsqueda web para Claude y Sonnet (herramienta de Anthropic; cada búsqueda tiene un costo extra)
         </label>
         <label className="check" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={Boolean(s.headsReview)} onChange={(e) => save({ headsReview: e.target.checked })} />
+          👑 Revisión de los jefes: si trabajan 2 o más IAs de un departamento, su jefe revisa y unifica lo que entregaron (una llamada extra)
+        </label>
+        <label className="check" style={{ marginTop: 6 }}>
           <input type="checkbox" checked={Boolean(s.autoCards)} onChange={(e) => save({ autoCards: e.target.checked })} />
           Crear tarjetas en el tablero con los próximos pasos de cada tarea terminada
         </label>

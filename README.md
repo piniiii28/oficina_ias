@@ -135,6 +135,13 @@ Es un solo edificio en pixel art (estilo Habbo, con dibujos propios): paredes de
 
 Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar o en un mueble (cafetera, arcade, piano, piscina, telescopio…) para usarlo, y personalízalo en **Ajustes**. Las IAs tienen energía: se cansan trabajando y recargan con café o en la azotea. Hay mascotas (Michi, Firulais y Kiwi) y cada piso tiene skins (botón 🎨). Las IAs en modo demo se ven desteñidas y con la etiqueta «demo»; las conectadas llevan un punto verde. El botón **🟢** del panel del ascensor muestra solo las conectadas. Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
 
+## Jefes y asistentes
+
+- **Jefes de departamento** (👑): Codex en Ingeniería, Gemini en Datos, ChatGPT en el Estudio Creativo, Perplexity en Investigación, O-Estratega en Negocios, Coach en Personas y Blendi en el Taller 3D. Se cambian desde el perfil de cada IA. Si activas **Ajustes → Revisión de los jefes**, cuando trabajan 2 o más IAs de un departamento su jefe revisa y unifica lo que entregaron.
+- **Asistentes opcionales**: en la pestaña **👥 Asistentes** de cada IA puedes darle hasta 2 especialistas en una tecnología o tema (por ejemplo, OpenCode con «React» y «Python»). Si la tarea es compleja, la IA les delega partes, trabajan en paralelo con modelos rápidos y gratis, y ella revisa e integra; si es simple, la hace sola. En el edificio caminan a su lado y en **Tareas** se ve lo que entregó cada uno.
+
+No conviene ponerle asistentes a todas: cada uno suma llamadas y los planes gratis tienen límites por minuto.
+
 ## Entrenamiento y memoria
 
 Los modelos de las empresas no se pueden reentrenar desde aquí. Lo que hace la oficina es **especializar** a cada IA en tres capas:

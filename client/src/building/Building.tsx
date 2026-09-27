@@ -244,11 +244,18 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
         <Chibi avatar={a.avatar} size={CHIBI} legs walking={w.moving} seed={idx} state={w.moving ? 'idle' : state} />
       </span>
+      {/* Sus asistentes lo acompañan (más pequeños, a su lado) */}
+      {!me && a.assistants?.map((x, k) => (
+        <span key={x.id} className={`walker-mini walker-mini--${k}`} title={`${x.name} · ${x.focus}`} style={{ transform: `scaleX(${w.dir})` }}>
+          <Chibi avatar={{ ...a.avatar, outfit: k ? '#94a3b8' : '#cbd5e1', hair: x.focus.length % 2 ? '#3f2a1d' : '#f59e0b', accessory: 'none', costume: 'none' }} size={CHIBI * 0.62} legs walking={w.moving} seed={idx + k + 3} state={w.moving ? 'idle' : state === 'working' ? 'working' : 'idle'} />
+        </span>
+      ))}
       {me ? (
         <span className="walker-name">{a.name}</span>
       ) : (
         <span className="walker-name walker-card">
-          <span><b>{a.name}</b> <em>Nv {levelOf(a)}</em></span>
+          <span><b>{a.name}</b>{a.isHead && ' 👑'} <em>Nv {levelOf(a)}</em></span>
+          {a.assistants?.length ? <small>👥 Asistentes: {a.assistants.map((x) => x.focus).join(', ')}</small> : null}
           <small>{a.role}</small>
           <small className={a.live ? 'ok' : 'muted'}>{a.live ? `● Conectada · ${a.provider}` : '○ Modo demo (sin conectar)'}</small>
           <small>{ACTIVITY[state] || ACTIVITY[w.inElevator ? 'ascensor' : w.reason] || 'Paseando'}</small>

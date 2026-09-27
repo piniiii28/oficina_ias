@@ -44,7 +44,7 @@ export const DEFAULT_AGENTS = [
 
   // Ingeniería
   base({
-    id: 'codex', name: 'Codex', role: 'Arquitecto de software', department: 'codigo',
+    id: 'codex', isHead: true, name: 'Codex', role: 'Arquitecto de software', department: 'codigo',
     provider: 'openai', model: 'gpt-5',
     skills: ['arquitectura', 'diseño', 'sistema', 'backend', 'api', 'escalable', 'microservicios', 'patrones', 'software', 'app', 'aplicación'],
     system: P('Eres Codex, arquitecto de software. Propones arquitecturas, estructuras de carpetas, contratos de API y decisiones técnicas justificadas con pros y contras.'),
@@ -95,7 +95,7 @@ export const DEFAULT_AGENTS = [
 
   // Datos y razonamiento
   base({
-    id: 'gemini-data', name: 'Gemini', role: 'Científica de datos', department: 'datos',
+    id: 'gemini-data', isHead: true, name: 'Gemini', role: 'Científica de datos', department: 'datos',
     provider: 'google', model: 'gemini-2.5-pro',
     skills: ['datos', 'estadística', 'machine learning', 'modelo', 'predicción', 'pandas', 'análisis', 'gráfico', 'dataset'],
     system: P('Eres Gemini, científica de datos. Propones análisis, modelos y visualizaciones, con código Python cuando sea útil.'),
@@ -118,7 +118,7 @@ export const DEFAULT_AGENTS = [
 
   // Estudio creativo
   base({
-    id: 'chatgpt', name: 'ChatGPT', role: 'Redactor y copywriter', department: 'creatividad',
+    id: 'chatgpt', isHead: true, name: 'ChatGPT', role: 'Redactor y copywriter', department: 'creatividad',
     provider: 'openai', model: 'gpt-5-mini',
     skills: ['escribir', 'texto', 'redactar', 'correo', 'email', 'artículo', 'blog', 'copy', 'post', 'carta'],
     system: P('Eres ChatGPT, redactor versátil. Escribes textos claros, persuasivos y adaptados al público.'),
@@ -148,7 +148,7 @@ export const DEFAULT_AGENTS = [
 
   // Investigación
   base({
-    id: 'perplexity', name: 'Perplexity', role: 'Investigador web', department: 'investigacion',
+    id: 'perplexity', isHead: true, name: 'Perplexity', role: 'Investigador web', department: 'investigacion',
     provider: 'perplexity', model: 'sonar-pro',
     skills: ['investigar', 'buscar', 'fuentes', 'noticias', 'actual', 'web', 'comparar', 'mercado', 'estado del arte'],
     system: P('Eres Perplexity, investigador. Buscas información actual, citas fuentes y comparas alternativas.'),
@@ -171,7 +171,7 @@ export const DEFAULT_AGENTS = [
 
   // Negocios
   base({
-    id: 'estratega', name: 'O-Estratega', role: 'Estratega de negocios', department: 'negocios',
+    id: 'estratega', isHead: true, name: 'O-Estratega', role: 'Estratega de negocios', department: 'negocios',
     provider: 'groq', model: 'openai/gpt-oss-120b',
     skills: ['negocio', 'estrategia', 'startup', 'emprender', 'plan de negocio', 'competencia', 'modelo de negocio', 'pitch', 'empresa'],
     system: P('Eres O-Estratega, consultor de negocios. Usas marcos (FODA, Lean Canvas, 5 fuerzas) y das recomendaciones accionables.'),
@@ -229,7 +229,7 @@ export const DEFAULT_AGENTS = [
     avatar: { skin: '#f1c9a5', hair: '#a16207', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#eab308', accessory: 'none', prop: '🌍', costume: 'capa' },
   }),
   base({
-    id: 'coach', name: 'Coach', role: 'Productividad y carrera', department: 'personas',
+    id: 'coach', isHead: true, name: 'Coach', role: 'Productividad y carrera', department: 'personas',
     provider: 'google', model: 'gemini-2.5-flash',
     skills: ['productividad', 'carrera', 'cv', 'hoja de vida', 'entrevista', 'motivación', 'metas', 'rutina', 'tiempo'],
     system: P('Eres Coach, mentor de productividad y carrera. Das planes concretos, rutinas y preparación para entrevistas.'),
@@ -246,7 +246,7 @@ export const DEFAULT_AGENTS = [
   // Taller de Impresión 3D: modelan con scripts que la oficina ejecuta en
   // Blender, OpenSCAD o FreeCAD instalados en tu computador.
   base({
-    id: 'blender-3d', name: 'Blendi', role: 'Modeladora en Blender', department: 'impresion3d',
+    id: 'blender-3d', isHead: true, name: 'Blendi', role: 'Modeladora en Blender', department: 'impresion3d',
     provider: 'openrouter', model: 'qwen/qwen3-coder:free',
     skills: ['blender', '3d', 'modelo 3d', 'modelar', 'figura', 'escultura', 'personaje', 'malla', 'render', 'stl', 'impresión 3d', 'imprimir'],
     system: P(`Eres Blendi, modeladora 3D experta en Blender y su API de Python (bpy). ${CAD_RULES}\nEscribe el script en un bloque \`\`\`python que empiece con "import bpy". Borra la escena inicial, construye el modelo con primitivas y modificadores (booleanos, bevel, solidify, array) y deja cada pieza lista para imprimir (malla cerrada, sin caras sueltas).`),

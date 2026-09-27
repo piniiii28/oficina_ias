@@ -14,6 +14,7 @@ import { CAD_TOOLS, detectCad, runCad, openInApp, sliceJob, extractCadBlocks, li
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
 import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
 import { listRequests, decide, addGrant } from './access.js';
+import { normalizeAssistants, SUGGESTED } from './assistants.js';
 import { addonSource, blenderCall, blenderStatus, installAddon, sceneText } from './blender.js';
 import os from 'node:os';
 import { seedWelcome } from './seed.js';
@@ -57,6 +58,16 @@ export function createApp(store) {
       if (!store.data.agents.some((a) => a.id === d.id)) store.data.agents.push(structuredClone(d));
     }
     store.data.settings.taller3dSeeded = true;
+    store.save();
+  }
+
+  // Oficinas anteriores a los jefes de departamento: se nombran una sola vez.
+  if (!store.data.settings.headsSeeded) {
+    for (const d of DEFAULT_AGENTS.filter((a) => a.isHead)) {
+      const a = store.data.agents.find((x) => x.id === d.id);
+      if (a && !store.data.agents.some((x) => x.isHead && x.department === a.department)) a.isHead = true;
+    }
+    store.data.settings.headsSeeded = true;
     store.save();
   }
 
@@ -132,6 +143,7 @@ export function createApp(store) {
       cadTools: Object.entries(CAD_TOOLS).map(([id, t]) => ({ id, label: t.label, url: t.url })),
       vaultPath: vault.dir,
       flows: FLOWS.map((f) => ({ id: f.id, name: f.name, agentIds: f.steps.map(([a]) => a) })),
+      suggestedAssistants: SUGGESTED,
     });
   });
 
@@ -165,6 +177,7 @@ export function createApp(store) {
     const s = store.data.settings;
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
+    if (req.body?.headsReview !== undefined) s.headsReview = Boolean(req.body.headsReview);
     if (req.body?.blenderControl !== undefined) s.blenderControl = Boolean(req.body.blenderControl);
     if (hubs !== undefined) s.hubs = normalizeHubs(hubs);
     if (cadPaths && typeof cadPaths === 'object') {
@@ -233,6 +246,14 @@ export function createApp(store) {
     if (!a) return res.status(404).json({ error: 'No existe' });
     for (const k of ['name', 'role', 'department', 'provider', 'model', 'skills', 'system', 'avatar', 'enabled', 'account']) {
       if (req.body[k] !== undefined) a[k] = req.body[k];
+    }
+    if (req.body.assistants !== undefined) a.assistants = normalizeAssistants(req.body.assistants);
+    if (req.body.delegate !== undefined) a.delegate = Boolean(req.body.delegate);
+    // Un solo jefe por departamento.
+    if (req.body.isHead !== undefined) {
+      if (req.body.isHead) for (const o of store.data.agents) if (o.department === a.department) delete o.isHead;
+      if (req.body.isHead) a.isHead = true;
+      else delete a.isHead;
     }
     if (!a.account || a.account === 'default') delete a.account;
     store.save();

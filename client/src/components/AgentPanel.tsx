@@ -1,12 +1,12 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
-import { api, levelOf, TIER_LABEL, type Account, type Agent, type ChatMessage } from '../api';
+import { api, levelOf, TIER_LABEL, type Account, type Agent, type AssistantDef, type ChatMessage } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { MicButton, SpeakButton } from './Voice';
 import { useOffice } from '../state';
 
-type Tab = 'chat' | 'entrenamiento' | 'memoria' | 'perfil';
+type Tab = 'chat' | 'entrenamiento' | 'asistentes' | 'memoria' | 'perfil';
 
 export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: () => void; status: string }) {
   const [tab, setTab] = useState<Tab>('chat');
@@ -23,7 +23,7 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
         <header className="drawer-head">
           <Chibi avatar={agent.avatar} state={live[agent.id]?.status || 'idle'} size={84} />
           <div>
-            <h2>{agent.name} <span className="level" title="Sube de nivel al completar trabajos">Nv {levelOf(agent)}</span></h2>
+            <h2>{agent.name} <span className="level" title="Sube de nivel al completar trabajos">Nv {levelOf(agent)}</span>{agent.isHead && <span className="level head" title="Jefe de su departamento">👑 Jefe</span>}</h2>
             <p className="muted">{agent.role}</p>
             <p className="small">
               <span className={`dot ${agent.live ? 'dot--live' : 'dot--demo'}`} /> {agent.live ? 'Conectada' : 'Modo demo'} · {agent.provider} / <code>{agent.model || '—'}</code>
@@ -33,15 +33,16 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
           <button className="icon-btn" onClick={onClose} aria-label="Cerrar">✕</button>
         </header>
         <nav className="tabs">
-          {(['chat', 'entrenamiento', 'memoria', 'perfil'] as Tab[]).map((t) => (
+          {(['chat', 'entrenamiento', 'asistentes', 'memoria', 'perfil'] as Tab[]).filter((t) => t !== 'asistentes' || !agent.isBrain).map((t) => (
             <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-              {{ chat: '💬 Chat', entrenamiento: '🎓 Entrenamiento', memoria: '🧠 Memoria', perfil: '⚙️ Perfil' }[t]}
+              {{ chat: '💬 Chat', entrenamiento: '🎓 Entrenamiento', asistentes: `👥 Asistentes${agent.assistants?.length ? ` (${agent.assistants.length})` : ''}`, memoria: '🧠 Memoria', perfil: '⚙️ Perfil' }[t]}
             </button>
           ))}
         </nav>
         <div className="drawer-body">
           {tab === 'chat' && <ChatTab agent={agent} />}
           {tab === 'entrenamiento' && <TrainingTab agent={agent} />}
+          {tab === 'asistentes' && <AssistantsTab agent={agent} />}
           {tab === 'memoria' && <MemoryTab agent={agent} />}
           {tab === 'perfil' && <ProfileTab agent={agent} onDeleted={onClose} />}
         </div>
@@ -326,6 +327,70 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
           }}>Despedir</button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Hasta 2 asistentes especializados; el jefe decide cuándo delegarles. */
+function AssistantsTab({ agent }: { agent: Agent }) {
+  const { reloadAgents, toast, providers, freeModels, suggestedAssistants } = useOffice();
+  const [list, setList] = useState<AssistantDef[]>(agent.assistants || []);
+  const [focus, setFocus] = useState('');
+  useEffect(() => setList(agent.assistants || []), [agent]);
+  const save = async (next: AssistantDef[], msg = '✅ Asistentes guardados') => {
+    const a = await api.updateAgent(agent.id, { assistants: next });
+    setList(a.assistants || []);
+    await reloadAgents();
+    toast(msg);
+  };
+  const add = (f: string) => {
+    if (!f.trim() || list.length >= 2) return;
+    save([...list, { id: '', name: '', focus: f.trim(), provider: 'groq', model: 'llama-3.3-70b-versatile' }], `👥 ${agent.name} tiene un asistente de ${f.trim()}`);
+    setFocus('');
+  };
+  const edit = (i: number, patch: Partial<AssistantDef>) => setList(list.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const ideas = (suggestedAssistants[agent.id] || []).filter((f) => !list.some((x) => x.focus === f));
+  return (
+    <div className="stack">
+      <p className="muted small">
+        Los asistentes son especialistas en una tecnología o tema. Cuando una tarea es compleja, {agent.name} les delega partes, ellos trabajan en paralelo y {agent.name} revisa e integra lo que entregan. Si la tarea es simple, la hace solo.
+        Usan modelos rápidos y gratis para gastar poco.
+      </p>
+      <label className="check">
+        <input type="checkbox" checked={agent.delegate !== false} onChange={async (e) => { await api.updateAgent(agent.id, { delegate: e.target.checked }); await reloadAgents(); }} />
+        Dejar que {agent.name} delegue en sus asistentes
+      </label>
+      {list.map((a, i) => (
+        <div key={a.id || i} className="assistant-card">
+          <div className="grid2">
+            <label>Nombre<input value={a.name} onChange={(e) => edit(i, { name: e.target.value })} /></label>
+            <label>Especialidad<input value={a.focus} onChange={(e) => edit(i, { focus: e.target.value })} /></label>
+            <label>Proveedor
+              <select value={a.provider} onChange={(e) => edit(i, { provider: e.target.value, model: freeModels[e.target.value]?.[0]?.id || a.model })}>
+                {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+            <label>Modelo
+              <input list={`as-models-${i}`} value={a.model} onChange={(e) => edit(i, { model: e.target.value })} />
+              <datalist id={`as-models-${i}`}>{(freeModels[a.provider] || []).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</datalist>
+            </label>
+          </div>
+          <div className="row">
+            <button className="btn btn--primary small" onClick={() => save(list)}>Guardar</button>
+            <button className="btn btn--ghost small" onClick={() => save(list.filter((_, k) => k !== i), 'Asistente quitado')}>Quitar</button>
+          </div>
+        </div>
+      ))}
+      {list.length < 2 && (
+        <>
+          <div className="row">
+            <input value={focus} onChange={(e) => setFocus(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add(focus)} placeholder="Especialidad, p. ej. React, Python, Excel, resina…" />
+            <button className="btn btn--primary small" disabled={!focus.trim()} onClick={() => add(focus)}>＋ Agregar asistente</button>
+          </div>
+          {ideas.length > 0 && <div className="row small"><span className="muted">Sugeridos:</span>{ideas.map((f) => <button key={f} className="btn btn--ghost small" onClick={() => add(f)}>＋ {f}</button>)}</div>}
+        </>
+      )}
+      {list.length >= 2 && <p className="muted small">Máximo 2 asistentes por IA, para que no se disparen las llamadas.</p>}
     </div>
   );
 }

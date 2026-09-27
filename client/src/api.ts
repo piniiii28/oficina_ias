@@ -33,7 +33,12 @@ export type Agent = {
   live?: boolean;
   account?: string;
   paidBackup?: { provider: string; model: string };
+  isHead?: boolean;
+  delegate?: boolean;
+  assistants?: AssistantDef[];
 };
+
+export type AssistantDef = { id: string; name: string; focus: string; provider: string; model: string };
 
 export type Flow = { id: string; name: string; agentIds: string[] };
 export type Department = { id: string; name: string; emoji: string; color: string };
@@ -62,6 +67,8 @@ export type Step = {
   instruction: string;
   dependsOn?: string[];
   rating?: { value: number; comment: string; at: string };
+  review?: boolean;
+  assistants?: { name: string; focus: string; task: string; output: string; simulated?: boolean; error?: string }[];
   status: 'pending' | 'working' | 'done' | 'error';
   output: string;
   simulated: boolean;
@@ -138,6 +145,7 @@ export type Settings = {
   grants: Grant[];
   accessEnabled: boolean;
   blenderControl?: boolean;
+  headsReview?: boolean;
   hubs: Hub[];
   cadPaths: Record<string, string>;
 };
@@ -189,7 +197,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
-  meta: () => req<{ departments: Department[]; providers: Provider[]; vaultPath: string; flows: Flow[]; freeModels: Record<string, FreeModel[]>; cadTools: CadTool[] }>('GET', '/api/meta'),
+  meta: () => req<{ departments: Department[]; providers: Provider[]; vaultPath: string; flows: Flow[]; freeModels: Record<string, FreeModel[]>; cadTools: CadTool[]; suggestedAssistants: Record<string, string[]> }>('GET', '/api/meta'),
 
   agents: () => req<Agent[]>('GET', '/api/agents'),
   createAgent: (a: Partial<Agent>) => req<Agent>('POST', '/api/agents', a),

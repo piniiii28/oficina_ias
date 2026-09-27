@@ -9,6 +9,7 @@ import { extractKeyIdeas } from './notes.js';
 import { relatedNotes } from './librarian.js';
 import { readLinks } from './links.js';
 import { callWithAccess } from './access.js';
+import { callWithAssistants } from './assistants.js';
 
 export const bus = new EventEmitter();
 /** Controladores para cancelar tareas en curso (id de tarea → AbortController). */
@@ -89,7 +90,7 @@ async function makePlan(store, task, forced, template) {
   const maxTeam = settings.maxTeam || 5;
   if (!live) return demoPlan(task, pool, maxTeam);
 
-  const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}. Habilidades: ${a.skills.join(', ')}${a.stats?.likes || a.stats?.dislikes ? `. Valoración del usuario: ${a.stats.likes || 0} 👍 / ${a.stats.dislikes || 0} 👎` : ''}`).join('\n');
+  const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}${a.isHead ? ' (jefe de su departamento)' : ''}${a.assistants?.length ? ` (tiene asistentes en ${a.assistants.map((x) => x.focus).join(' y ')})` : ''}. Habilidades: ${a.skills.join(', ')}${a.stats?.likes || a.stats?.dislikes ? `. Valoración del usuario: ${a.stats.likes || 0} 👍 / ${a.stats.dislikes || 0} 👎` : ''}`).join('\n');
   const prompt =
     `Tarea del usuario:\n"""${task}"""\n\nEquipo disponible:\n${roster}\n\n` +
     `Elige entre ${Math.min(2, maxTeam)} y ${maxTeam} especialistas (solo los necesarios)`+ ' y escribe una instrucción concreta para cada uno. ' +
@@ -271,14 +272,16 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       const onDelta = streamer(`task:${task.id}:${agent.id}`);
       try {
         // Puede pedir acceso a carpetas o programas del usuario (con su permiso).
-        const res = await callWithAccess(store, {
+        // Si tiene asistentes, decide si les delega partes.
+        const res = await callWithAssistants(store, {
           provider: agent.provider, model: agent.model, agent, onDelta, signal, effort,
           system: buildSystem(agent),
           messages: [{
             role: 'user',
             content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}${ctx()}`,
           }],
-        });
+        }, { taskKey: `task:${task.id}:${agent.id}`, allowDemoDelegation: true });
+        if (res.assistants) step.assistants = res.assistants;
         step.output = res.text;
         step.simulated = res.simulated;
         step.status = 'done';
@@ -294,6 +297,8 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     });
 
     if (signal.aborted) throw new Error('Cancelada por ti');
+    // Opcional: el jefe de cada departamento revisa lo que entregó su equipo.
+    if (settings.headsReview) await headsReview(store, task, settings, signal, emitTask, nameOf);
     // Síntesis del cerebro.
     task.status = 'synthesizing';
     emitTask();
@@ -380,6 +385,42 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   return task;
 }
 
+/** Revisión de los jefes: si 2 o más IAs de un departamento trabajaron, su jefe revisa y ajusta. */
+async function headsReview(store, task, settings, signal, emitTask, nameOf) {
+  const byDept = new Map();
+  for (const s of task.steps.filter((x) => x.status === 'done')) {
+    const a = store.data.agents.find((x) => x.id === s.agentId);
+    if (!a || a.isHead) continue;
+    (byDept.get(a.department) || byDept.set(a.department, []).get(a.department)).push(s);
+  }
+  for (const [dept, steps] of byDept) {
+    const head = store.data.agents.find((a) => a.isHead && a.enabled && a.department === dept);
+    if (!head || steps.length < 2 || task.steps.some((s) => s.agentId === head.id)) continue;
+    const step = { agentId: head.id, instruction: `Como jefe del departamento, revisa y unifica lo que entregó tu equipo (${steps.map((s) => nameOf(s.agentId)).join(', ')}).`, dependsOn: steps.map((s) => s.agentId), status: 'working', output: '', simulated: false, error: null, review: true };
+    task.steps.push(step);
+    emitTask();
+    agentStatus(head.id, 'working', 'Revisando el trabajo de mi equipo…');
+    const onDelta = streamer(`task:${task.id}:${head.id}`);
+    try {
+      const r = await callModel(settings, {
+        provider: head.provider, model: head.model, agent: head, onDelta, signal, effort: 'low',
+        system: buildSystem(head),
+        messages: [{ role: 'user', content: `${step.instruction} Señala errores, contradicciones y vacíos, y entrega la versión unificada del departamento.\n\nTarea: ${task.prompt}\n\n${steps.map((s) => `### Entrega de ${nameOf(s.agentId)}\n${s.output}`).join('\n\n')}` }],
+      });
+      step.output = r.text;
+      step.simulated = r.simulated;
+      step.status = 'done';
+      agentStatus(head.id, 'done', 'Revisión del departamento lista');
+    } catch (err) {
+      step.status = 'error';
+      step.error = err.message;
+      agentStatus(head.id, 'error', err.message);
+    }
+    onDelta.end();
+    emitTask();
+  }
+}
+
 function demoSynthesis(prompt, steps, names) {
   const bullets = steps.flatMap((s) => extractKeyIdeas(s.output).slice(0, 1).map((i) => `- ${i} *(de ${names(s.agentId)})*`));
   return [
@@ -458,7 +499,7 @@ export async function chatWithAgent(store, agentId, message) {
   agentStatus(agentId, 'thinking', 'Pensando…');
   const onDelta = streamer(`chat:${agentId}`);
   try {
-    const res = await callWithAccess(store, {
+    const res = await callWithAssistants(store, {
       provider: agent.provider, model: agent.model, agent, onDelta,
       system: buildSystem(agent),
       messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
