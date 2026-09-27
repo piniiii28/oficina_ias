@@ -88,10 +88,11 @@ async function makePlan(store, task, forced, template) {
   const maxTeam = settings.maxTeam || 5;
   if (!live) return demoPlan(task, pool, maxTeam);
 
-  const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}. Habilidades: ${a.skills.join(', ')}`).join('\n');
+  const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}. Habilidades: ${a.skills.join(', ')}${a.stats?.likes || a.stats?.dislikes ? `. Valoración del usuario: ${a.stats.likes || 0} 👍 / ${a.stats.dislikes || 0} 👎` : ''}`).join('\n');
   const prompt =
     `Tarea del usuario:\n"""${task}"""\n\nEquipo disponible:\n${roster}\n\n` +
     `Elige entre ${Math.min(2, maxTeam)} y ${maxTeam} especialistas (solo los necesarios)`+ ' y escribe una instrucción concreta para cada uno. ' +
+    'Ante empates, prefiere a las IAs mejor valoradas por el usuario. ' +
     'Si alguien necesita el trabajo de otro (p. ej. el tester necesita el código, el redactor necesita la investigación), ' +
     'indícalo en "dependsOn" con los agentId de los que depende; los demás trabajan en paralelo. ' +
     'Responde SOLO con JSON: {"analysis": "una frase", "subtasks": [{"agentId": "...", "instruction": "...", "dependsOn": []}]}';

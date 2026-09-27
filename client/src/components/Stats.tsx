@@ -58,7 +58,7 @@ export function Stats() {
             <div key={a.id} className="rank-row" title={`${a.name}: ${n} trabajo${n === 1 ? '' : 's'}`}>
               <span className="rank-name">{a.avatar.prop} {a.name}</span>
               <span className="rank-bar"><i style={{ width: `${(n / max) * 100}%` }} /></span>
-              <span className="rank-value">{n}</span>
+              <span className="rank-value">{n}{a.stats?.likes ? ` · 👍${a.stats.likes}` : ''}</span>
             </div>
           );
         })}

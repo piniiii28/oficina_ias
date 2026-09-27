@@ -106,6 +106,8 @@ export function demoPlan(task, agents, max = 5) {
       let score = 0;
       for (const s of a.skills) if (hasWord(text, s.toLowerCase())) score += s.includes(' ') ? 3 : 2;
       if (text.includes(a.name.toLowerCase())) score += 5;
+      // Las valoraciones del usuario desempatan.
+      if (score > 0) score += Math.max(-1.5, Math.min(1.5, ((a.stats?.likes || 0) - (a.stats?.dislikes || 0)) * 0.5));
       return { a, score };
     })
     .sort((x, y) => y.score - x.score);

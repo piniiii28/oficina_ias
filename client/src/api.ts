@@ -26,7 +26,7 @@ export type Agent = {
   avatar: AvatarConfig;
   knowledge: Knowledge[];
   memory: Memory[];
-  stats: { tasks: number; lastActive: string | null };
+  stats: { tasks: number; lastActive: string | null; likes?: number; dislikes?: number };
   enabled: boolean;
   isBrain?: boolean;
   isLibrarian?: boolean;
@@ -41,6 +41,7 @@ export type Step = {
   agentId: string;
   instruction: string;
   dependsOn?: string[];
+  rating?: { value: number; comment: string; at: string };
   status: 'pending' | 'working' | 'done' | 'error';
   output: string;
   simulated: boolean;
@@ -167,6 +168,7 @@ export const api = {
     req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments, flow, effort, fromNote }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
   cancelTask: (id: string) => req('POST', `/api/tasks/${id}/cancel`),
+  rateStep: (id: string, agentId: string, value: number, comment = '') => req('POST', `/api/tasks/${id}/steps/${agentId}/rate`, { value, comment }),
 
   meetings: () => req<Meeting[]>('GET', '/api/meetings'),
   startMeeting: (topic: string, agentIds: string[], rounds: number) => req<{ id: string }>('POST', '/api/meetings', { topic, agentIds, rounds }),

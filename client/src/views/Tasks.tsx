@@ -113,6 +113,17 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
             {s.error ? <p className="danger">{s.error}</p> : <div className={s.status === 'working' ? 'streaming' : ''}><Markdown text={s.output || streams[`task:${task.id}:${s.agentId}`] || '…'} onLink={(t) => openNote({ title: t })} /></div>}
+            {s.status === 'done' && (
+              <div className="rate">
+                <span className="muted small">¿Te sirvió? {a?.name} lo recordará:</span>
+                <button className={`btn btn--ghost small ${s.rating?.value === 1 ? 'on' : ''}`} onClick={() => api.rateStep(task.id, s.agentId, 1)}>👍</button>
+                <button className={`btn btn--ghost small ${s.rating?.value === -1 ? 'on' : ''}`} onClick={() => {
+                  const c = prompt(`¿Qué debería mejorar ${a?.name}? (opcional)`) ?? '';
+                  api.rateStep(task.id, s.agentId, -1, c);
+                }}>👎</button>
+                {s.rating?.comment && <small className="muted">«{s.rating.comment}»</small>}
+              </div>
+            )}
           </details>
         );
       })}

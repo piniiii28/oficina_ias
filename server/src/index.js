@@ -288,6 +288,27 @@ export function createApp(store) {
     promise.catch((err) => console.error('[tarea]', err));
     res.status(202).json({ id: store.data.tasks[0].id });
   });
+  app.post('/api/tasks/:id/steps/:agentId/rate', (req, res) => {
+    const t = store.data.tasks.find((x) => x.id === req.params.id);
+    const step = t?.steps.find((x) => x.agentId === req.params.agentId);
+    const agent = agentById(req.params.agentId);
+    if (!step || !agent) return res.status(404).json({ error: 'No existe' });
+    const value = Number(req.body?.value) > 0 ? 1 : -1;
+    const comment = String(req.body?.comment || '').trim().slice(0, 300);
+    const prev = step.rating?.value || 0;
+    step.rating = { value, comment, at: new Date().toISOString() };
+    agent.stats ||= { tasks: 0, lastActive: null };
+    agent.stats.likes = (agent.stats.likes || 0) + (value > 0 ? 1 : 0) - (prev > 0 ? 1 : 0);
+    agent.stats.dislikes = (agent.stats.dislikes || 0) + (value < 0 ? 1 : 0) - (prev < 0 ? 1 : 0);
+    // La valoración queda en su memoria para mejorar la próxima vez.
+    (agent.memory ||= []).push({
+      text: `${value > 0 ? 'Al usuario le gustó' : 'Al usuario NO le gustó'} mi aporte en "${t.title}"${comment ? `: ${comment}` : ''}`,
+      at: new Date().toISOString(),
+    });
+    store.save();
+    bus.emit('event', { type: 'task', task: t });
+    res.json({ ok: true, stats: agent.stats });
+  });
   app.post('/api/tasks/:id/cancel', (req, res) => {
     const ctrl = running.get(req.params.id);
     if (!ctrl) return res.status(404).json({ error: 'Esa tarea no está en curso' });

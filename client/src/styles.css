@@ -542,7 +542,7 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .stat-tile strong { display: block; font-size: 28px; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
 .stat-tile small { color: var(--muted); }
 .ranking h3 { margin-top: 0; }
-.rank-row { display: grid; grid-template-columns: 130px 1fr 32px; gap: 8px; align-items: center; padding: 3px 0; border-radius: 6px; }
+.rank-row { display: grid; grid-template-columns: 130px 1fr 64px; gap: 8px; align-items: center; padding: 3px 0; border-radius: 6px; }
 .rank-row:hover { background: var(--panel-2); }
 .rank-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rank-bar { height: 10px; }
@@ -625,3 +625,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .plan-diagram svg { display: block; }
 .task-detail > *, .meeting-room > *, .agents-view > *, .settings > * { flex-shrink: 0; }
 .elevator-panel button.on { background: #ef4444; color: #fff; border-color: #fecaca; animation: pulse 1.4s infinite; }
+.rate { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.rate .on { border-color: var(--accent); background: var(--accent-soft); }

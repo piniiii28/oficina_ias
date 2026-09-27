@@ -490,3 +490,24 @@ test('Anthropic con búsqueda web: continúa tras pause_turn', async () => {
     fake.close();
   }
 });
+
+test('valorar un aporte: se guarda en la memoria y en las estadísticas de la IA', async () => {
+  const store = new Store(tmp());
+  const app = createApp(store);
+  store.data.settings.demoMode = 'always';
+  const t = await runTask(store, new Notes(store), { prompt: 'app web en react', agentIds: ['opencode'] });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/api/tasks/${t.id}/steps/opencode/rate`;
+    const post = (b) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    await post({ value: -1, comment: 'Faltaron las pruebas' });
+    await post({ value: 1 });
+    const a = store.data.agents.find((x) => x.id === 'opencode');
+    assert.equal(a.stats.likes, 1);
+    assert.equal(a.stats.dislikes, 0, 'cambiar la valoración no la cuenta dos veces');
+    assert.ok(a.memory.some((m) => /NO le gustó.*Faltaron las pruebas/.test(m.text)));
+  } finally {
+    server.close();
+  }
+});
