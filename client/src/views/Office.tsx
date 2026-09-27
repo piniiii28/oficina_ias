@@ -5,6 +5,7 @@ import { Chibi } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
 import { Flights } from '../components/Flights';
 import { Building } from '../building/Building';
+import { Feed } from '../components/Feed';
 import { useOffice, type Live } from '../state';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -212,6 +213,8 @@ export function Office() {
           {latest && <TaskProgress task={latest} agents={agents} />}
         </div>
       </section>
+
+      <Feed />
 
       <div className="floor-toolbar">
         <h2>La oficina <span className="muted">· {staff.length} IAs</span></h2>

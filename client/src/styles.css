@@ -572,3 +572,10 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 4px; color: var(--muted); }
 @keyframes pop-in-plain { from { transform: scale(0.97); opacity: 0; } }
 @media (max-width: 900px) { .search-hint { display: none; } }
+
+.feed { margin-top: 14px; box-shadow: none; padding: 8px 12px; }
+.feed ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.feed li { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 2px 4px; border-radius: 8px; animation: slidein 0.2s ease-out; }
+.feed li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed li.feed-done strong { color: var(--ok); }
+.feed li.feed-error strong { color: var(--danger); }
