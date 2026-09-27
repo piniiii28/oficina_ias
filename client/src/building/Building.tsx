@@ -359,10 +359,23 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
   const inElevator = active.filter((a) => walkers[a.id]?.inElevator);
 
   const wrap = useRef<HTMLDivElement>(null);
+  const [tour, setTour] = useState(false);
+  useEffect(() => {
+    if (!tour) return;
+    let k = 0;
+    const go = () => {
+      document.getElementById(`piso-${FLOORS[k % FLOORS.length].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      k++;
+    };
+    go();
+    const id = window.setInterval(go, 8000);
+    return () => clearInterval(id);
+  }, [tour]);
   return (
     <div className="building-wrap" ref={wrap}>
       <nav className="elevator-panel" aria-label="Ir a un piso">
         <button title="Pantalla completa" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : wrap.current?.requestFullscreen?.())}>🖥️</button>
+        <button title={tour ? 'Detener recorrido' : 'Recorrido automático por los pisos'} className={tour ? 'on' : ''} onClick={() => setTour((t) => !t)}>📹</button>
         <span>🛗</span>
         {FLOORS.map((f, k) => (
           <button key={f.id} title={f.name} onClick={() => document.getElementById(`piso-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>

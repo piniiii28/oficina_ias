@@ -624,3 +624,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .plan-diagram { flex-shrink: 0; overflow-x: auto; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
 .plan-diagram svg { display: block; }
 .task-detail > *, .meeting-room > *, .agents-view > *, .settings > * { flex-shrink: 0; }
+.elevator-panel button.on { background: #ef4444; color: #fff; border-color: #fecaca; animation: pulse 1.4s infinite; }
