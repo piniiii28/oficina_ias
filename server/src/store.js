@@ -58,6 +58,25 @@ export class Store {
     fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
     if (fs.existsSync(this.file)) fs.copyFileSync(this.file, this.file + '.bak');
     fs.renameSync(tmp, this.file);
+    this.#dailyBackup();
+  }
+
+  /** Un respaldo por día en respaldos/ (se guardan los últimos 14). */
+  #dailyBackup() {
+    const d = new Date();
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (this.lastBackup === day) return;
+    this.lastBackup = day;
+    try {
+      const dir = path.join(this.dir, 'respaldos');
+      fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `oficina-${day}.json`);
+      if (!fs.existsSync(file)) fs.copyFileSync(this.file, file);
+      const old = fs.readdirSync(dir).filter((f) => /^oficina-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+      for (const f of old.slice(0, Math.max(0, old.length - 14))) fs.unlinkSync(path.join(dir, f));
+    } catch (err) {
+      console.error('[respaldo]', err.message);
+    }
   }
 
   static id(prefix = '') {

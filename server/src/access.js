@@ -14,7 +14,8 @@ import { detectCad, CAD_TOOLS } from './cad.js';
 import { launchApp, openPath } from './system.js';
 import { blenderCall, blenderStatus, sceneText } from './blender.js';
 import { runAutomation } from './automations.js';
-import { getPrinter, printerInfo, cameraFrame, PRINTER_COMMANDS } from './bambu.js';
+import { PRINTER_COMMANDS } from './bambu.js';
+import { printerNow, printerCommand, printerCamera } from './devices.js';
 
 const win = process.platform === 'win32';
 export const MODES = ['leer', 'escribir'];
@@ -157,7 +158,7 @@ Puedes activar una escribiendo (los datos en JSON):
 Disponibles:
 ${autos.map((a) => `- «${a.name}»${a.description ? `: ${a.description}` : ''}`).join('\n')}
 El usuario aprueba cada una la primera vez.` : '';
-  const pr = printerInfo(settings);
+  const pr = printerNow(settings);
   const printer = pr.configured ? `
 
 ## Impresora 3D del usuario (${pr.name}, Bambu Lab ${pr.model}${pr.connected ? `, ahora: ${pr.state?.estado}${pr.state?.progreso != null ? ` ${pr.state.progreso} %` : ''}` : ', desconectada'})
@@ -262,7 +263,7 @@ async function runAction(store, agent, act, onceGrants) {
       return r.ok ? `Guardado en ${target}.` : `No pude guardar: ${r.error}`;
     }
     if (kind.startsWith('impresora-')) {
-      const info = printerInfo(store.data.settings);
+      const info = printerNow(store.data.settings);
       if (!info.configured) return 'La impresora no está configurada (Taller 3D → Mi impresora).';
       if (kind === 'impresora-estado') {
         if (!info.connected) return `No estoy conectado a la impresora: ${info.error || 'sin respuesta'}`;
@@ -278,8 +279,7 @@ async function runAction(store, agent, act, onceGrants) {
             store.save();
           } else onceGrants.push({ camera: true });
         }
-        const c = store.data.settings.printer;
-        const img = await cameraFrame({ host: c.host, accessCode: c.accessCode, port: c.cameraPort || 6000 }, { plain: process.env.OFICINA_PRINTER_PLAIN === '1' });
+        const img = await printerCamera(store.data.settings);
         const dir = path.join(dataDir, 'taller3d', 'capturas');
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(dir, `impresora-${Date.now()}.jpg`), img);
@@ -288,8 +288,7 @@ async function runAction(store, agent, act, onceGrants) {
       }
       const orden = String(attrs.orden || '');
       if (!PRINTER_COMMANDS.includes(orden)) return `Orden desconocida. Usa: ${PRINTER_COMMANDS.join(', ')}.`;
-      const p = getPrinter();
-      if (!p?.connected) return `No estoy conectado a la impresora: ${info.error || 'sin respuesta'}`;
+      if (!info.connected) return `No estoy conectado a la impresora: ${info.error || 'sin respuesta'}`;
       // Detener siempre se pregunta; lo demás, hasta que digas «permitir siempre».
       if (orden === 'detener' || (!store.data.settings.printerControl && !onceGrants.some((g) => g.printer))) {
         const r = await requestAccess(store, { agent, path: 'Tu impresora Bambu Lab', mode: 'controlar', reason: attrs.motivo, action: orden.replace('_', ' '), special: true });
@@ -299,7 +298,7 @@ async function runAction(store, agent, act, onceGrants) {
           store.save();
         } else onceGrants.push({ printer: true });
       }
-      p.command(orden);
+      await printerCommand(store.data.settings, orden);
       return `Orden enviada a la impresora: ${orden}.`;
     }
     if (kind === 'automatizar') {

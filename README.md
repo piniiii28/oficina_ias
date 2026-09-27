@@ -35,13 +35,19 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **37 IAs
 
 Atajo: **Ctrl+K** (⌘K en Mac) abre la búsqueda global de notas, IAs, tareas y secciones.
 
-## Cómo iniciarla
+## Cómo instalarla y actualizarla
 
-Necesitas [Node.js](https://nodejs.org) 20 o superior.
+La forma recomendada es **`instalar.bat`** (Windows) o **`./instalar.sh`** (Mac/Linux), una sola vez:
 
-- **Windows:** doble clic en `iniciar.bat`.
-- **macOS / Linux:** ejecuta `./iniciar.sh`.
-- **Manual:** `npm install` y luego `npm start`. Abre http://localhost:4747
+- Instala Git y Node.js si faltan, descarga la oficina con git en `%USERPROFILE%\OficinaIAs`, trae tus datos si venías de una versión en ZIP y crea un acceso directo **«Oficina de IAs»** en el escritorio.
+- Desde ahí, cada vez que la abres **se actualiza sola**. También hay un botón **Ajustes → Buscar actualizaciones**, que instala los cambios y reinicia la oficina.
+- La primera vez GitHub puede pedirte iniciar sesión (el repositorio es privado); queda guardado.
+
+También puedes abrirla con `iniciar.bat` / `./iniciar.sh`, o a mano con `npm install` y `npm start`. Abre http://localhost:4747
+
+### Dónde quedan tus datos
+
+En **Documentos → Oficina de IAs** (fuera del programa, así actualizar o reinstalar no los toca). Ahí están la base de la oficina, la bóveda de notas `.md` para Obsidian, el Taller 3D y **respaldos diarios** (los últimos 14). La primera vez que abres esta versión, tus datos de la carpeta `data/` se copian allí solos. Puedes moverlos (por ejemplo a OneDrive) en **Ajustes → Actualizaciones y datos**.
 
 Desde Chrome o Edge puedes **instalarla como app** (ícono de instalar en la barra de direcciones) para abrirla en su propia ventana.
 
@@ -188,10 +194,21 @@ En **Taller 3D → Mi impresora** escribe la IP, el número de serie y el códig
 ## Usarla desde otros computadores (Tailscale)
 
 1. Instala [Tailscale](https://tailscale.com/download) (gratis) en todos los computadores con la misma cuenta.
-2. En **Ajustes → Otros computadores**, crea un usuario con contraseña para cada persona (miembro o administrador) y elige su núcleo del grafo.
+2. En **Ajustes → Otros computadores**, crea tu usuario con contraseña (como administrador). Si alguien más la va a usar, dale un usuario propio como miembro. Tus suscripciones son personales: tú puedes usarlas desde tus tres computadores, pero no compartirlas con otras personas.
 3. Activa el acceso remoto: la oficina también escucha en la IP de Tailscale de este computador (`http://100.x.y.z:4747`). Los demás entran desde el navegador e inician sesión.
 
 En este computador no hace falta iniciar sesión. Los **miembros** trabajan con las IAs, las notas y el tablero, pero no pueden cambiar tus claves, aprobar permisos, ejecutar scripts en tu computador ni tocar la impresora. Nadie fuera de tu red de Tailscale puede ver la oficina.
+
+## Nodos: tus otros computadores
+
+Las IAs de la nube (Claude, Gemini, Groq…) trabajan igual desde cualquier computador, así que no hace falta repartirles trabajo. Lo que sí aporta otro computador es lo que tiene **cerca**: la impresora de esa casa o su Ollama (si tiene mejor tarjeta de video).
+
+1. En el otro computador instala la oficina y Tailscale, y abre **`nodo.bat`** (o `./nodo.sh`). Se abre una página con su dirección de Tailscale y su **código de enlace**.
+2. En la oficina principal: **Ajustes → Nodos → Agregar nodo**.
+3. Para la impresora de esa casa: **Taller 3D → Mi impresora → ¿Dónde está la impresora? → En la casa del nodo…**. El código de acceso se guarda en el nodo.
+4. Para su Ollama: **Ajustes → Nodos → Ollama que usa la oficina**.
+
+El nodo solo responde por Tailscale y con su código de enlace, y se actualiza solo al abrirlo.
 
 ## Jurado
 
@@ -203,7 +220,7 @@ La oficina solo escucha en tu propio computador (`127.0.0.1`) y rechaza peticion
 
 ## ¿Dónde se guarda todo?
 
-En `data/oficina.json`, dentro de la carpeta del proyecto, con una copia de seguridad automática en `oficina.json.bak`. **Nada se pierde al apagar el computador.** Desde Ajustes puedes descargar un respaldo (sin tus claves) y restaurarlo en otro equipo.
+En **Documentos → Oficina de IAs** (`oficina.json`), con una copia automática en `oficina.json.bak` y respaldos diarios en `respaldos/`. **Nada se pierde al apagar el computador.** Desde Ajustes puedes descargar un respaldo (sin tus claves) y restaurarlo en otro equipo.
 
 ## Estructura
 

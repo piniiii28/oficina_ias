@@ -10,8 +10,11 @@ import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
-import { connectPrinter, getPrinter, printerInfo, cameraFrame, PRINTER_COMMANDS, isLanHost } from './bambu.js';
+import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
+import { addNode, nodeById, nodeCall, printerCamera, printerCommand, printerNow, publicNode, savePrinter, startNodePrinterPoll } from './devices.js';
 import { requestAccess } from './access.js';
+import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
+import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
 import { COOKIE, cookieOf, createUser, hashPassword, hostAllowed, login, logout, needsAdmin, publicUser, tailscaleAddresses, userFromSession } from './auth.js';
 import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
 import { FREE_MODELS, freePlan } from './freeModels.js';
@@ -32,7 +35,8 @@ import { FLOWS, flowPlan } from './flows.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
-const DATA_DIR = process.env.OFICINA_DATA || path.join(ROOT, 'data');
+// Tus datos viven fuera del programa (Documentos/Oficina de IAs), para que actualizar no los toque.
+const dataDir = () => resolveDataDir(ROOT);
 const PORT = Number(process.env.PORT || 4747);
 // Solo tu computador puede usar la oficina (tiene tus claves y puede ejecutar CLIs).
 const HOST = process.env.HOST || '127.0.0.1';
@@ -187,6 +191,7 @@ export function createApp(store) {
     delete rest.apiToken;
     delete rest.hookToken;
     delete rest.printer; // el código de acceso de la impresora no sale del servidor
+    delete rest.nodes; // ni los códigos de enlace de los nodos
     delete rest.users; // las contraseñas (cifradas) tampoco
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
     return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
@@ -258,6 +263,11 @@ export function createApp(store) {
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (req.body?.headsReview !== undefined) s.headsReview = Boolean(req.body.headsReview);
+    if (req.body?.ollamaNode !== undefined) {
+      if (req.body.ollamaNode && !(s.nodes || []).some((n) => n.id === req.body.ollamaNode)) return res.status(400).json({ error: 'Ese nodo no existe' });
+      if (req.body.ollamaNode) s.ollamaNode = req.body.ollamaNode;
+      else delete s.ollamaNode;
+    }
     if (req.body?.verifySteps !== undefined) s.verifySteps = Boolean(req.body.verifySteps);
     if (req.body?.jury && typeof req.body.jury === 'object') s.jury = { enabled: Boolean(req.body.jury.enabled), size: Math.max(1, Math.min(3, Number(req.body.jury.size) || 2)) };
     if (req.body?.blenderControl !== undefined) s.blenderControl = Boolean(req.body.blenderControl);
@@ -745,9 +755,11 @@ export function createApp(store) {
 
   // --- Ollama: modelos instalados y descarga de modelos ---
   const ollamaBase = () => (store.data.settings.apiKeys?.ollamaUrl || PROVIDERS.ollama.baseUrl).replace(/\/v1\/?$/, '');
+  const ollamaNode = () => store.data.settings.ollamaNode && nodeById(store.data.settings, store.data.settings.ollamaNode);
   app.get('/api/ollama/models', async (_req, res) => {
     try {
-      const r = await fetch(`${ollamaBase()}/api/tags`, { signal: AbortSignal.timeout(4000) });
+      const n = ollamaNode();
+      const r = n ? await fetch(`${n.url}/nodo/ollama/api/tags`, { headers: { 'X-Nodo-Token': n.token }, signal: AbortSignal.timeout(4000) }) : await fetch(`${ollamaBase()}/api/tags`, { signal: AbortSignal.timeout(4000) });
       const data = await r.json();
       res.json({ running: true, models: (data.models || []).map((m) => ({ name: m.name, size: m.size })) });
     } catch {
@@ -758,6 +770,20 @@ export function createApp(store) {
     const model = String(req.body?.model || '').trim();
     if (!/^[a-z0-9][a-z0-9._:/-]{0,80}$/i.test(model)) return res.status(400).json({ error: 'Nombre de modelo no válido' });
     const log = streamer(`install:ollama:${model}`);
+    const n = ollamaNode();
+    if (n) {
+      // Descarga en el nodo (puede tardar varios minutos).
+      log(`Descargando ${model} en el nodo «${n.name}»…\n`);
+      try {
+        const r = await fetch(`${n.url}/nodo/ollama/api/pull`, { method: 'POST', headers: { 'X-Nodo-Token': n.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: model, stream: false }), signal: AbortSignal.timeout(60 * 60000) });
+        const out = await r.text();
+        log.end();
+        return res.json({ ok: r.ok, log: out.slice(-2000) });
+      } catch (err) {
+        log.end();
+        return res.json({ ok: false, log: err.message });
+      }
+    }
     log(`$ ollama pull ${model}\n`);
     const r = await runLogged('ollama', ['pull', model], { onData: log, timeoutMs: 60 * 60000 });
     log.end();
@@ -1054,6 +1080,48 @@ export function createApp(store) {
     res.json(remoteInfo());
   });
 
+  // --- Carpeta de datos y actualizaciones ---
+  app.get('/api/system', (_req, res) => res.json({ dataDir: store.dir, appDir: ROOT, canRestart: process.env.OFICINA_LANZADOR === '1' }));
+  app.post('/api/system/data-dir', (req, res) => {
+    if (!req.user?.local) return res.status(403).json({ error: 'Solo desde este computador' });
+    try {
+      store.flush();
+      moveDataTo(store.dir, String(req.body?.dir || '').trim());
+      setDataDir(ROOT, path.resolve(String(req.body.dir).trim()));
+      const restart = process.env.OFICINA_LANZADOR === '1';
+      res.json({ ok: true, restart });
+      if (restart) setTimeout(() => process.exit(RESTART_CODE), 400);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.get('/api/update', async (req, res) => {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo un administrador' });
+    res.json(await updateStatus(ROOT, { fetch: req.query.fetch !== '0' }));
+  });
+  app.post('/api/update', async (req, res) => {
+    if (!req.user?.local) return res.status(403).json({ error: 'Actualiza desde el computador principal' });
+    const log = streamer('install:update');
+    try {
+      await applyUpdate(ROOT, log);
+      log.end();
+      const restart = process.env.OFICINA_LANZADOR === '1';
+      res.json({ ok: true, restart });
+      if (restart) {
+        store.flush();
+        setTimeout(() => process.exit(RESTART_CODE), 600);
+      }
+    } catch (err) {
+      log.end();
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.post('/api/update/terminal', (req, res) => {
+    if (!req.user?.local) return res.status(403).json({ error: 'Solo desde este computador' });
+    const cmd = process.platform === 'win32' ? `cd /d "${ROOT}" && git pull` : `cd "${ROOT}" && git pull`;
+    res.json({ opened: openTerminal(cmd), command: cmd });
+  });
+
   // --- Claude Desktop (servidor MCP de la oficina) ---
   const MCP_FILE = path.join(ROOT, 'mcp', 'oficina-mcp.mjs');
   const claudeConfigPath = () => (process.platform === 'win32'
@@ -1092,46 +1160,39 @@ export function createApp(store) {
     res.json({ ok: true, configPath: file });
   });
 
-  // --- Impresora Bambu Lab (red local) ---
-  connectPrinter(store.data.settings, (e) => bus.emit('event', e));
-  app.get('/api/printer/status', (_req, res) => res.json(printerInfo(store.data.settings)));
-  app.put('/api/printer', (req, res) => {
+  // --- Impresora Bambu Lab (en esta red o en la de un nodo) ---
+  const emitEvent = (e) => bus.emit('event', e);
+  connectPrinter(store.data.settings.printer?.node ? {} : store.data.settings, emitEvent);
+  const nodePoll = startNodePrinterPoll(store, emitEvent);
+  app.locals.stop = () => clearInterval(nodePoll);
+  app.get('/api/printer/status', (_req, res) => res.json(printerNow(store.data.settings)));
+  app.put('/api/printer', async (req, res) => {
     if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'La impresora se configura desde este computador' });
-    const b = req.body || {};
-    const prev = store.data.settings.printer || {};
-    const host = String(b.host ?? prev.host ?? '').trim();
-    if (host && !isLanHost(host)) return res.status(400).json({ error: 'Usa la IP local de la impresora (por ejemplo 192.168.1.50)' });
-    store.data.settings.printer = {
-      name: String(b.name ?? prev.name ?? 'Mi P1S').slice(0, 40),
-      model: String(b.model ?? prev.model ?? 'P1S').slice(0, 20),
-      host,
-      port: Number(b.port || prev.port || 8883),
-      serial: String(b.serial ?? prev.serial ?? '').trim().toUpperCase(),
-      // Vacío = conservar el código anterior.
-      accessCode: typeof b.accessCode === 'string' && b.accessCode.trim() ? b.accessCode.trim() : prev.accessCode || '',
-      cameraPort: Number(b.cameraPort || prev.cameraPort || 6000),
-    };
-    store.save();
-    connectPrinter(store.data.settings, (e) => bus.emit('event', e));
-    res.json(printerInfo(store.data.settings));
+    try {
+      res.json(await savePrinter(store, req.body, emitEvent));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
-  app.delete('/api/printer', (req, res) => {
+  app.delete('/api/printer', async (req, res) => {
     if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'Solo desde este computador' });
+    const node = store.data.settings.printer?.node && nodeById(store.data.settings, store.data.settings.printer.node);
+    if (node) await nodeCall(node, 'DELETE', '/nodo/printer').catch(() => {});
     delete store.data.settings.printer;
     store.save();
-    connectPrinter(store.data.settings);
-    res.json(printerInfo(store.data.settings));
+    connectPrinter({});
+    res.json(printerNow(store.data.settings));
   });
   app.post('/api/printer/command', async (req, res) => {
     const command = String(req.body?.command || '');
     if (!PRINTER_COMMANDS.includes(command)) return res.status(400).json({ error: 'Orden desconocida' });
-    const p = getPrinter();
-    if (!p?.connected) return res.status(409).json({ error: printerInfo(store.data.settings).error || 'No estoy conectado a la impresora' });
+    const info = printerNow(store.data.settings);
+    if (!info.connected) return res.status(409).json({ error: info.error || 'No estoy conectado a la impresora' });
     // Si la orden no la da la persona frente al computador (Claude Desktop, otro equipo), se pide permiso.
     if (!isLocal(req) || req.viaToken) {
       const allowed = store.data.settings.printerControl && command !== 'detener';
       if (!allowed) {
-        const r = await requestAccess(store, { agent: { id: 'externo', name: String(req.body?.via || 'Una conexión externa').slice(0, 40) }, path: 'Tu impresora Bambu Lab', mode: 'controlar', reason: `Quiere: ${command.replace('_', ' ')}`, action: command, special: true });
+        const r = await requestAccess(store, { agent: { id: 'externo', name: String(req.body?.via || req.user?.name || 'Una conexión externa').slice(0, 40) }, path: 'Tu impresora Bambu Lab', mode: 'controlar', reason: `Quiere: ${command.replace('_', ' ')}`, action: command, special: true });
         if (r.decision === 'deny') return res.status(403).json({ error: 'El usuario no dio permiso' });
         if (r.decision === 'always' && command !== 'detener') {
           store.data.settings.printerControl = true;
@@ -1140,7 +1201,7 @@ export function createApp(store) {
       }
     }
     try {
-      p.command(command);
+      await printerCommand(store.data.settings, command);
       res.json({ ok: true, message: { pausar: '⏸️ Impresión en pausa', reanudar: '▶️ Impresión reanudada', detener: '⏹️ Impresión detenida', luz_on: '💡 Luz encendida', luz_off: '🌑 Luz apagada' }[command] });
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -1148,16 +1209,42 @@ export function createApp(store) {
   });
   app.get('/api/printer/camera.jpg', async (req, res) => {
     if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'La cámara solo se ve desde este computador' });
-    const c = store.data.settings.printer;
-    if (!c?.host || !c.accessCode) return res.status(404).json({ error: 'Configura la impresora primero' });
     try {
-      const img = await cameraFrame({ host: c.host, accessCode: c.accessCode, port: c.cameraPort || 6000 }, { plain: process.env.OFICINA_PRINTER_PLAIN === '1' });
+      const img = await printerCamera(store.data.settings);
       res.setHeader('Content-Type', 'image/jpeg');
       res.setHeader('Cache-Control', 'no-store');
       res.end(img);
     } catch (err) {
       res.status(502).json({ error: err.message });
     }
+  });
+
+  // --- Nodos: tus otros computadores (impresora y Ollama de otras zonas) ---
+  app.get('/api/nodes', async (_req, res) => {
+    const nodes = store.data.settings.nodes || [];
+    res.json(await Promise.all(nodes.map(async (n) => {
+      try {
+        return { ...publicNode(n), online: true, info: await nodeCall(n, 'GET', '/nodo/info', undefined, { timeoutMs: 4000 }) };
+      } catch (err) {
+        return { ...publicNode(n), online: false, error: err.message };
+      }
+    })));
+  });
+  app.post('/api/nodes', async (req, res) => {
+    try {
+      const { node, info } = await addNode(store, req.body || {});
+      res.status(201).json({ ...publicNode(node), online: true, info });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.delete('/api/nodes/:id', (req, res) => {
+    const s = store.data.settings;
+    s.nodes = (s.nodes || []).filter((n) => n.id !== req.params.id);
+    if (s.printer?.node === req.params.id) delete s.printer;
+    if (s.ollamaNode === req.params.id) delete s.ollamaNode;
+    store.save();
+    res.json({ ok: true });
   });
 
   // --- Taller de Impresión 3D ---
@@ -1282,7 +1369,7 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
   // --- Copia de seguridad ---
   app.get('/api/export', (_req, res) => {
     const { settings, sessions: _s, metrics: _m, ...rest } = store.data;
-    const { users: _u, remote: _r, apiKeys: _omit, accounts: _acc, apiToken: _t, hookToken: _h, blenderToken: _b, printer: _pr, ...safeSettings } = settings;
+    const { users: _u, remote: _r, nodes: _n, apiKeys: _omit, accounts: _acc, apiToken: _t, hookToken: _h, blenderToken: _b, printer: _pr, ...safeSettings } = settings;
     res.setHeader('Content-Disposition', 'attachment; filename="oficina-ias-respaldo.json"');
     res.json({ ...rest, settings: safeSettings, exportedAt: new Date().toISOString() });
   });
@@ -1291,9 +1378,9 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
     if (!Array.isArray(b.agents) || !Array.isArray(b.notes)) return res.status(400).json({ error: 'Archivo de respaldo no válido' });
     // Las claves y los comandos de las CLIs son de este computador: un respaldo ajeno no debe poder cambiarlos.
     // Los permisos de carpetas también son de este computador.
-    const { apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote } = store.data.settings;
-    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, apiToken: _t, hookToken: _h, blenderToken: _b, automations: _au, printer: _pr, users: _us, remote: _re, ...importedSettings } = b.settings || {};
-    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote }, sessions: store.data.sessions };
+    const { apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote, nodes, ollamaNode } = store.data.settings;
+    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, apiToken: _t, hookToken: _h, blenderToken: _b, automations: _au, printer: _pr, users: _us, remote: _re, nodes: _no, ollamaNode: _on, ...importedSettings } = b.settings || {};
+    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote, nodes, ollamaNode }, sessions: store.data.sessions };
     store.flush();
     bus.emit('event', { type: 'notes' });
     res.json({ ok: true });
@@ -1330,6 +1417,7 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const DATA_DIR = dataDir();
   const store = new Store(DATA_DIR);
   const app = createApp(store);
   startScheduler(store, new Notes(store));

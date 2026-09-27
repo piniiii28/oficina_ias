@@ -1,18 +1,22 @@
 // Mi impresora Bambu Lab (P1S): estado en vivo, cámara y controles por la red local.
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, type NodeInfo } from '../api';
 import { useOffice } from '../state';
 
 export function PrinterPanel() {
   const { printer, toast } = useOffice();
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: 'Mi P1S', host: '', serial: '', accessCode: '' });
+  const [form, setForm] = useState({ name: 'Mi P1S', host: '', serial: '', accessCode: '', node: '' });
+  const [nodes, setNodes] = useState<NodeInfo[]>([]);
+  useEffect(() => {
+    api.nodes().then(setNodes).catch(() => {});
+  }, [editing]);
   const [cam, setCam] = useState<string | null>(null);
   const [camOn, setCamOn] = useState(false);
   const [camError, setCamError] = useState('');
 
   useEffect(() => {
-    if (printer?.configured) setForm((f) => ({ ...f, name: printer.name, host: printer.host, serial: printer.serial }));
+    if (printer?.configured) setForm((f) => ({ ...f, name: printer.name, host: printer.host || '', serial: printer.serial || '', node: printer.node?.id || '' }));
   }, [printer?.configured]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cámara: una foto cada 3 s mientras está encendida.
@@ -43,7 +47,7 @@ export function PrinterPanel() {
 
   async function save() {
     try {
-      await api.savePrinter(form);
+      await api.savePrinter({ ...form, node: form.node || undefined });
       setEditing(false);
       setForm({ ...form, accessCode: '' });
       toast('🖨️ Conectando con la impresora…');
@@ -70,7 +74,7 @@ export function PrinterPanel() {
   return (
     <section className="card printer-panel">
       <div className="row between">
-        <h3>🖨️ {p?.configured ? p.name : 'Mi impresora Bambu Lab'}</h3>
+        <h3>🖨️ {p?.configured ? p.name : 'Mi impresora Bambu Lab'}{p?.node && <small className="muted"> · por el nodo {p.node.name}</small>}</h3>
         {p?.configured && <span className={`pill ${p.connected ? 'pill--done' : 'pill--error'}`}>{p.connected ? `● Conectada · ${s?.estado || '…'}` : '○ Sin conexión'}</span>}
       </div>
       {setup ? (
@@ -82,14 +86,22 @@ export function PrinterPanel() {
             <li>Para la cámara, activa <b>LAN Mode Liveview</b>.</li>
             <li>El <b>número de serie</b> está en Configuración → Dispositivo, o en Bambu Studio → Dispositivo.</li>
           </ol>
+          <label className="check">¿Dónde está la impresora?{' '}
+            <select value={form.node} onChange={(e) => setForm({ ...form, node: e.target.value })}>
+              <option value="">En la misma casa que este computador</option>
+              {nodes.map((n) => <option key={n.id} value={n.id}>En la casa del nodo «{n.name}»{n.online ? '' : ' (desconectado)'}</option>)}
+            </select>
+          </label>
+          {!nodes.length && <p className="muted small">Si la impresora está en otra casa, primero abre <b>nodo.bat</b> en el computador de esa casa y agrégalo en Ajustes → Nodos.</p>}
+          {form.node && <p className="muted small">El código de acceso se guarda en el nodo; la IP es la de la impresora en la red de esa casa.</p>}
           <div className="grid2">
             <label>Nombre<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
             <label>IP de la impresora<input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="192.168.1.50" /></label>
             <label>Número de serie<input value={form.serial} onChange={(e) => setForm({ ...form, serial: e.target.value })} placeholder="01P00A…" /></label>
-            <label>Código de acceso LAN<input type="password" value={form.accessCode} onChange={(e) => setForm({ ...form, accessCode: e.target.value })} placeholder={p?.accessPreview ? `guardado (${p.accessPreview})` : '8 caracteres'} /></label>
+            <label>Código de acceso LAN<input type="password" value={form.accessCode} onChange={(e) => setForm({ ...form, accessCode: e.target.value })} placeholder={p?.accessPreview ? `guardado (${p.accessPreview})` : p?.node ? 'guardado en el nodo' : '8 caracteres'} /></label>
           </div>
           <div className="row">
-            <button className="btn btn--primary small" disabled={!form.host || !form.serial || (!form.accessCode && !p?.accessPreview)} onClick={save}>Guardar y conectar</button>
+            <button className="btn btn--primary small" disabled={!form.host || !form.serial || (!form.accessCode && !p?.accessPreview && !(p?.node && p.node.id === form.node))} onClick={save}>Guardar y conectar</button>
             {p?.configured && <button className="btn btn--ghost small" onClick={() => setEditing(false)}>Cancelar</button>}
           </div>
         </>

@@ -1,6 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { AvatarConfig, RemoteInfo, Settings as SettingsT, User } from '../api';
+import type { AvatarConfig, NodeInfo, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
@@ -37,6 +37,8 @@ export function Settings() {
       <CliSection s={s} save={save} />
       <AccessSection s={s} setS={setS} />
       <RemoteSection />
+      <NodesSection />
+      <SystemSection />
       <HubsSection s={s} setS={setS} />
       <CadSection s={s} save={save} />
       <MeSection />
@@ -157,6 +159,135 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
   );
 }
 
+/** Nodos: tus otros computadores le prestan a la oficina su impresora y su Ollama. */
+function NodesSection() {
+  const { toast } = useOffice();
+  const [nodes, setNodes] = useState<NodeInfo[] | null>(null);
+  const [form, setForm] = useState({ url: '', token: '', name: '' });
+  const [ollamaNode, setOllamaNode] = useState('');
+  const load = () => {
+    api.nodes().then(setNodes).catch(() => setNodes([]));
+    api.settings().then((s) => setOllamaNode(s.ollamaNode || '')).catch(() => {});
+  };
+  useEffect(load, []);
+  return (
+    <section className="card">
+      <h2>🛰️ Nodos (tus otros computadores)</h2>
+      <p className="muted small">Un nodo le presta a esta oficina lo que ese computador tiene cerca: la <b>impresora</b> de esa casa y su <b>Ollama</b> (si tiene mejor tarjeta de video). Las IAs de la nube (Claude, Gemini, Groq…) trabajan igual desde cualquier computador.</p>
+      <ol className="steps small">
+        <li>En el otro computador instala la oficina (con <b>instalar.bat</b>) y Tailscale.</li>
+        <li>Abre <b>nodo.bat</b> (en lugar de iniciar.bat). Se abre una página con su dirección y su <b>código de enlace</b>.</li>
+        <li>Pégalos aquí.</li>
+      </ol>
+      <div className="grid2">
+        <label>Dirección del nodo<input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://100.101.102.103:4748" /></label>
+        <label>Código de enlace<input value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} /></label>
+        <label>Nombre (opcional)<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Bogotá" /></label>
+      </div>
+      <button className="btn btn--primary small" disabled={!form.url || !form.token} onClick={async () => {
+        try {
+          await api.addNode(form);
+          setForm({ url: '', token: '', name: '' });
+          load();
+          toast('🛰️ Nodo agregado');
+        } catch (err) {
+          toast(`❌ ${(err as Error).message}`);
+        }
+      }}>＋ Agregar nodo</button>
+      <ul className="grant-list">
+        {nodes?.map((n) => (
+          <li key={n.id}>
+            <b>{n.name}</b> <span className={`pill ${n.online ? 'pill--done' : 'pill--error'}`}>{n.online ? 'en línea' : 'sin conexión'}</span> <code>{n.url}</code>
+            {n.info && <span className="small muted"> · {n.info.cpus} núcleos, {n.info.memGB} GB · Ollama: {n.info.ollama.running ? `${n.info.ollama.models.length} modelos` : 'no'} · Impresora: {n.info.printer.configured ? (n.info.printer.connected ? 'conectada' : 'sin conexión') : 'no'}</span>}
+            {n.error && <span className="small danger"> · {n.error}</span>}
+            <button className="link" onClick={async () => { if (confirm(`¿Quitar el nodo ${n.name}?`)) { await api.deleteNode(n.id); load(); } }}>quitar</button>
+          </li>
+        ))}
+        {nodes && !nodes.length && <li className="muted small">Todavía no hay nodos.</li>}
+      </ul>
+      {nodes && nodes.length > 0 && (
+        <label className="check">Ollama que usa la oficina{' '}
+          <select value={ollamaNode} onChange={async (e) => { try { await api.saveSettings({ ollamaNode: e.target.value }); setOllamaNode(e.target.value); toast('🦙 Listo'); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>
+            <option value="">El de este computador</option>
+            {nodes.map((n) => <option key={n.id} value={n.id}>El del nodo «{n.name}»</option>)}
+          </select>
+        </label>
+      )}
+      <p className="muted small">La impresora se elige en Taller 3D → Mi impresora → «¿Dónde está la impresora?».</p>
+    </section>
+  );
+}
+
+/** Dónde se guardan los datos y actualizaciones del programa. */
+function SystemSection() {
+  const { toast, streams } = useOffice();
+  const [sys, setSys] = useState<{ dataDir: string; appDir: string; canRestart: boolean } | null>(null);
+  const [up, setUp] = useState<UpdateStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.system().then(setSys).catch(() => {});
+  }, []);
+  const check = async () => {
+    setChecking(true);
+    try {
+      setUp(await api.updateStatus());
+    } catch (err) {
+      toast(`❌ ${(err as Error).message}`);
+    } finally {
+      setChecking(false);
+    }
+  };
+  if (!sys) return null;
+  return (
+    <section className="card">
+      <h2>🔄 Actualizaciones y datos</h2>
+      <p className="small">📁 Tus datos (notas, grafo, IAs, tareas y claves) están en <code className="copy">{sys.dataDir}</code>, fuera del programa: actualizar o reinstalar no los toca. Cada día se guarda un respaldo en su carpeta <code>respaldos</code> (los últimos 14).</p>
+      <details>
+        <summary className="small">Cambiar la carpeta de datos</summary>
+        <p className="muted small">Por ejemplo a OneDrive o Google Drive para tener copia en la nube (solo el computador principal debe usarla). Se copian tus datos y la oficina se reinicia.</p>
+        <div className="row">
+          <input id="nueva-carpeta" placeholder="C:\Users\...\OneDrive\Oficina de IAs" />
+          <button className="btn btn--ghost small" onClick={async () => {
+            const dir = (document.getElementById('nueva-carpeta') as HTMLInputElement).value.trim();
+            if (!dir || !confirm(`¿Mover tus datos a ${dir}?`)) return;
+            try {
+              const r = await api.moveData(dir);
+              toast(r.restart ? '📦 Datos copiados. La oficina se reinicia…' : '📦 Datos copiados. Cierra y vuelve a abrir la oficina.');
+              if (r.restart) setTimeout(() => location.reload(), 5000);
+            } catch (err) {
+              toast(`❌ ${(err as Error).message}`);
+            }
+          }}>Mover</button>
+        </div>
+      </details>
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="btn btn--primary small" disabled={checking} onClick={check}>{checking ? 'Buscando…' : '🔍 Buscar actualizaciones'}</button>
+        {up?.git && (up.behind || 0) > 0 && (
+          <button className="btn btn--primary small" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await api.applyUpdate();
+              toast(r.restart ? '✅ Actualizada. La oficina se reinicia…' : '✅ Actualizada. Cierra y vuelve a abrir la oficina.');
+              if (r.restart) setTimeout(() => location.reload(), 8000);
+            } catch (err) {
+              toast(`❌ ${(err as Error).message}`);
+            } finally {
+              setBusy(false);
+            }
+          }}>{busy ? 'Actualizando…' : `⬇️ Instalar ${up.behind} ${up.behind === 1 ? 'cambio' : 'cambios'}`}</button>
+        )}
+      </div>
+      {streams['install:update'] && <pre className="log">{streams['install:update'].slice(-1500)}</pre>}
+      {up && !up.git && <p className="small warn">Esta copia se descargó en ZIP y no se puede actualizar sola. Abre <b>instalar.bat</b> una vez: descarga la oficina con git, trae tus datos y crea un acceso directo que se actualiza solo.</p>}
+      {up?.git && !up.error && !(up.behind || 0) && <p className="small ok">✓ Tienes la última versión ({up.head}).</p>}
+      {up?.error && <p className="small warn">{up.error} <button className="link" onClick={async () => { const r = await api.updateTerminal(); toast(r.opened ? '🪟 Se abrió una terminal: inicia sesión en GitHub si te lo pide' : `Ejecuta: ${r.command}`); }}>abrir el actualizador</button></p>}
+      {(up?.commits?.length || 0) > 0 && <ul className="small">{up!.commits!.map((c) => <li key={c}>{c}</li>)}</ul>}
+      <p className="muted small">Solo este computador necesita actualizarse: desde los otros entras por el navegador y ves siempre la versión nueva. Los nodos se actualizan solos al abrir nodo.bat.</p>
+    </section>
+  );
+}
+
 /** Usar la oficina desde otros computadores con Tailscale (y los usuarios con contraseña). */
 function RemoteSection() {
   const { toast, hubs } = useOffice();
@@ -176,12 +307,12 @@ function RemoteSection() {
         <h2>🌐 Otros computadores (Tailscale)</h2>
         {info && <span className={`pill ${info.enabled ? 'pill--done' : ''}`}>{info.enabled ? '● Acceso remoto activo' : '○ Solo este computador'}</span>}
       </div>
-      <p className="muted small">Tailscale es gratis y crea una red privada solo entre tus computadores (Mosquera, Bogotá, Canadá…). La oficina sigue corriendo aquí y los demás entran desde el navegador con su usuario y contraseña. Nadie fuera de tu red de Tailscale puede verla.</p>
+      <p className="muted small">Tailscale es gratis y crea una red privada solo entre tus computadores (Mosquera, Bogotá, Canadá…). La oficina sigue corriendo aquí y desde tus otros computadores entras por el navegador con tu usuario y contraseña, usando las mismas IAs y suscripciones. Nadie fuera de tu red de Tailscale puede verla.</p>
       <ol className="steps small">
         <li>Instala <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale ↗</a> en este computador y en los otros, e inicia sesión con la <b>misma cuenta</b> (o invita a los demás a tu red).</li>
-        <li>Crea abajo un usuario para cada persona.</li>
+        <li>Crea abajo tu usuario (como <b>administrador</b>): con él entras desde tus otros computadores.</li>
         <li>Activa el acceso remoto. {info?.ips.length ? <>Este computador en Tailscale: <code>{info.ips.join(', ')}</code></> : <span className="warn">Todavía no detecto Tailscale en este computador.</span>}</li>
-        <li>Los demás entran a {info?.urls.length ? info.urls.map((u) => <code key={u} className="copy">{u}</code>) : <code>http://IP-de-tailscale:{info?.port || 4747}</code>} (o <code>http://{info?.hostname}:{info?.port}</code> con MagicDNS). Este computador debe estar encendido.</li>
+        <li>Desde los otros computadores entra a {info?.urls.length ? info.urls.map((u) => <code key={u} className="copy">{u}</code>) : <code>http://IP-de-tailscale:{info?.port || 4747}</code>} (o <code>http://{info?.hostname}:{info?.port}</code> con MagicDNS). Este computador debe estar encendido.</li>
       </ol>
       <h4>Usuarios</h4>
       <ul className="grant-list">

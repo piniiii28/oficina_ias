@@ -32,7 +32,9 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 - `server/src/agents.js` y `playbooks.js`: la plantilla de 28 IAs y sus manuales de fábrica.
 - `server/src/notes.js`: notas, `[[enlaces]]`, `#etiquetas` y el grafo. `vault.js` escribe la bóveda `.md` para Obsidian.
 - `librarian.js` (sugerencias y notas relacionadas), `meetings.js`, `routines.js`.
-- `server/src/store.js`: persistencia en `data/oficina.json`, con escritura atómica y copia `.bak`.
+- `server/src/store.js`: persistencia en `oficina.json` (escritura atómica, copia `.bak` y respaldos diarios). La carpeta la decide `datadir.js` (por defecto Documentos/Oficina de IAs; en pruebas, `OFICINA_DATA` o `new Store(dir)`).
+- `server/src/updater.js`: actualizaciones con git; `iniciar.bat` reinicia la oficina cuando sale con el código 75.
+- `server/src/node.js` y `devices.js`: nodos (otros computadores por Tailscale) que prestan su impresora y su Ollama.
 - `client/src/state.tsx`: contexto global; recibe los eventos SSE (`agent`, `task`, `meeting`, `delta`, `notes`, `cards`).
 - `client/src/views/*`: una vista por sección (`Taller.tsx` es el Taller 3D).
 - `client/src/components/ConnectCenter.tsx`: conectar IAs paso a paso, cuentas, modo gratis y el asistente de conexión.
@@ -44,7 +46,7 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 
 ## Convenciones
 
-- Los datos del usuario viven en `data/` (está en `.gitignore`). No subas claves.
+- Los datos del usuario viven fuera del repositorio (Documentos/Oficina de IAs; `data/` y `oficina-datos.json` están en `.gitignore`). No subas claves.
 - Las funciones nuevas del servidor llevan una prueba en `server/test/oficina.test.js`. Usa `demoMode: 'always'` para no llamar APIs.
 - Los ids de modelos se pueden editar desde la interfaz, así que no los asumas fijos.
 - Cambios visuales: revísalos en el navegador en tema claro y oscuro, y a 390 px de ancho.

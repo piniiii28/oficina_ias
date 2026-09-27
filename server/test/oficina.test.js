@@ -1408,3 +1408,140 @@ test('jurado: jueces de otro proveedor califican a ciegas y se usa la mediana', 
     fake.close();
   }
 });
+
+test('nodos: la impresora de otra casa y su Ollama se usan a través del nodo', async () => {
+  const http = await import('node:http');
+  const net = await import('node:net');
+  const { mqtt } = await import('../src/bambu.js');
+  process.env.OFICINA_PRINTER_PLAIN = '1';
+  // Ollama falso en la casa del nodo.
+  const ollama = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      if (req.url === '/api/tags') return res.end(JSON.stringify({ models: [{ name: 'gemma3:latest' }] }));
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `hola desde el nodo (${JSON.parse(body).model})` } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  ollama.listen(0, '127.0.0.1');
+  await new Promise((r) => ollama.once('listening', r));
+  process.env.OLLAMA_URL = `http://127.0.0.1:${ollama.address().port}`;
+  const orders = [];
+  const broker = net.createServer((sock) => {
+    let buf = Buffer.alloc(0);
+    sock.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+      const { packets, rest } = mqtt.parse(buf);
+      buf = Buffer.from(rest);
+      for (const p of packets) {
+        if (p.type === 1) sock.write(Buffer.from([0x20, 2, 0, 0]));
+        else if (p.type === 3) {
+          const msg = JSON.parse(p.payload.toString());
+          if (msg.pushing) sock.write(mqtt.publish('device/SERIE1/report', JSON.stringify({ print: { gcode_state: 'RUNNING', mc_percent: 12 } })));
+          else orders.push(msg);
+        }
+      }
+    });
+  });
+  broker.listen(0, '127.0.0.1');
+  await new Promise((r) => broker.once('listening', r));
+  const { NodeConfig, createNodeApp } = await import(`../src/node.js?${Date.now()}`);
+  const cfg = new NodeConfig(tmp());
+  const nodeApp = createNodeApp(cfg);
+  const nodeServer = nodeApp.listen(0, '127.0.0.1');
+  await new Promise((r) => nodeServer.once('listening', r));
+  const nodeUrl = `http://127.0.0.1:${nodeServer.address().port}`;
+  const store = new Store(tmp());
+  try {
+    // Sin el código de enlace, el nodo no responde.
+    assert.equal((await fetch(`${nodeUrl}/nodo/info`)).status, 401);
+    await withApp(store, async (call) => {
+      assert.equal((await call('POST', '/api/nodes', { url: 'http://8.8.8.8:4748', token: 'x' })).status, 400, 'solo direcciones de Tailscale o de la red local');
+      assert.equal((await call('POST', '/api/nodes', { url: nodeUrl, token: 'mal' })).status, 400);
+      const added = await call('POST', '/api/nodes', { url: nodeUrl, token: cfg.data.token, name: 'Bogotá' });
+      assert.equal(added.status, 201);
+      assert.equal(added.data.info.ollama.running, true);
+      const nodeId = added.data.id;
+      assert.ok(!JSON.stringify((await call('GET', '/api/settings')).data).includes(cfg.data.token), 'el código de enlace no sale en los ajustes');
+
+      // Impresora en la casa del nodo: el código de acceso se guarda en el nodo, no en la principal.
+      await call('PUT', '/api/printer', { node: nodeId, name: 'P1S de Bogotá', host: '127.0.0.1', port: broker.address().port, serial: 'serie1', accessCode: 'codigo123' });
+      assert.equal(store.data.settings.printer.node, nodeId);
+      assert.ok(!JSON.stringify(store.data.settings.printer).includes('codigo123'));
+      assert.equal(cfg.data.printer.accessCode, 'codigo123');
+      let st;
+      for (let i = 0; i < 80; i++) {
+        st = (await call('GET', '/api/printer/status')).data;
+        if (st.connected && st.state?.progreso === 12) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      assert.equal(st.state.estado, 'imprimiendo');
+      assert.equal(st.node.name, 'Bogotá');
+      assert.equal((await call('POST', '/api/printer/command', { command: 'luz_on' })).status, 200);
+      await new Promise((r) => setTimeout(r, 100));
+      assert.ok(orders.some((o) => o.system?.led_mode === 'on'), 'la orden llegó a la impresora de la otra casa');
+
+      // Ollama del nodo.
+      await call('PUT', '/api/settings', { ollamaEnabled: true, ollamaNode: nodeId });
+      assert.deepEqual((await call('GET', '/api/ollama/models')).data.models.map((m) => m.name), ['gemma3:latest']);
+      await call('PUT', '/api/agents/gemma-salud', { provider: 'ollama', model: 'gemma3' });
+      const chat = await call('POST', '/api/agents/gemma-salud/chat', { message: 'hola, ¿quién eres?' });
+      assert.match(chat.data.reply, /hola desde el nodo \(gemma3\)/);
+      const list = (await call('GET', '/api/nodes')).data;
+      assert.equal(list[0].online, true);
+      assert.ok(!('token' in list[0]));
+    });
+  } finally {
+    nodeServer.close();
+    broker.close();
+    ollama.close();
+    const { connectPrinter } = await import('../src/bambu.js');
+    connectPrinter({});
+    delete process.env.OFICINA_PRINTER_PLAIN;
+    delete process.env.OLLAMA_URL;
+  }
+});
+
+test('datos en Documentos: se mudan una vez, hay respaldos diarios y se detectan actualizaciones', async () => {
+  const { resolveDataDir } = await import('../src/datadir.js');
+  const root = tmp();
+  fs.mkdirSync(path.join(root, 'data'));
+  fs.writeFileSync(path.join(root, 'data', 'oficina.json'), '{"notes":[{"title":"vieja"}]}');
+  const docs = path.join(tmp(), 'Oficina de IAs');
+  const dir = resolveDataDir(root, { env: {}, fallback: docs });
+  assert.equal(dir, docs);
+  assert.match(fs.readFileSync(path.join(docs, 'oficina.json'), 'utf8'), /vieja/);
+  assert.ok(fs.existsSync(path.join(root, 'data', 'MOVIDO.txt')));
+  assert.equal(resolveDataDir(root, { env: {}, fallback: '/otra' }), docs, 'recuerda la carpeta elegida');
+  assert.equal(resolveDataDir(root, { env: { OFICINA_DATA: '/x' } }), '/x');
+
+  const store = new Store(tmp());
+  store.flush();
+  const backups = fs.readdirSync(path.join(store.dir, 'respaldos'));
+  assert.equal(backups.length, 1);
+  assert.match(backups[0], /^oficina-\d{4}-\d{2}-\d{2}\.json$/);
+
+  // Actualizaciones con git: un "GitHub" local con un cambio nuevo.
+  const { execFileSync } = await import('node:child_process');
+  const g = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 'x', GIT_AUTHOR_EMAIL: 'x@x', GIT_COMMITTER_NAME: 'x', GIT_COMMITTER_EMAIL: 'x@x' } }).toString();
+  const remote = tmp();
+  g(remote, 'init', '--bare', '-q');
+  const a = tmp();
+  g(a, 'init', '-q');
+  fs.writeFileSync(path.join(a, 'x.txt'), '1');
+  g(a, 'add', '.');
+  g(a, 'commit', '-qm', 'primera');
+  g(a, 'push', '-q', remote, 'HEAD:refs/heads/principal');
+  const install = path.join(tmp(), 'app');
+  g(path.dirname(install), 'clone', '-q', '-b', 'principal', remote, install);
+  fs.writeFileSync(path.join(a, 'x.txt'), '2');
+  g(a, 'commit', '-qam', 'Mejora nueva');
+  g(a, 'push', '-q', remote, 'HEAD:refs/heads/principal');
+  const { updateStatus } = await import('../src/updater.js');
+  const st = await updateStatus(install);
+  assert.equal(st.git, true);
+  assert.equal(st.behind, 1);
+  assert.match(st.commits[0], /Mejora nueva/);
+  assert.equal((await updateStatus(tmp())).git, false);
+});

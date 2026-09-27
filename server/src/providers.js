@@ -259,8 +259,11 @@ async function readSSE(res, onEvent) {
 }
 
 async function callOpenAICompatible(provider, apiKey, model, system, messages, settings, onDelta, signal) {
-  const base = provider === 'ollama' && settings.apiKeys?.ollamaUrl ? settings.apiKeys.ollamaUrl : PROVIDERS[provider].baseUrl;
+  // Ollama puede ser el de un nodo (otro de tus computadores, por Tailscale).
+  const node = provider === 'ollama' && settings.ollamaNode ? (settings.nodes || []).find((n) => n.id === settings.ollamaNode) : null;
+  const base = node ? `${node.url}/nodo/ollama/v1` : provider === 'ollama' && settings.apiKeys?.ollamaUrl ? settings.apiKeys.ollamaUrl : PROVIDERS[provider].baseUrl;
   const headers = { 'Content-Type': 'application/json' };
+  if (node) headers['X-Nodo-Token'] = node.token;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = 'http://localhost:4747';

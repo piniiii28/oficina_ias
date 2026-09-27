@@ -44,7 +44,10 @@ export type Meter = {
 };
 
 export type PrinterState = { estado: string; codigo: string | null; archivo: string | null; progreso: number | null; restante: number | null; capa: number | null; capas: number | null; boquilla: number | null; boquillaMeta: number | null; cama: number | null; camaMeta: number | null; luz: boolean | null; error: string | null };
-export type PrinterInfo = { configured: boolean; name: string; model: string; host: string; serial: string; accessPreview: string | null; connected: boolean; error: string | null; state: PrinterState | null; updatedAt: number | null };
+export type NodeInfo = { id: string; name: string; url: string; tokenPreview: string | null; online: boolean; error?: string; info?: { name: string; platform: string; cpus: number; memGB: number; tailscale: string[]; printer: PrinterInfo; ollama: { running: boolean; models: string[] }; cad: Record<string, string | null> } };
+export type UpdateStatus = { git: boolean; head?: string; branch?: string; behind?: number; commits?: string[]; error?: string | null; canRestart: boolean };
+export type PrinterInfo = { node?: { id: string; name: string };
+  configured: boolean; name: string; model: string; host: string; serial: string; accessPreview: string | null; connected: boolean; error: string | null; state: PrinterState | null; updatedAt: number | null };
 export type Automation = { id: string; name: string; url: string; description: string; trigger: 'manual' | 'tarea'; allowAI: boolean };
 export type AutomationLog = { id: string; automationId: string; name: string; origen: string; ok: boolean; status: number; respuesta: string; ms: number; at: string };
 export type User = { id: string; name: string; role: 'admin' | 'miembro'; hub: string | null };
@@ -168,6 +171,7 @@ export type Settings = {
   headsReview?: boolean;
   verifySteps?: boolean;
   jury?: { enabled: boolean; size: number };
+  ollamaNode?: string;
   hubs: Hub[];
   cadPaths: Record<string, string>;
 };
@@ -336,7 +340,15 @@ export const api = {
   n8nStart: () => req<{ opened: boolean; command: string }>('POST', '/api/n8n/start'),
 
   printer: () => req<PrinterInfo>('GET', '/api/printer/status'),
-  savePrinter: (p: { name?: string; host: string; serial: string; accessCode?: string }) => req<PrinterInfo>('PUT', '/api/printer', p),
+  savePrinter: (p: { name?: string; host: string; serial: string; accessCode?: string; node?: string }) => req<PrinterInfo>('PUT', '/api/printer', p),
+  nodes: () => req<NodeInfo[]>('GET', '/api/nodes'),
+  addNode: (n: { url: string; token: string; name?: string }) => req<NodeInfo>('POST', '/api/nodes', n),
+  deleteNode: (id: string) => req('DELETE', `/api/nodes/${id}`),
+  system: () => req<{ dataDir: string; appDir: string; canRestart: boolean }>('GET', '/api/system'),
+  moveData: (dir: string) => req<{ ok: boolean; restart: boolean }>('POST', '/api/system/data-dir', { dir }),
+  updateStatus: () => req<UpdateStatus>('GET', '/api/update'),
+  applyUpdate: () => req<{ ok: boolean; restart: boolean }>('POST', '/api/update'),
+  updateTerminal: () => req<{ opened: boolean; command: string }>('POST', '/api/update/terminal'),
   deletePrinter: () => req<PrinterInfo>('DELETE', '/api/printer'),
   printerCommand: (command: string) => req<{ ok: boolean; message: string }>('POST', '/api/printer/command', { command }),
 
