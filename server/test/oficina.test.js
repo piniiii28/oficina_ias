@@ -1952,6 +1952,7 @@ test('imágenes: la IA escribe <<imagen …>>, la oficina la genera, la guarda y
       const cf = seen.find((x) => x.url.includes('/ai/run/'));
       assert.match(cf.url, /accounts\/cuenta1\/ai\/run\/@cf\/black-forest-labs\/flux-1-schnell/);
       assert.equal(cf.auth, 'Bearer cf-secreto');
+      assert.deepEqual(Object.keys(JSON.parse(cf.body)).sort(), ['prompt', 'steps'], 'Cloudflare no acepta width ni height');
       assert.ok((await call('GET', '/api/images')).data.files.length >= 2);
 
       // Apagado: las IAs ya no reciben la guía.

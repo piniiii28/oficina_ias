@@ -61,7 +61,8 @@ export async function generateImage(settings, { prompt, formato = '1:1', service
     const res = await fetch(`${base}/client/v4/accounts/${encodeURIComponent(s.cloudflareAccount)}/ai/run/${IMAGE_SERVICES.cloudflare.model}`, {
       method: 'POST', signal,
       headers: { Authorization: `Bearer ${s.cloudflareToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, steps: 8, width, height }),
+      // FLUX schnell de Cloudflare solo acepta prompt y steps (hace imágenes de 1024×1024).
+      body: JSON.stringify({ prompt, steps: 8 }),
     });
     const data = JSON.parse((await asBuffer(res, 'Cloudflare')).toString());
     const b64 = data.result?.image;
