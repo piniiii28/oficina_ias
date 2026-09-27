@@ -27,6 +27,8 @@ export function Agents() {
   const [selected, setSelected] = useState<Agent | null>(null);
   const [creating, setCreating] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  const [q, setQ] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
   const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'openrouter', model: '', skills: '', system: '' });
   const [avatar, setAvatar] = useState(randomAvatar);
   const dept = (id: string) => departments.find((d) => d.id === id);
@@ -143,8 +145,15 @@ export function Agents() {
         </section>
       )}
 
+      <div className="row">
+        <input className="search" placeholder="Buscar por nombre, rol, habilidad o modelo…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="type-filter" style={{ flex: 1 }}>
+          <button className={!deptFilter ? 'on' : ''} onClick={() => setDeptFilter('')}>Todos</button>
+          {departments.map((d) => <button key={d.id} className={deptFilter === d.id ? 'on' : ''} onClick={() => setDeptFilter(d.id)} title={d.name}>{d.emoji}</button>)}
+        </div>
+      </div>
       <div className="agent-cards">
-        {agents.map((a, i) => (
+        {agents.filter((a) => (!deptFilter || a.department === deptFilter) && (!q.trim() || `${a.name} ${a.role} ${a.skills.join(' ')} ${a.model} ${a.provider}`.toLowerCase().includes(q.trim().toLowerCase()))).map((a, i) => (
           <button key={a.id} className={`agent-card ${a.enabled ? '' : 'off'}`} onClick={() => setSelected(a)} style={{ ['--room' as string]: dept(a.department)?.color }}>
             <Chibi avatar={a.avatar} size={70} seed={i} state={live[a.id]?.status || 'idle'} />
             <div>
