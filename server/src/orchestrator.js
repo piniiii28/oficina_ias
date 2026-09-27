@@ -348,6 +348,15 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     for (const st of task.steps) if (st.status === 'pending' || st.status === 'working') st.status = 'error', st.error ||= 'Cancelada';
   }
   running.delete(task.id);
+  // Opcional: los próximos pasos se convierten en tarjetas del tablero.
+  if (task.status === 'done' && settings.autoCards) {
+    const m = task.final.match(/#+\s*(próximos pasos|proximos pasos|ideas clave)[^\n]*\n([\s\S]*?)(?:\n#+\s|\n---|$)/i);
+    const items = m ? m[2].split('\n').map((l) => l.replace(/^\s*(?:[-*•+]|\d+[.)])\s*(\[[ xX]\]\s*)?/, '').replace(/\*\(de [^)]*\)\*/, '').replace(/\*\*/g, '').trim()).filter((l) => l.length > 3).slice(0, 6) : [];
+    for (const title of items) {
+      (store.data.cards ||= []).push({ id: Store.id('c_'), title: title.slice(0, 200), details: `Surge de la tarea: ${task.title}`, column: 'todo', project: task.title.slice(0, 40), taskId: null, noteId: null, createdAt: new Date().toISOString() });
+    }
+    if (items.length) bus.emit('event', { type: 'cards' });
+  }
   // Tarjetas del tablero ligadas a esta tarea pasan a «Hecho».
   for (const c of store.data.cards || []) {
     if (c.taskId === task.id) {

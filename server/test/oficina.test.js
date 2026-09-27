@@ -537,3 +537,12 @@ test('menciones sin enlazar: se detectan y se enlazan con un clic', () => {
   assert.match(notes.get(b.id).content, /\[\[Cafetería central\|cafetería central\]\]/);
   assert.equal(notes.unlinkedMentions(a.id).length, 0);
 });
+
+test('tarjetas automáticas con los próximos pasos', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  Object.assign(store.data.settings, { demoMode: 'always', autoCards: true });
+  await runTask(store, new Notes(store), { prompt: 'Plan de marketing en instagram' });
+  assert.ok(store.data.cards.length >= 1);
+  assert.equal(store.data.cards[0].column, 'todo');
+});

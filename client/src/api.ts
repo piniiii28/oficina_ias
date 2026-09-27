@@ -104,6 +104,7 @@ export type Settings = {
   reviewFinal?: boolean;
   maxTeam?: number;
   webSearch?: boolean;
+  autoCards?: boolean;
   maxParallel: number;
   keys: Record<string, { configured: boolean; preview: string | null }>;
   ollamaEnabled: boolean;

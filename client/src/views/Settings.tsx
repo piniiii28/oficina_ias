@@ -101,6 +101,10 @@ export function Settings() {
           <input type="checkbox" checked={Boolean(s.webSearch)} onChange={(e) => save({ webSearch: e.target.checked })} />
           Búsqueda web para Claude y Sonnet (herramienta de Anthropic; cada búsqueda tiene un costo extra)
         </label>
+        <label className="check" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={Boolean(s.autoCards)} onChange={(e) => save({ autoCards: e.target.checked })} />
+          Crear tarjetas en el tablero con los próximos pasos de cada tarea terminada
+        </label>
         <p className="muted small">El modelo del Cerebro Central se cambia desde su perfil (haz clic en Claude en la Oficina → Perfil).</p>
       </section>
 
