@@ -2025,3 +2025,123 @@ test('modelos retirados o saturados: la oficina se recupera sola y nunca pasa a 
   for (const next of Object.values(RETIRED_MODELS.openrouter)) assert.match(next, /:free$/);
   for (const a of DEFAULT_AGENTS) assert.ok(!RETIRED_MODELS[a.provider]?.[a.model], `${a.id} usa un modelo retirado`);
 });
+
+test('salud de las IAs: las que fallan seguido no reciben trabajo; «Revisar todas» y «Activar las de demo»', async () => {
+  const http = await import('node:http');
+  let broken = new Set(['roto']);
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      if (req.url === '/api/tags' || req.url === '/api/version') return res.end('{"models":[]}');
+      if (broken.has(JSON.parse(b).model)) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end('{"error":{"message":"se cayó"}}');
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'OK' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      // Gemma usa un modelo que se cae.
+      await call('PUT', '/api/agents/gemma-salud', { model: 'roto' });
+      const r1 = await call('POST', '/api/agents/check');
+      const g = r1.data.results.find((x) => x.id === 'gemma-salud');
+      assert.equal(g.ok, false);
+      assert.ok(r1.data.results.find((x) => x.id === 'phi-tutor').ok);
+      let agents = (await call('GET', '/api/agents')).data;
+      assert.equal(agents.find((a) => a.id === 'gemma-salud').health.ok, false);
+      assert.equal(agents.find((a) => a.id === 'gemma-salud').usable, false, 'con fallas no recibe trabajo');
+      assert.equal(agents.find((a) => a.id === 'phi-tutor').usable, true);
+      const t = await runTask(store, new Notes(store), { prompt: 'Consejos de salud y de estudio', agentIds: ['gemma-salud', 'phi-tutor'] });
+      assert.deepEqual(t.steps.map((s) => s.agentId), ['phi-tutor']);
+      // Se arregla: al revisar otra vez vuelve a trabajar.
+      broken = new Set();
+      await call('POST', '/api/agents/check');
+      assert.equal((await call('GET', '/api/agents')).data.find((a) => a.id === 'gemma-salud').usable, true);
+
+      // Las de demo pasan a lo que tienes conectado (aquí solo Ollama).
+      const before = store.data.agents.find((a) => a.id === 'babel').provider;
+      const rescue = await call('POST', '/api/agents/rescue');
+      assert.ok(rescue.data.changed > 5);
+      const babel = store.data.agents.find((a) => a.id === 'babel');
+      assert.equal(babel.provider, 'ollama');
+      assert.equal(babel.demoBackup.provider, before);
+      assert.ok(!store.data.agents.find((a) => a.id === 'undermind').demoBackup, 'Undermind no se toca');
+      assert.ok((await call('POST', '/api/agents/rescue/undo')).data.restored > 5);
+      assert.equal(store.data.agents.find((a) => a.id === 'babel').provider, before);
+    });
+  } finally {
+    fake.close();
+  }
+  assert.ok(['zeta', 'samba', 'rayo'].every((id) => DEFAULT_AGENTS.some((a) => a.id === id)));
+});
+
+test('videos: gratis uniendo imágenes con FFmpeg, o Hailuo de MiniMax; la IA escribe <<video …>>', async () => {
+  const http = await import('node:http');
+  const { ffmpegPath } = await import('../src/video.js');
+  const { runLogged } = await import('../src/system.js');
+  // Una imagen JPEG de verdad para las escenas.
+  const dir = tmp();
+  const jpgFile = path.join(dir, 'escena.jpg');
+  await runLogged(await ffmpegPath(), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=512x512', '-frames:v', '1', jpgFile]);
+  const JPG = fs.readFileSync(jpgFile);
+  const MP4 = Buffer.from('video-de-minimax');
+  const seen = [];
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      seen.push({ url: req.url, body: b });
+      if (req.url.startsWith('/prompt/')) {
+        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+        return res.end(JPG);
+      }
+      if (req.url === '/v1/video_generation') return res.end(JSON.stringify({ task_id: 't1', base_resp: { status_code: 0 } }));
+      if (req.url.startsWith('/v1/query/video_generation')) return res.end(JSON.stringify({ status: seen.filter((x) => x.url.startsWith('/v1/query')).length > 1 ? 'Success' : 'Processing', file_id: 'f1' }));
+      if (req.url.startsWith('/v1/files/retrieve')) return res.end(JSON.stringify({ file: { download_url: `http://127.0.0.1:${fake.address().port}/descarga.mp4` } }));
+      if (req.url === '/descarga.mp4') return res.end(MP4);
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Tu video:\n<<video prompt="a robot in a greenhouse" escenas="robot enters | robot waters plants | sunrise over plants" formato="16:9">>' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const base = `http://127.0.0.1:${fake.address().port}`;
+  Object.assign(process.env, { POLLINATIONS_BASE: base, MINIMAX_BASE: base, OFICINA_VIDEO_POLL_MS: '5' });
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call, appBase) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `${base}/v1` };
+      const info = (await call('GET', '/api/videos')).data;
+      assert.equal(info.active, 'slideshow');
+      assert.equal(info.ffmpeg, true, 'FFmpeg viene con la oficina');
+      await call('PUT', '/api/agents/clip', { provider: 'ollama', model: 'm' });
+      const chat = await call('POST', '/api/agents/clip/chat', { message: 'hazme un video' });
+      const m = chat.data.reply.match(/\(\/api\/videos\/(vid-[\w-]+\.mp4)\)/);
+      assert.ok(m, chat.data.reply);
+      assert.equal(seen.filter((x) => x.url.startsWith('/prompt/')).length, 3, 'una imagen por escena');
+      const vid = await fetch(`${appBase}/api/videos/${m[1]}`);
+      assert.equal(vid.status, 200);
+      const head = Buffer.from(await vid.arrayBuffer()).subarray(4, 8).toString();
+      assert.equal(head, 'ftyp', 'es un MP4 de verdad');
+
+      // Hailuo de MiniMax (de pago): crea la tarea, espera y descarga.
+      store.data.settings.apiKeys.minimax = 'mm';
+      await call('PUT', '/api/settings', { video: { service: 'minimax' } });
+      const v = await call('POST', '/api/videos', { prompt: 'a cat surfing' });
+      assert.equal(v.data.service, 'minimax');
+      assert.equal(JSON.parse(seen.find((x) => x.url === '/v1/video_generation').body).model, 'MiniMax-Hailuo-2.3');
+      assert.deepEqual(Buffer.from(await (await fetch(`${appBase}${v.data.url}`)).arrayBuffer()), MP4);
+      assert.equal((await fetch(`${appBase}/api/videos/..%2Foficina.json`)).status, 400);
+    });
+  } finally {
+    fake.close();
+    for (const k of ['POLLINATIONS_BASE', 'MINIMAX_BASE', 'OFICINA_VIDEO_POLL_MS']) delete process.env[k];
+  }
+});

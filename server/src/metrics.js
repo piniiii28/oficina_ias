@@ -19,6 +19,19 @@ export function recordCall(store, { agentId, ok, simulated, inChars, ms, quota, 
   store.save();
 }
 
+/**
+ * ¿La IA está funcionando? Si sus últimas 2 llamadas reales fallaron (y la
+ * última hace menos de 6 horas), queda «con fallas» y no se le da trabajo
+ * hasta que vuelva a responder (por ejemplo con «Revisar todas»).
+ */
+export function healthOf(store, agentId) {
+  const recent = (store.data.metrics?.[agentId]?.recent || []).filter((r) => !r.sim);
+  const last = recent.slice(-2);
+  if (last.length < 2 || last.some((r) => r.ok)) return { ok: true };
+  if (Date.now() - last[1].at > 6 * 3600000) return { ok: true, stale: true };
+  return { ok: false, error: last[1].error || 'Falló dos veces seguidas', at: last[1].at };
+}
+
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 
 /** Acierto (0–100) con de qué señales sale. */

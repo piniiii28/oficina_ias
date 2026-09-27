@@ -41,7 +41,7 @@ export async function applyUpdate(root, onLog = () => {}, { build: doBuild = tru
   const pull = await git(root, ['pull', '--ff-only'], { onData: onLog });
   if (!pull.ok) throw new Error(/auth|could not read/i.test(pull.out) ? 'GitHub pidió iniciar sesión: abre el actualizador una vez.' : 'No pude traer la versión nueva (¿cambiaste archivos del programa?).');
   onLog('\n$ npm install\n');
-  const inst = await runLogged('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', ...(workspace ? ['-w', workspace] : [])], { cwd: root, onData: onLog, shell: win, timeoutMs: 15 * 60000 });
+  const inst = await runLogged('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', ...(workspace ? ['--omit=optional', '-w', workspace] : [])], { cwd: root, onData: onLog, shell: win, timeoutMs: 15 * 60000 });
   if (!inst.ok) throw new Error('Falló la instalación de dependencias');
   if (!doBuild) return { ok: true };
   onLog('\n$ npm run build\n');

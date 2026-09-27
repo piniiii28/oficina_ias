@@ -8,10 +8,11 @@ import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, isLive, usableFilter, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
-import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.js';
+import { recordCall, accuracyOf, loadOf, juryReport, juryStep, healthOf } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
 import { addNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { VIDEO_SERVICES, ffmpegPath, generateVideo, videoService, videosDir } from './video.js';
 import { IMAGE_SERVICES, generateImage, imageService, imagesDir, saveImage } from './images.js';
 import { MCP_SERVICES, mcpAdd, mcpLoginCommand, mcpRemove, mcpStatus } from './mcpServices.js';
 import { busyNow, ollamaModelsFor, ollamaPull, ollamaServer, ollamaServers, ollamaTags, hasModel, syncModels } from './ollama.js';
@@ -20,7 +21,7 @@ import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
 import { COOKIE, cookieOf, createUser, hashPassword, hostAllowed, login, logout, needsAdmin, publicUser, tailscaleAddresses, userFromSession } from './auth.js';
 import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
-import { FREE_MODELS, freePlan, healAgents } from './freeModels.js';
+import { FREE_MODELS, freePlan, healAgents, rescuePlan } from './freeModels.js';
 import { CAD_TOOLS, detectCad, runCad, openInApp, openInBambu, sliceJob, extractCadBlocks, listFiles } from './cad.js';
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
 import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
@@ -75,7 +76,7 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'], freeV3Seeded: ['zeta', 'samba', 'rayo'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
@@ -215,6 +216,7 @@ export function createApp(store) {
     delete rest.nodes; // ni los códigos de enlace de los nodos
     delete rest.users; // las contraseñas (cifradas) tampoco
     const img = rest.images || {};
+    rest.video = { service: rest.video?.service || null, enabled: rest.video?.enabled !== false, active: videoService(store.data.settings) };
     rest.images = { service: img.service || null, enabled: img.enabled !== false, cloudflareAccount: img.cloudflareAccount || '', cloudflareToken: Boolean(img.cloudflareToken), pollinationsKey: Boolean(img.pollinationsKey), active: imageService(store.data.settings) || null };
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
     return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, onlyLive: rest.onlyLive !== false, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
@@ -286,6 +288,11 @@ export function createApp(store) {
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (req.body?.onlyLive !== undefined) s.onlyLive = Boolean(req.body.onlyLive);
+    if (req.body?.video && typeof req.body.video === 'object') {
+      const v = (s.video ||= {});
+      if (req.body.video.service !== undefined) v.service = VIDEO_SERVICES[req.body.video.service] ? req.body.video.service : null;
+      if (req.body.video.enabled !== undefined) v.enabled = Boolean(req.body.video.enabled);
+    }
     if (req.body?.images && typeof req.body.images === 'object') {
       const b = req.body.images;
       const img = (s.images ||= {});
@@ -353,9 +360,10 @@ export function createApp(store) {
   // --- Agentes ---
   app.get('/api/agents', (_req, res) => {
     const s = store.data.settings;
-    const usable = usableFilter(s, store.data.agents);
+    const healthy = (a) => healthOf(store, a.id).ok;
+    const usable = usableFilter(s, store.data.agents, healthy);
     // usable: trabaja en tareas y se ve en el edificio (con «solo IAs conectadas», las demo no).
-    res.json(store.data.agents.map((a) => ({ ...a, live: isLive(s, a), usable: a.isBrain || usable(a) })));
+    res.json(store.data.agents.map((a) => ({ ...a, live: isLive(s, a), usable: a.isBrain || usable(a), health: healthOf(store, a.id) })));
   });
   app.post('/api/agents', (req, res) => {
     const b = req.body || {};
@@ -588,7 +596,7 @@ export function createApp(store) {
     const topic = String(req.body?.topic || '').trim();
     const agentIds = Array.isArray(req.body?.agentIds) ? req.body.agentIds.slice(0, 6) : [];
     if (!topic || agentIds.length < 2) return res.status(400).json({ error: 'Escribe un tema y elige al menos 2 IAs' });
-    const usable = usableFilter(store.data.settings, store.data.agents);
+    const usable = usableFilter(store.data.settings, store.data.agents, (a) => healthOf(store, a.id).ok);
     if (agentIds.filter((id) => usable(agentById(id))).length < 2) return res.status(400).json({ error: 'Elige al menos 2 IAs conectadas (las de modo demo no participan; puedes cambiarlo en Ajustes)' });
     runMeeting(store, notes, { topic, agentIds, hub: req.hub, rounds: Number(req.body.rounds) || 2 }).catch((err) => console.error('[reunión]', err));
     res.status(202).json({ id: store.data.meetings[0].id });
@@ -886,6 +894,64 @@ export function createApp(store) {
       Object.assign(a, a.geminiBackup);
       delete a.geminiBackup;
       delete a.account;
+      n++;
+    }
+    store.save();
+    res.json({ restored: n });
+  });
+  // Revisar todas las IAs conectadas: una pregunta cortita a cada una. Las que
+  // fallan quedan «con fallas» y no reciben trabajo hasta que vuelvan a responder.
+  app.post('/api/agents/check', async (_req, res) => {
+    const s = store.data.settings;
+    const list = store.data.agents.filter((a) => a.enabled !== false && isLive(s, a));
+    const results = [];
+    let i = 0;
+    const worker = async () => {
+      while (i < list.length) {
+        const a = list[i++];
+        const t0 = Date.now();
+        const before = a.model;
+        try {
+          await callModel(s, {
+            provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(90000),
+            system: 'Prueba de conexión. Responde solo con la palabra OK.', messages: [{ role: 'user', content: 'Di OK' }],
+          });
+          results.push({ id: a.id, name: a.name, provider: a.provider, model: a.model, ok: true, ms: Date.now() - t0, changedModel: before !== a.model ? before : undefined });
+        } catch (err) {
+          // Una segunda falla la deja «con fallas» (healthOf).
+          const again = await callModel(s, { provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(60000), system: 'Responde OK.', messages: [{ role: 'user', content: 'OK' }] }).then(() => null, (e) => e);
+          results.push({ id: a.id, name: a.name, provider: a.provider, model: a.model, ok: !again, ms: Date.now() - t0, error: again ? String(again.message).slice(0, 240) : undefined, firstError: again ? undefined : String(err.message).slice(0, 160) });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
+    store.save();
+    results.sort((x, y) => Number(x.ok) - Number(y.ok) || x.name.localeCompare(y.name));
+    res.json({ checked: results.length, failed: results.filter((r) => !r.ok).length, results });
+  });
+
+  // Activar las IAs en demo con los proveedores gratis que ya conectaste.
+  app.post('/api/agents/rescue', (_req, res) => {
+    const s = store.data.settings;
+    const connected = (p) => s.demoMode !== 'always' && hasKey(s, p);
+    const changes = rescuePlan(store.data.agents, connected);
+    for (const c of changes) {
+      const a = agentById(c.id);
+      a.demoBackup = c.from;
+      a.provider = c.to.provider;
+      a.model = c.to.model;
+      delete a.account;
+    }
+    store.save();
+    modelSync.changed();
+    res.json({ changed: changes.length, changes, stillDemo: store.data.agents.filter((a) => a.enabled !== false && !isLive(s, a)).length });
+  });
+  app.post('/api/agents/rescue/undo', (_req, res) => {
+    let n = 0;
+    for (const a of store.data.agents) {
+      if (!a.demoBackup) continue;
+      Object.assign(a, a.demoBackup);
+      delete a.demoBackup;
       n++;
     }
     store.save();
@@ -1419,6 +1485,34 @@ export function createApp(store) {
     for (const a of store.data.agents) if (a.provider === 'ollama' && a.account === `node:${req.params.id}`) delete a.account;
     store.save();
     res.json({ ok: true });
+  });
+
+  // --- Videos ---
+  app.get('/api/videos', async (_req, res) => {
+    const dir = videosDir(store.dir);
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^vid-[\w-]+\.mp4$/.test(f)).sort().reverse().slice(0, 40) : [];
+    const ff = await runLogged(await ffmpegPath(), ['-version'], { timeoutMs: 10000 });
+    res.json({ services: VIDEO_SERVICES, active: videoService(store.data.settings), files, ffmpeg: ff.ok });
+  });
+  app.get('/api/videos/:file', (req, res) => {
+    const f = req.params.file;
+    if (!/^vid-[\w-]+\.mp4$/.test(f)) return res.status(400).json({ error: 'Nombre no válido' });
+    const file = path.join(videosDir(store.dir), f);
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'No existe' });
+    res.sendFile(file);
+  });
+  app.post('/api/videos', async (req, res) => {
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 2000);
+    if (prompt.length < 3) return res.status(400).json({ error: 'Describe el video' });
+    const log = streamer('video:prueba');
+    try {
+      const v = await generateVideo(store.data.settings, store.dir, { prompt, escenas: req.body?.escenas, formato: req.body?.formato, service: VIDEO_SERVICES[req.body?.service] ? req.body.service : undefined }, log);
+      log.end();
+      res.json({ ...v, url: `/api/videos/${v.file}` });
+    } catch (err) {
+      log.end();
+      res.status(502).json({ error: err.message });
+    }
   });
 
   // --- Imágenes generadas por las IAs ---

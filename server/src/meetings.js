@@ -3,6 +3,7 @@
 // que se guarda como nota enlazada.
 import { Store } from './store.js';
 import { callModel, usableFilter } from './providers.js';
+import { healthOf } from './metrics.js';
 import { bus, agentStatus, buildSystem } from './orchestrator.js';
 import { keywords } from './demo.js';
 
@@ -33,7 +34,7 @@ async function demoTurn(agent, topic, transcript, round) {
 }
 
 export async function runMeeting(store, notes, { topic, agentIds, rounds = 2, hub = 'cerebro' }) {
-  const usable = usableFilter(store.data.settings, store.data.agents);
+  const usable = usableFilter(store.data.settings, store.data.agents, (a) => healthOf(store, a.id).ok);
   const agents = agentIds.map((id) => store.data.agents.find((a) => a.id === id)).filter((a) => a && usable(a));
   if (agents.length < 2) throw new Error('Para la reunión elige al menos 2 IAs conectadas');
   const brain = store.data.agents.find((a) => a.isBrain);

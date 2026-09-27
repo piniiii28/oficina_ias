@@ -1,7 +1,7 @@
 // Centro de conexión: conecta IAs paso a paso (primero las gratis), con varias
 // cuentas por proveedor, modo gratis y un asistente (el cerebro) que te guía.
 import { useEffect, useRef, useState } from 'react';
-import { api, TIER_LABEL, type ChatMessage, type Provider, type Settings, type Tier } from '../api';
+import { api, type CheckResult, TIER_LABEL, type ChatMessage, type Provider, type Settings, type Tier } from '../api';
 import { Markdown } from './Markdown';
 import { useOffice } from '../state';
 
@@ -27,6 +27,9 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
   const liveCount = agents.filter((a) => a.live).length;
   const backups = agents.filter((a) => a.paidBackup).length;
   const onGeminiCli = agents.filter((a) => a.geminiBackup).length;
+  const rescued = agents.filter((a) => a.demoBackup).length;
+  const inDemo = agents.filter((a) => a.enabled && !a.live && !a.isBrain).length;
+  const [check, setCheck] = useState<{ busy: boolean; results: CheckResult[] | null }>({ busy: false, results: null });
   const googleApi = agents.filter((a) => a.provider === 'google').length;
 
   const connected = (p: Provider) => s.keys[p.id]?.configured || (p.cli && s.cli[p.id]?.enabled) || (p.keyless && s.ollamaEnabled);
@@ -60,6 +63,37 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
           <button className={`btn ${helper ? 'btn--primary' : 'btn--ghost'}`} onClick={() => setHelper((h) => !h)}>💬 Ayuda de Claude</button>
         </div>
       </div>
+      <div className="row check-row">
+        <button className="btn btn--ghost small" disabled={check.busy || !liveCount} title="Le hace una pregunta cortita a cada IA conectada para ver cuáles funcionan" onClick={async () => {
+          setCheck({ busy: true, results: null });
+          try {
+            const r = await api.checkAgents();
+            setCheck({ busy: false, results: r.results });
+            await refresh();
+            toast(r.failed ? `⚠️ ${r.failed} de ${r.checked} IAs están fallando: no recibirán trabajo hasta que vuelvan a responder` : `✅ Las ${r.checked} IAs conectadas responden`);
+          } catch (err) {
+            setCheck({ busy: false, results: null });
+            toast(`❌ ${(err as Error).message}`);
+          }
+        }}>{check.busy ? '🩺 Revisando… (puede tardar un minuto)' : '🩺 Revisar todas las IAs'}</button>
+        {inDemo > 0 && <button className="btn btn--ghost small" title="Las IAs en modo demo pasan a un proveedor gratis que ya conectaste" onClick={async () => {
+          const r = await api.rescueAgents();
+          await refresh();
+          toast(r.changed ? `🔁 ${r.changed} IAs de demo ahora usan tus proveedores conectados${r.stillDemo ? ` (quedan ${r.stillDemo} en demo)` : ''}` : 'Conecta al menos un proveedor gratis (por ejemplo Groq) para activarlas');
+        }}>🔁 Activar las {inDemo} de demo</button>}
+        {rescued > 0 && <button className="link" onClick={async () => { const r = await api.undoRescue(); await refresh(); toast(`↩️ ${r.restored} IAs volvieron a su proveedor anterior`); }}>deshacer</button>}
+      </div>
+      {check.results && (
+        <ul className="check-results">
+          {check.results.map((r) => (
+            <li key={r.id} className={r.ok ? 'ok' : 'bad'}>
+              {r.ok ? '✅' : '❌'} <b>{r.name}</b> <span className="muted small">{r.provider} / {r.model}{r.ok ? ` · ${(r.ms / 1000).toFixed(1)} s` : ''}</span>
+              {r.changedModel && <span className="small muted"> · cambió de {r.changedModel} (ya no existía)</span>}
+              {r.error && <div className="small danger">{r.error}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {helper && <Assistant onAction={(kind, arg) => {
         if (kind === 'clave' || kind === 'instalar' || kind === 'sesion') {

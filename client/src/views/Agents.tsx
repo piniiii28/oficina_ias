@@ -172,6 +172,7 @@ export function Agents() {
               <strong>{a.name}{a.isHead && <span title="Jefe de departamento"> 👑</span>}</strong>
               <small>{a.role}{a.assistants?.length ? ` · 👥 ${a.assistants.map((x) => x.focus).join(', ')}` : ''}</small>
               <small className="muted"><span className={`dot ${a.live ? 'dot--live' : 'dot--demo'}`} /> {a.provider} · {a.model}</small>
+              {a.live && a.health?.ok === false && <small className="danger" title={a.health.error}>⚠️ Con fallas: no recibe trabajo hasta que vuelva a responder</small>}
               <Meters agentId={a.id} />
               <small className="muted">{dept(a.department)?.emoji} {dept(a.department)?.name} · {a.stats?.tasks || 0} {a.stats?.tasks === 1 ? 'trabajo' : 'trabajos'} · {a.knowledge?.length || 0} {a.knowledge?.length === 1 ? 'lección' : 'lecciones'}</small>
             </div>

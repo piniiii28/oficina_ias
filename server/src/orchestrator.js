@@ -10,7 +10,7 @@ import { relatedNotes } from './librarian.js';
 import { readLinks } from './links.js';
 import { callWithAccess } from './access.js';
 import { callWithAssistants } from './assistants.js';
-import { verifyStep, juryStep } from './metrics.js';
+import { verifyStep, juryStep, healthOf } from './metrics.js';
 import { onTaskFinished } from './automations.js';
 
 export const bus = new EventEmitter();
@@ -73,7 +73,7 @@ function parseJson(text) {
 
 async function makePlan(store, task, forced, template) {
   const { settings, agents } = store.data;
-  const usable = usableFilter(settings, agents);
+  const usable = usableFilter(settings, agents, (a) => healthOf(store, a.id).ok);
   // Las IAs en modo demo no trabajan (salvo que se desactive «solo IAs conectadas»).
   if (forced?.length) forced = forced.filter((id) => usable(agents.find((a) => a.id === id)));
   const pool = agents.filter((a) => !a.isBrain && a.enabled && usable(a) && (!forced?.length || forced.includes(a.id)));
@@ -337,7 +337,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     synthDelta.end();
     task.final = synth.simulated ? demoSynthesis(prompt, ok, names) : synth.text;
     // Las imágenes que generaron las IAs no se pierden en el resumen final.
-    const imgs = [...new Set(ok.flatMap((s) => (s.output || '').match(/!\[[^\]]*\]\(\/api\/images\/[\w.-]+\)/g) || []))].filter((m) => !task.final.includes(m.match(/\(([^)]+)\)/)[1]));
+    const imgs = [...new Set(ok.flatMap((s) => (s.output || '').match(/!?\[[^\]]*\]\(\/api\/(?:images|videos)\/[\w.-]+\)/g) || []))].filter((m) => !task.final.includes(m.match(/\(([^)]+)\)/)[1]));
     if (imgs.length) task.final = `${imgs.join('\n\n')}\n\n${task.final}`;
 
     // Revisión de calidad opcional por un verificador antes de entregar.
@@ -414,7 +414,7 @@ async function headsReview(store, task, settings, signal, emitTask, nameOf) {
   }
   for (const [dept, steps] of byDept) {
     const head = store.data.agents.find((a) => a.isHead && a.enabled && a.department === dept);
-    if (!head || !usableFilter(settings, store.data.agents)(head) || steps.length < 2 || task.steps.some((s) => s.agentId === head.id)) continue;
+    if (!head || !usableFilter(settings, store.data.agents, (a) => healthOf(store, a.id).ok)(head) || steps.length < 2 || task.steps.some((s) => s.agentId === head.id)) continue;
     const step = { agentId: head.id, instruction: `Como jefe del departamento, revisa y unifica lo que entregó tu equipo (${steps.map((s) => nameOf(s.agentId)).join(', ')}).`, dependsOn: steps.map((s) => s.agentId), status: 'working', output: '', simulated: false, error: null, review: true };
     task.steps.push(step);
     emitTask();

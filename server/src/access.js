@@ -17,6 +17,7 @@ import { runAutomation } from './automations.js';
 import { PRINTER_COMMANDS } from './bambu.js';
 import { printerNow, printerCommand, printerCamera } from './devices.js';
 import { imageGuide, renderImages, IMAGE_RE } from './images.js';
+import { videoGuide, renderVideos, VIDEO_RE } from './video.js';
 
 const win = process.platform === 'win32';
 export const MODES = ['leer', 'escribir'];
@@ -387,13 +388,25 @@ export async function callWithAccess(store, params) {
   const settings = store.data.settings;
   // Imágenes: cada <<imagen …>> de la respuesta se genera y se pone en su lugar.
   const withImages = async (r) => {
-    if (r.simulated || !IMAGE_RE.test(r.text)) return r;
+    if (r.simulated) return r;
+    let out = r;
     IMAGE_RE.lastIndex = 0;
-    if (params.agent) agentStatus(params.agent.id, 'working', '🎨 Generando la imagen…');
-    const { text, images } = await renderImages(settings, store.dir, r.text);
-    return { ...r, text, images };
+    if (IMAGE_RE.test(out.text)) {
+      IMAGE_RE.lastIndex = 0;
+      if (params.agent) agentStatus(params.agent.id, 'working', '🎨 Generando la imagen…');
+      const { text, images } = await renderImages(settings, store.dir, out.text);
+      out = { ...out, text, images };
+    }
+    VIDEO_RE.lastIndex = 0;
+    if (VIDEO_RE.test(out.text)) {
+      VIDEO_RE.lastIndex = 0;
+      if (params.agent) agentStatus(params.agent.id, 'working', '🎬 Haciendo el video…');
+      const { text, videos } = await renderVideos(settings, store.dir, out.text, { onLog: (t) => params.agent && agentStatus(params.agent.id, 'working', t.trim()) });
+      out = { ...out, text, videos };
+    }
+    return out;
   };
-  const imgGuide = imageGuide(settings);
+  const imgGuide = imageGuide(settings) + videoGuide(settings);
   if (settings.accessEnabled === false) return withImages(await callModel(settings, { ...params, system: params.system + imgGuide }));
   const blender = await blenderStatus(store);
   const system = params.system + accessGuide(settings, store.dir, blender) + imgGuide;

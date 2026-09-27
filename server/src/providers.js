@@ -20,18 +20,18 @@ export const PROVIDERS = {
   openai: { label: 'OpenAI (ChatGPT)', tier: 'pago', hint: 'GPT por API. Si ya tienes ChatGPT, mejor usa Codex CLI.', baseUrl: 'https://api.openai.com/v1', keyUrl: 'https://platform.openai.com/api-keys' },
   google: { label: 'Google (Gemini)', tier: 'gratis', hint: 'Plan gratis con límites diarios. La clave se saca con tu cuenta de Google.', keyUrl: 'https://aistudio.google.com/apikey' },
   openrouter: { label: 'OpenRouter (cientos de modelos)', tier: 'mixto', hint: 'Una sola clave para muchos modelos. Los que terminan en :free son gratis.', baseUrl: 'https://openrouter.ai/api/v1', keyUrl: 'https://openrouter.ai/keys' },
-  groq: { label: 'Groq (Llama, ultra rápido)', tier: 'gratis', hint: 'Plan gratis y muy rápido (Llama, Qwen, Kimi, GPT-OSS).', baseUrl: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys' },
-  cerebras: { label: 'Cerebras (gratis, ultra rápido)', tier: 'gratis', hint: 'Plan gratis con modelos abiertos (Llama, Qwen, GPT-OSS).', baseUrl: 'https://api.cerebras.ai/v1', keyUrl: 'https://cloud.cerebras.ai' },
-  mistral: { label: 'Mistral', tier: 'gratis', hint: 'Plan gratis de prueba (Mistral Small, Codestral).', baseUrl: 'https://api.mistral.ai/v1', keyUrl: 'https://console.mistral.ai/api-keys' },
+  groq: { label: 'Groq (gratis, ultra rápido)', tier: 'gratis', hint: 'Plan gratis y muy rápido (GPT-OSS y Qwen 3.8). Retiró los Llama en agosto de 2026.', baseUrl: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys' },
+  cerebras: { label: 'Cerebras (gratis, ultra rápido)', tier: 'gratis', hint: 'Plan gratis («Free Trial») con GPT-OSS 120B y Qwen 3.8, con límites por minuto.', baseUrl: 'https://api.cerebras.ai/v1', keyUrl: 'https://cloud.cerebras.ai' },
+  mistral: { label: 'Mistral', tier: 'gratis', hint: 'Plan gratis («Free mode» en Mistral Studio), pero pide verificar tu número de teléfono y no está en todos los países. Si no te deja, usa Groq, Cerebras u OpenRouter.', baseUrl: 'https://api.mistral.ai/v1', keyUrl: 'https://console.mistral.ai/api-keys' },
   deepseek: { label: 'DeepSeek', tier: 'pago', hint: 'De pago, pero cuesta centavos.', baseUrl: 'https://api.deepseek.com/v1', keyUrl: 'https://platform.deepseek.com/api_keys' },
   xai: { label: 'xAI (Grok)', tier: 'pago', hint: 'Grok por API.', baseUrl: 'https://api.x.ai/v1', keyUrl: 'https://console.x.ai' },
   perplexity: { label: 'Perplexity (búsqueda web)', tier: 'pago', hint: 'Respuestas con búsqueda web.', baseUrl: 'https://api.perplexity.ai', keyUrl: 'https://www.perplexity.ai/settings/api' },
   together: { label: 'Together AI (open source)', tier: 'pago', hint: 'Modelos abiertos; suele regalar créditos al empezar.', baseUrl: 'https://api.together.xyz/v1', keyUrl: 'https://api.together.xyz/settings/api-keys' },
   github: { label: 'GitHub Models (gratis con tu cuenta)', tier: 'gratis', hint: 'Gratis con tu cuenta de GitHub: GPT-4.1, Llama, DeepSeek, Mistral (con límites diarios). La clave es un token de GitHub.', baseUrl: 'https://models.github.ai/inference', keyUrl: 'https://github.com/settings/personal-access-tokens' },
-  sambanova: { label: 'SambaNova (gratis, rápido)', tier: 'gratis', hint: 'Plan gratis con Llama, DeepSeek y Qwen.', baseUrl: 'https://api.sambanova.ai/v1', keyUrl: 'https://cloud.sambanova.ai/apis' },
+  sambanova: { label: 'SambaNova (gratis, rápido)', tier: 'gratis', hint: 'Créditos gratis para GPT-OSS, DeepSeek, MiniMax M3, Gemma 4 y Llama.', baseUrl: 'https://api.sambanova.ai/v1', keyUrl: 'https://cloud.sambanova.ai/apis' },
   huggingface: { label: 'Hugging Face', tier: 'gratis', hint: 'Créditos gratis cada mes para miles de modelos abiertos.', baseUrl: 'https://router.huggingface.co/v1', keyUrl: 'https://huggingface.co/settings/tokens' },
-  nvidia: { label: 'NVIDIA NIM', tier: 'gratis', hint: 'Créditos gratis para probar Llama, DeepSeek, Qwen y más.', baseUrl: 'https://integrate.api.nvidia.com/v1', keyUrl: 'https://build.nvidia.com' },
-  cohere: { label: 'Cohere (Command)', tier: 'gratis', hint: 'Clave de prueba gratis con límites (modelos Command).', baseUrl: 'https://api.cohere.ai/compatibility/v1', keyUrl: 'https://dashboard.cohere.com/api-keys' },
+  nvidia: { label: 'NVIDIA NIM', tier: 'gratis', hint: 'Créditos gratis para probar Nemotron, Kimi K3, GLM 5.3, DeepSeek V4 y más.', baseUrl: 'https://integrate.api.nvidia.com/v1', keyUrl: 'https://build.nvidia.com' },
+  cohere: { label: 'Cohere (Command)', tier: 'gratis', hint: 'Clave de prueba gratis: 1.000 llamadas al mes (modelos Command A).', baseUrl: 'https://api.cohere.ai/compatibility/v1', keyUrl: 'https://dashboard.cohere.com/api-keys' },
   minimax: { label: 'MiniMax (M3, muy barato)', tier: 'pago', hint: 'De pago pero muy barato (unos US$0,30 por millón de tokens de entrada). Fuerte para programar y tareas largas. Modelos: MiniMax-M3, MiniMax-M2.7.', baseUrl: 'https://api.minimax.io/v1', keyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key' },
   ollama: { label: 'Ollama (local, gratis)', tier: 'gratis', hint: 'Modelos en tu propio computador, gratis y sin límite.', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
   // Herramientas de línea de comandos instaladas en tu computador: usan tu
@@ -72,13 +72,18 @@ export const isLive = (settings, agent) => Boolean(agent) && settings.demoMode !
 
 /**
  * «Solo IAs conectadas» (activado por defecto): las IAs en modo demo no
- * trabajan en tareas, reuniones ni como asistentes. Si todavía no hay
- * ninguna conectada, trabajan todas en demo para que la oficina se pueda probar.
+ * trabajan en tareas, reuniones ni como asistentes; tampoco las conectadas
+ * que están fallando (healthy). Si todavía no hay ninguna conectada, trabajan
+ * todas en demo para que la oficina se pueda probar.
  */
-export function usableFilter(settings, agents) {
+export function usableFilter(settings, agents, healthy = () => true) {
   if (settings.onlyLive === false) return () => true;
-  const anyLive = agents.some((a) => !a.isBrain && a.enabled && isLive(settings, a));
-  return anyLive ? (a) => isLive(settings, a) : () => true;
+  const live = (a) => Boolean(a) && isLive(settings, a);
+  const staff = agents.filter((a) => !a.isBrain && a.enabled);
+  // Primero las conectadas que funcionan; si todas están fallando, las conectadas igual.
+  if (staff.some((a) => live(a) && healthy(a))) return (a) => live(a) && healthy(a);
+  if (staff.some(live)) return live;
+  return () => true;
 }
 
 /**
@@ -114,10 +119,12 @@ async function listModels(provider, cred) {
   if (hit && Date.now() - hit.at < 600000) return hit.ids;
   const base = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : PROVIDERS[provider]?.baseUrl;
   if (!base) return [];
+  // GitHub Models publica su catálogo en otra dirección.
+  const url = provider === 'github' ? 'https://models.github.ai/catalog/models' : `${base}/models`;
   try {
-    const r = await fetch(`${base}/models`, { headers: cred?.key ? { Authorization: `Bearer ${cred.key}` } : {}, signal: AbortSignal.timeout(8000) });
+    const r = await fetch(url, { headers: cred?.key ? { Authorization: `Bearer ${cred.key}` } : {}, signal: AbortSignal.timeout(8000) });
     const data = await r.json();
-    let items = data.data || data.models || [];
+    let items = Array.isArray(data) ? data : data.data || data.models || [];
     // En OpenRouter solo sirven los gratis.
     if (provider === 'openrouter') items = items.filter((m) => m.id?.endsWith(':free') || (+m.pricing?.prompt === 0 && +m.pricing?.completion === 0));
     const ids = items.map((m) => m.id || m.name).filter(Boolean);

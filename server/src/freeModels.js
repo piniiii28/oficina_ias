@@ -33,22 +33,29 @@ export const FREE_MODELS = {
     { id: 'mistral-ai/mistral-small-2503', label: 'Mistral Small', for: 'redacción' },
   ],
   sambanova: [
+    { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
+    { id: 'MiniMax-M3', label: 'MiniMax M3 (vista previa)', for: 'código' },
+    { id: 'DeepSeek-V3.1', label: 'DeepSeek V3.1', for: 'razonamiento' },
+    { id: 'gemma-4-31B-it', label: 'Gemma 4 31B', for: 'redacción' },
     { id: 'Meta-Llama-3.3-70B-Instruct', label: 'Llama 3.3 70B', for: 'general' },
-    { id: 'DeepSeek-V3-0324', label: 'DeepSeek V3', for: 'código' },
-    { id: 'Qwen3-32B', label: 'Qwen3 32B', for: 'razonamiento' },
   ],
   huggingface: [
-    { id: 'meta-llama/Llama-3.3-70B-Instruct', label: 'Llama 3.3 70B', for: 'general' },
-    { id: 'Qwen/Qwen3-32B', label: 'Qwen3 32B', for: 'razonamiento' },
-    { id: 'deepseek-ai/DeepSeek-V3-0324', label: 'DeepSeek V3', for: 'código' },
+    { id: 'Qwen/Qwen3.8-27B', label: 'Qwen 3.8 27B', for: 'general' },
+    { id: 'deepseek-ai/DeepSeek-V4.1-Flash', label: 'DeepSeek V4.1 Flash', for: 'código' },
+    { id: 'moonshotai/Kimi-K3', label: 'Kimi K3', for: 'documentos largos' },
+    { id: 'zai-org/GLM-5.3', label: 'GLM 5.3', for: 'razonamiento' },
+    { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
   ],
   nvidia: [
-    { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B', for: 'general' },
-    { id: 'deepseek-ai/deepseek-r1', label: 'DeepSeek R1', for: 'razonamiento' },
-    { id: 'qwen/qwen2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder', for: 'código' },
+    { id: 'nvidia/nemotron-3-super-120b-a12b', label: 'Nemotron 3 Super 120B', for: 'general' },
+    { id: 'moonshotai/kimi-k3', label: 'Kimi K3', for: 'documentos largos' },
+    { id: 'z-ai/glm-5.3', label: 'GLM 5.3', for: 'razonamiento' },
+    { id: 'deepseek-ai/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', for: 'código' },
+    { id: 'google/gemma-4-31b-it', label: 'Gemma 4 31B', for: 'redacción' },
   ],
   cohere: [
-    { id: 'command-a-03-2025', label: 'Command A', for: 'redacción' },
+    { id: 'command-a-plus-05-2026', label: 'Command A+', for: 'redacción' },
+    { id: 'command-a-03-2025', label: 'Command A', for: 'general' },
     { id: 'command-r7b-12-2024', label: 'Command R7B (rápido)', for: 'rápido' },
   ],
   mistral: [
@@ -87,6 +94,9 @@ export const RETIRED_MODELS = {
     'llama-3.3-70b-versatile': 'openai/gpt-oss-120b', 'llama-3.1-8b-instant': 'openai/gpt-oss-20b', 'qwen/qwen3-32b': 'qwen/qwen3.8-27b', 'qwen/qwen3.6-27b': 'qwen/qwen3.8-27b',
     'meta-llama/llama-4-scout-17b-16e-instruct': 'openai/gpt-oss-120b', 'moonshotai/kimi-k2-instruct': 'openai/gpt-oss-120b', 'deepseek-r1-distill-llama-70b': 'openai/gpt-oss-120b',
   },
+  sambanova: { 'Qwen3-32B': 'gpt-oss-120b', 'DeepSeek-V3-0324': 'DeepSeek-V3.1', 'DeepSeek-R1': 'DeepSeek-V3.1', 'Meta-Llama-3.1-8B-Instruct': 'gpt-oss-120b' },
+  huggingface: { 'Qwen/Qwen3-32B': 'Qwen/Qwen3.8-27B', 'deepseek-ai/DeepSeek-V3-0324': 'deepseek-ai/DeepSeek-V4.1-Flash' },
+  nvidia: { 'meta/llama-3.3-70b-instruct': 'nvidia/nemotron-3-super-120b-a12b', 'deepseek-ai/deepseek-r1': 'z-ai/glm-5.3', 'qwen/qwen2.5-coder-32b-instruct': 'deepseek-ai/deepseek-v4.1-flash' },
   cerebras: { 'llama-3.3-70b': 'gpt-oss-120b', 'qwen-3-32b': 'qwen-3.8-27b', 'llama3.1-8b': 'gpt-oss-120b' },
   openrouter: {
     'qwen/qwen3-coder:free': 'qwen/qwen3.8-27b:free', 'deepseek/deepseek-chat-v3.1:free': 'nvidia/nemotron-3-super-120b-a12b:free', 'deepseek/deepseek-r1:free': 'nvidia/nemotron-3-ultra-550b-a55b:free',
@@ -119,8 +129,24 @@ const ORDER = {
   código: [['openrouter', 'qwen/qwen3.8-27b:free'], ['groq', 'qwen/qwen3.8-27b'], ['cerebras', 'qwen-3.8-27b'], ['mistral', 'codestral-latest'], ['google', 'gemini-3.7-flash'], ['ollama', 'qwen2.5-coder']],
   razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free'], ['google', 'gemini-3.8-flash'], ['ollama', 'deepseek-r1']],
   redacción: [['google', 'gemini-3.7-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'google/gemma-4-31b-it:free'], ['groq', 'openai/gpt-oss-120b'], ['ollama', 'gemma3']],
-  general: [['groq', 'openai/gpt-oss-120b'], ['google', 'gemini-3.7-flash'], ['cerebras', 'gpt-oss-120b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
+  general: [['groq', 'openai/gpt-oss-120b'], ['google', 'gemini-3.7-flash'], ['cerebras', 'gpt-oss-120b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'], ['nvidia', 'nvidia/nemotron-3-super-120b-a12b'], ['huggingface', 'Qwen/Qwen3.8-27B'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
 };
+
+/**
+ * IAs en modo demo (su proveedor no está conectado): se pasan a un proveedor
+ * gratis que SÍ conectaste, según lo que hace cada una. Las que usan una CLI o
+ * un servicio especial (Undermind) no se tocan.
+ */
+export function rescuePlan(agents, isConnected) {
+  const changes = [];
+  for (const a of agents) {
+    if (a.enabled === false || a.mcp || a.provider.startsWith('cli-') || isConnected(a.provider)) continue;
+    const need = a.isBrain ? 'razonamiento' : NEED[a.department] || 'general';
+    const pick = ORDER[need].find(([p]) => isConnected(p)) || ORDER.general.find(([p]) => isConnected(p));
+    if (pick) changes.push({ id: a.id, from: { provider: a.provider, model: a.model }, to: { provider: pick[0], model: pick[1] } });
+  }
+  return changes;
+}
 
 const PAID = new Set(['anthropic', 'openai', 'xai', 'perplexity', 'together', 'deepseek']);
 

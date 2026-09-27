@@ -31,11 +31,11 @@ if exist .git (
   set GIT_TERMINAL_PROMPT=0
   git pull --ff-only --quiet || echo No pude buscar actualizaciones; sigo con la version actual.
 )
-call npm install --no-audit --no-fund --loglevel=error -w server
+call npm install --no-audit --no-fund --loglevel=error --omit=optional -w server
 start "" http://localhost:4748
 set OFICINA_LANZADOR=1
 :inicio
 node server/src/node.js
 REM Codigo 75 = el nodo se actualizo y pidio reiniciarse.
-if %errorlevel%==75 (echo Reiniciando el nodo... & call npm install --no-audit --no-fund --loglevel=error -w server & goto inicio)
+if %errorlevel%==75 (echo Reiniciando el nodo... & call npm install --no-audit --no-fund --loglevel=error --omit=optional -w server & goto inicio)
 pause

@@ -14,7 +14,7 @@ if ! command -v ollama >/dev/null && [ ! -x /Applications/Ollama.app/Contents/Re
   fi
 fi
 if [ -d .git ]; then GIT_TERMINAL_PROMPT=0 git pull --ff-only --quiet || echo "No pude buscar actualizaciones."; fi
-npm install --no-audit --no-fund --loglevel=error -w server
+npm install --no-audit --no-fund --loglevel=error --omit=optional -w server
 ( sleep 2; (command -v open >/dev/null && open http://localhost:4748) || (command -v xdg-open >/dev/null && xdg-open http://localhost:4748) || true ) &
 export OFICINA_LANZADOR=1
 while true; do
@@ -23,5 +23,5 @@ while true; do
   # Código 75 = el nodo se actualizó y pidió reiniciarse.
   [ "$code" = "75" ] || break
   echo "Reiniciando el nodo…"
-  npm install --no-audit --no-fund --loglevel=error -w server
+  npm install --no-audit --no-fund --loglevel=error --omit=optional -w server
 done

@@ -25,6 +25,8 @@ export function Markdown({ text, onLink, onToggle, cadName }: { text: string; on
     });
     const withTags = withLinks.replace(/(^|\s)#([\p{L}\d_\-/]+)/gu, '$1<span class="tag">#$2</span>');
     let html = DOMPurify.sanitize(marked.parse(withTags, { async: false }) as string, { ADD_ATTR: ['data-title'] });
+    // Videos generados por las IAs: el enlace se muestra como reproductor.
+    html = html.replace(/<a href="(\/api\/videos\/vid-[\w-]+\.mp4)">([^<]*)<\/a>/g, '<video class="md-video" controls preload="metadata" src="$1#t=0.8" title="$2"></video>');
     // Casillas de tareas: se pueden marcar si hay onToggle.
     if (onToggle) html = html.replace(/<input ([^>]*?)disabled="?"?([^>]*)>/g, '<input $1$2>');
     // Bloques de código 3D (en el mismo orden en que aparecen los <pre>).

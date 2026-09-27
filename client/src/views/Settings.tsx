@@ -1,6 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { AvatarConfig, ImagesInfo, McpService, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
+import type { AvatarConfig, VideosInfo, ImagesInfo, McpService, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
@@ -37,6 +37,7 @@ export function Settings() {
       <CliSection s={s} save={save} />
       <McpSection name="undermind" />
       <ImagesSection s={s} setS={setS} />
+      <VideosSection s={s} setS={setS} />
       <AccessSection s={s} setS={setS} />
       <RemoteSection />
       <NodesSection />
@@ -162,6 +163,64 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
         })}
       </div>
     </details>
+  );
+}
+
+/** Videos: gratis con imágenes y FFmpeg, o de pago con Hailuo o Veo. */
+function VideosSection({ s, setS }: { s: SettingsT; setS: (s: SettingsT) => void }) {
+  const { toast, streams } = useOffice();
+  const [info, setInfo] = useState<VideosInfo | null>(null);
+  const [prompt, setPrompt] = useState('A tiny robot watering plants in a cozy greenhouse at sunrise');
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    api.videos().then(setInfo).catch(() => {});
+  }, [s.video?.active]);
+  const v = s.video;
+  if (!info || !v) return null;
+  const save = async (patch: Record<string, unknown>, msg = '🎬 Guardado') => {
+    try {
+      setS(await api.saveSettings({ video: patch }));
+      toast(msg);
+    } catch (err) {
+      toast(`❌ ${(err as Error).message}`);
+    }
+  };
+  const chosen = v.service || v.active;
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>🎬 Videos</h2>
+        <span className={`pill ${v.enabled ? 'pill--done' : ''}`}>{v.enabled ? `● ${info.services[v.active]?.label.split(' (')[0]}` : 'Apagado'}</span>
+      </div>
+      <p className="muted small">Pídele un video a una IA (por ejemplo a Clip o a Pixel) y aparece en la respuesta, listo para ver o descargar. Se guardan en tu carpeta de datos, en <code>videos/</code>. Ningún servicio de video con IA real es gratis hoy: el gratis arma el video con imágenes.</p>
+      <label className="check"><input type="checkbox" checked={v.enabled} onChange={(e) => save({ enabled: e.target.checked })} /> Las IAs pueden hacer videos</label>
+      <div className="image-services">
+        {Object.entries(info.services).map(([id, svc]) => (
+          <label key={id} className={`image-service ${chosen === id ? 'on' : ''}`}>
+            <input type="radio" name="video-service" checked={chosen === id} onChange={() => save({ service: id }, `🎬 Ahora se usa ${svc.label.split(' (')[0]}`)} />
+            <span><b>{svc.label}</b> <span className={`tier tier--${svc.tier}`}>{svc.tier === 'gratis' ? 'Gratis' : 'De pago'}</span><br /><small className="muted">{svc.hint}{svc.keyUrl && <> <a href={svc.keyUrl} target="_blank" rel="noreferrer">sacar clave ↗</a></>}</small></span>
+          </label>
+        ))}
+      </div>
+      {chosen === 'slideshow' && !info.ffmpeg && <p className="small warn">No encuentro FFmpeg. Actualiza la oficina (viene incluido) o instálalo desde ffmpeg.org.</p>}
+      {chosen !== 'slideshow' && v.active === 'slideshow' && <p className="small warn">Falta la clave de {chosen === 'veo' ? 'Gemini' : 'MiniMax'} en «Conectar las IAs»; mientras tanto se usa el video con imágenes.</p>}
+      <div className="row">
+        <input className="grow" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe un video para probar" />
+        <button className="btn btn--primary small" disabled={busy || prompt.trim().length < 3} onClick={async () => {
+          setBusy(true);
+          try {
+            const r = await api.generateVideo(prompt, chosen, '16:9');
+            setPreview(r.url);
+          } catch (err) {
+            toast(`❌ ${(err as Error).message}`);
+          }
+          setBusy(false);
+        }}>{busy ? 'Haciendo el video…' : '🎬 Probar'}</button>
+      </div>
+      {busy && streams['video:prueba'] && <pre className="log">{streams['video:prueba'].slice(-300)}</pre>}
+      {preview && <video className="image-preview" src={preview} controls autoPlay muted loop />}
+    </section>
   );
 }
 

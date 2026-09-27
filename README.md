@@ -218,6 +218,20 @@ Las IAs pueden generar imágenes: pídele una a Pixel (o a cualquiera) y aparece
 - **Hugging Face**: usa tu clave; los créditos gratis dan para pocas.
 - **Gemini**: la mejor calidad, pero de pago.
 
+## 🎬 Videos
+
+Pídele un video a Clip (o a cualquier IA) y aparece en la respuesta. Se guardan en `videos/`. En **Ajustes → 🎬 Videos**:
+
+- **Video con imágenes** (gratis): una imagen por escena, unidas con movimiento y fundidos. FFmpeg viene incluido con la oficina.
+- **Hailuo de MiniMax** o **Veo de Google**: video real con IA, de pago (con tu clave).
+
+## 🩺 IAs que funcionan de verdad
+
+En **Ajustes → Conectar las IAs**:
+- **🩺 Revisar todas las IAs** le hace una pregunta cortita a cada IA conectada. Las que fallan (o fallan dos veces seguidas trabajando) quedan «con fallas» y no reciben trabajo hasta que vuelvan a responder.
+- **🔁 Activar las de demo** pasa las IAs en modo demo a un proveedor gratis que ya conectaste (se puede deshacer).
+- Si un proveedor retira un modelo o deja de darlo gratis, la IA pasa sola a otro gratis; si está saturado, reintenta.
+
 ## Undermind: artículos científicos
 
 [Undermind](https://www.undermind.ai) busca a fondo en la literatura científica. No da clave de API: se conecta a tu **Claude Code** por MCP (plan gratis con límite de búsquedas).
