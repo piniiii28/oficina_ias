@@ -453,3 +453,35 @@ export async function selfTrain(store, agentId) {
   agentStatus(agent.id, 'done', '¡Aprendí algo nuevo!');
   return item;
 }
+
+/** Resumen del día: una nota de diario enlazada con todo lo que hizo la oficina hoy. */
+export async function dailySummary(store, notes, date = new Date()) {
+  const day = date.toISOString().slice(0, 10);
+  const sameDay = (iso) => iso && new Date(iso).toDateString() === date.toDateString();
+  const tasks = store.data.tasks.filter((t) => sameDay(t.createdAt) && t.status === 'done');
+  const meetings = (store.data.meetings || []).filter((m) => sameDay(m.createdAt) && m.status === 'done');
+  const ideas = store.data.notes.filter((n) => n.type === 'idea' && sameDay(n.createdAt));
+  if (!tasks.length && !meetings.length) throw new Error('Hoy todavía no hay tareas ni reuniones terminadas.');
+  const brain = brainOf(store);
+  const titleOf = (id) => store.data.notes.find((n) => n.id === id)?.title;
+  agentStatus(brain.id, 'thinking', 'Escribiendo el resumen del día…');
+  const res = await callModel(store.data.settings, {
+    provider: brain.provider, model: brain.model, agent: brain, effort: 'low',
+    system: buildSystem(brain),
+    messages: [{
+      role: 'user',
+      content: `Escribe el resumen del día de la oficina (máximo 200 palabras): logros, decisiones y qué conviene hacer mañana.\n\nTareas:\n${tasks.map((t) => `- ${t.title}: ${t.final.slice(0, 500)}`).join('\n')}\n\nReuniones:\n${meetings.map((m) => `- ${m.topic}: ${m.summary.slice(0, 400)}`).join('\n')}`,
+    }],
+  });
+  const body = res.simulated
+    ? `Hoy la oficina completó ${tasks.length} tarea(s) y ${meetings.length} reunión(es), y surgieron ${ideas.length} idea(s) nuevas. *(Resumen simulado.)*`
+    : res.text;
+  const links = (arr) => arr.filter(Boolean).map((t) => `- [[${t}]]`).join('\n') || '- (ninguna)';
+  const content = `${body}\n\n## Tareas\n${links(tasks.map((t) => titleOf(t.noteId)))}\n\n## Reuniones\n${links(meetings.map((m) => titleOf(m.noteId)))}\n\n## Ideas nuevas\n${links(ideas.map((i) => i.title))}\n\n#diario`;
+  const title = `Resumen del día ${day}`;
+  const existing = notes.findByTitle(title);
+  const note = existing ? notes.update(existing.id, { content }) : notes.create({ title, type: 'diario', tags: ['diario'], source: { agentId: brain.id }, content });
+  agentStatus(brain.id, 'done', 'Resumen del día listo');
+  bus.emit('event', { type: 'notes' });
+  return note;
+}

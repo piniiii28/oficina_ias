@@ -110,6 +110,15 @@ export function Notes() {
             <button className="btn btn--primary small" onClick={() => newNote()}>＋ Nota</button>
             <button className="btn btn--ghost small" onClick={() => newNote('idea')}>💡 Idea</button>
             <button className="btn btn--ghost small" onClick={() => newNote('diario')}>📅 Hoy</button>
+            <button className="btn btn--ghost small" title="Claude resume lo que hizo la oficina hoy" onClick={async () => {
+              try {
+                const n = await api.dailySummary();
+                await load();
+                await open(n.id);
+              } catch (err) {
+                toast((err as Error).message);
+              }
+            }}>🧠 Resumen del día</button>
             <label className="btn btn--ghost small" title="Importar archivos .md (por ejemplo, de Obsidian)">
               ⬆️ .md
               <input type="file" accept=".md,.markdown,.txt" multiple hidden onChange={(e) => e.target.files && importFiles(e.target.files)} />

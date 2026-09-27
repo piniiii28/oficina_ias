@@ -8,7 +8,7 @@ import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, detectClis, cliCommand, callModel } from './providers.js';
-import { bus, runTask, chatWithAgent, selfTrain } from './orchestrator.js';
+import { bus, runTask, chatWithAgent, selfTrain, dailySummary } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
@@ -361,6 +361,13 @@ export function createApp(store) {
     const n = notes.findByTitle(title) || notes.create({ title, content: '' });
     bus.emit('event', { type: 'notes' });
     res.json(n);
+  });
+  app.post('/api/notes/daily', async (_req, res) => {
+    try {
+      res.status(201).json(await dailySummary(store, notes));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
   app.post('/api/notes/import', (req, res) => {
     // Importa archivos .md (por ejemplo, de una bóveda de Obsidian).

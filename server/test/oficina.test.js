@@ -354,3 +354,16 @@ test('Anthropic: streaming con el SDK, fallbacks y esfuerzo', async () => {
     fake.close();
   }
 });
+
+test('resumen del día: nota de diario enlazada a las tareas de hoy', async () => {
+  const { dailySummary } = await import('../src/orchestrator.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  await assert.rejects(dailySummary(store, notes), /todavía no hay/);
+  const t = await runTask(store, notes, { prompt: 'Plan de marketing en instagram' });
+  const n = await dailySummary(store, notes);
+  assert.equal(n.type, 'diario');
+  assert.ok(n.content.includes(`[[${notes.get(t.noteId).title}]]`));
+});

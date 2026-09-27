@@ -180,6 +180,7 @@ export const api = {
   resolveNote: (title: string) => req<Note>('POST', '/api/notes/resolve', { title }),
   updateNote: (id: string, n: Partial<Note>) => req<Note>('PUT', `/api/notes/${id}`, n),
   deleteNote: (id: string) => req('DELETE', `/api/notes/${id}`),
+  dailySummary: () => req<Note>('POST', '/api/notes/daily'),
   importNotes: (files: { name: string; content: string }[]) => req<{ created: number; updated: number }>('POST', '/api/notes/import', { files }),
   graph: (opts: { tags: boolean; agents: boolean }) =>
     req<{ nodes: GraphNode[]; links: GraphLink[] }>('GET', `/api/graph?tags=${opts.tags ? 1 : 0}&agents=${opts.agents ? 1 : 0}`),
