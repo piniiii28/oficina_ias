@@ -54,6 +54,7 @@ export function Settings() {
                 <div className="row">
                   <input type="password" placeholder="Pega tu clave…" value={keys[p.id] || ''} onChange={(e) => setKeys({ ...keys, [p.id]: e.target.value })} />
                   <button className="btn btn--primary small" disabled={!keys[p.id]} onClick={async () => { await save({ apiKeys: { [p.id]: keys[p.id] } }, `🔌 ${p.label} conectado`); setKeys({ ...keys, [p.id]: '' }); }}>Guardar</button>
+                  {k?.configured && <TestButton id={p.id} />}
                   {k?.preview && <button className="btn btn--ghost small" onClick={() => save({ apiKeys: { [p.id]: null } }, 'Clave eliminada')}>Quitar</button>}
                 </div>
               </div>
@@ -65,6 +66,7 @@ export function Settings() {
               <div className="small muted">Instala Ollama y descarga modelos (p. ej. <code>ollama pull gemma3</code>). Usan Ollama: {usage('ollama').join(', ') || 'nadie'}</div>
             </div>
             <div className="row">
+              {s.ollamaEnabled && <TestButton id="ollama" />}
               <input placeholder="http://localhost:11434/v1" defaultValue={s.ollamaUrl} onBlur={(e) => e.target.value !== s.ollamaUrl && save({ ollamaUrl: e.target.value })} />
               <label className="check"><input type="checkbox" checked={s.ollamaEnabled} onChange={(e) => save({ ollamaEnabled: e.target.checked })} /> Activar</label>
             </div>
@@ -164,6 +166,7 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
                   onBlur={() => cmds[p.id] !== undefined && cmds[p.id] !== c?.command && save({ cli: { [p.id]: { command: cmds[p.id] } } }, 'Comando guardado')}
                 />
                 <label className="check"><input type="checkbox" checked={Boolean(c?.enabled)} onChange={(e) => save({ cli: { [p.id]: { enabled: e.target.checked } } })} /> Activar</label>
+                {c?.enabled && <TestButton id={p.id} />}
                 <button className="btn btn--ghost small" onClick={() => assign(p.id)} title={`Asignar a: ${CLI_MATCH[p.id].join(', ')}`}>Asignar a sus IAs</button>
               </div>
             </div>
@@ -212,5 +215,23 @@ function MeSection() {
         }
       }}>Guardar mi avatar</button>
     </section>
+  );
+}
+
+function TestButton({ id }: { id: string }) {
+  const { toast } = useOffice();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button className="btn btn--ghost small" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try {
+        const r = await api.testProvider(id);
+        toast(`✅ Conectado (${r.model}, ${(r.ms / 1000).toFixed(1)} s): «${r.reply}»`);
+      } catch (err) {
+        toast(`❌ ${(err as Error).message}`);
+      } finally {
+        setBusy(false);
+      }
+    }}>{busy ? 'Probando…' : 'Probar'}</button>
   );
 }

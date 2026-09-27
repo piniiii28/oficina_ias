@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
-import { PROVIDERS, hasKey, detectClis, cliCommand } from './providers.js';
+import { PROVIDERS, hasKey, detectClis, cliCommand, callModel } from './providers.js';
 import { bus, runTask, chatWithAgent } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
@@ -74,6 +74,23 @@ export function createApp(store) {
 
   // --- Ajustes ---
   app.get('/api/settings', (_req, res) => res.json(publicSettings()));
+  app.post('/api/providers/:id/test', async (req, res) => {
+    const provider = req.params.id;
+    if (!PROVIDERS[provider]) return res.status(404).json({ error: 'Proveedor desconocido' });
+    if (!hasKey(store.data.settings, provider)) return res.status(400).json({ error: 'Primero guarda la clave o activa la herramienta' });
+    const agent = store.data.agents.find((a) => a.provider === provider && a.model) || store.data.agents.find((a) => a.provider === provider);
+    const model = req.body?.model || agent?.model;
+    if (!model && !PROVIDERS[provider].cli) return res.status(400).json({ error: 'Ninguna IA usa este proveedor todavía; asígnale uno en su perfil' });
+    const t0 = Date.now();
+    try {
+      const r = await callModel({ ...store.data.settings, demoMode: 'auto' }, {
+        provider, model, agent, effort: 'low', system: 'Eres una prueba de conexión.', messages: [{ role: 'user', content: 'Responde solo con: OK' }],
+      });
+      res.json({ ok: true, model, ms: Date.now() - t0, reply: r.text.slice(0, 120) });
+    } catch (err) {
+      res.status(502).json({ ok: false, model, error: err.message });
+    }
+  });
   app.get('/api/cli/detect', async (_req, res) => res.json(await detectClis()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;

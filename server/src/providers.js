@@ -119,7 +119,16 @@ async function callAnthropic(apiKey, model, system, messages, effort, onDelta) {
     ? client.beta.messages.stream({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
     : client.messages.stream(params);
   stream.on('text', (delta) => onDelta(delta));
-  const response = await stream.finalMessage();
+  let response;
+  try {
+    response = await stream.finalMessage();
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw new Error('Anthropic: la clave de API no es válida.');
+    if (err instanceof Anthropic.RateLimitError) throw new Error('Anthropic: límite de uso alcanzado, intenta en un momento.');
+    if (err instanceof Anthropic.NotFoundError) throw new Error(`Anthropic: el modelo "${model}" no existe o no está disponible para tu cuenta.`);
+    if (err instanceof Anthropic.APIError) throw new Error(`Anthropic (${err.status ?? 'red'}): ${err.error?.error?.message || err.message}`);
+    throw err;
+  }
   if (response.stop_reason === 'refusal') {
     throw new Error('El modelo declinó esta petición por políticas de seguridad.');
   }

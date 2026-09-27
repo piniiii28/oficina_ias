@@ -173,6 +173,7 @@ export const api = {
   suggestLinks: () => req<{ suggestions: Suggestion[]; by: string; simulated: boolean }>('POST', '/api/graph/suggest'),
   connect: (connections: Suggestion[]) => req<{ applied: number }>('POST', '/api/graph/connect', { connections }),
 
+  testProvider: (id: string) => req<{ ok: boolean; model: string; ms: number; reply: string }>('POST', `/api/providers/${id}/test`, {}),
   detectClis: () => req<Record<string, string | null>>('GET', '/api/cli/detect'),
   settings: () => req<Settings>('GET', '/api/settings'),
   saveSettings: (s: Record<string, unknown>) => req<Settings>('PUT', '/api/settings', s),
