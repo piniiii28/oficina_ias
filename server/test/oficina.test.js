@@ -279,3 +279,78 @@ test('autoentrenamiento: la IA convierte su experiencia en una lección', async 
 test('los enlaces vacíos [[ ]] de las plantillas no crean nodos', () => {
   assert.deepEqual(parseLinks('Conecta con [[ ]] y [[Real]]'), ['Real']);
 });
+
+test('proveedor compatible con OpenAI: streaming por SSE y errores', async () => {
+  const { callModel } = await import('../src/providers.js');
+  const http = await import('node:http');
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const data = JSON.parse(body);
+      if (data.model === 'malo') {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'clave inválida' } }));
+      }
+      assert.equal(data.stream, true);
+      assert.equal(data.messages[0].role, 'system');
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      for (const w of ['Hola', ' desde', ' el', ' modelo']) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: w } }] })}\n\n`);
+      res.end('data: [DONE]\n\n');
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const settings = { apiKeys: { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` } };
+  try {
+    const parts = [];
+    const r = await callModel(settings, { provider: 'ollama', model: 'gemma3', system: 'S', messages: [{ role: 'user', content: 'hola' }], onDelta: (d) => parts.push(d) });
+    assert.equal(r.text, 'Hola desde el modelo');
+    assert.equal(r.simulated, false);
+    assert.equal(parts.length, 4);
+    await assert.rejects(callModel(settings, { provider: 'ollama', model: 'malo', system: 'S', messages: [{ role: 'user', content: 'x' }] }), /clave inválida/);
+  } finally {
+    fake.close();
+  }
+});
+
+test('Anthropic: streaming con el SDK, fallbacks y esfuerzo', async () => {
+  const http = await import('node:http');
+  let seen;
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      seen = { url: req.url, beta: req.headers['anthropic-beta'], body: JSON.parse(body) };
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
+      ev('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: seen.body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } } });
+      ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
+      for (const t of ['Soy', ' Claude']) ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: t } });
+      ev('content_block_stop', { index: 0 });
+      ev('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 2 } });
+      ev('message_stop', {});
+      res.end();
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${fake.address().port}`;
+  const { callModel } = await import('../src/providers.js');
+  try {
+    const parts = [];
+    const r = await callModel({ apiKeys: { anthropic: 'sk-ant-prueba-unica' } }, {
+      provider: 'anthropic', model: 'claude-opus-5', effort: 'low', system: 'S', messages: [{ role: 'user', content: 'hola' }], onDelta: (d) => parts.push(d),
+    });
+    assert.equal(r.text, 'Soy Claude');
+    assert.deepEqual(parts, ['Soy', ' Claude']);
+    assert.match(seen.url, /\/v1\/messages/);
+    assert.match(seen.beta, /server-side-fallback-2026-07-01/);
+    assert.equal(seen.body.fallbacks, 'default');
+    assert.deepEqual(seen.body.output_config, { effort: 'low' });
+    assert.equal(seen.body.stream, true);
+  } finally {
+    delete process.env.ANTHROPIC_BASE_URL;
+    fake.close();
+  }
+});
