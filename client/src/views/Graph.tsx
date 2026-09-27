@@ -30,6 +30,22 @@ export function Graph() {
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Note | null>(null);
   const [depth, setDepth] = useState(0); // 0 = grafo global
+  const [until, setUntil] = useState<number | null>(null); // línea de tiempo (null = todo)
+  const [playing, setPlaying] = useState(false);
+  const times = useMemo(() => data.nodes.filter((n) => n.createdAt).map((n) => Date.parse(n.createdAt!)).sort((a, b) => a - b), [data]);
+  useEffect(() => {
+    if (!playing || times.length < 2) return;
+    let k = 0;
+    const id = window.setInterval(() => {
+      k++;
+      if (k >= times.length) {
+        setUntil(null);
+        setPlaying(false);
+      } else setUntil(times[k]);
+    }, 450);
+    setUntil(times[0]);
+    return () => clearInterval(id);
+  }, [playing, times]);
   const state = useRef({ k: 1, x: 0, y: 0, hover: null as N | null, drag: null as N | null, panning: false, moved: false, lx: 0, ly: 0 });
   const simRef = useRef<Simulation<N, L> | null>(null);
   // Valores que cambian seguido se leen por ref para no reiniciar la física.
@@ -47,6 +63,16 @@ export function Graph() {
   const center = depth > 0 ? selected : null;
   const graph = useMemo(() => {
     let nodes = data.nodes.filter((n) => opts.ghosts || n.kind !== 'ghost');
+    if (until !== null) {
+      // Solo notas creadas hasta ese momento (y lo que cuelga de ellas).
+      const visibleNotes = new Set(nodes.filter((n) => n.kind === 'note' && Date.parse(n.createdAt || '0') <= until).map((n) => n.id));
+      const attached = new Set<string>();
+      for (const l of data.links) {
+        if (visibleNotes.has(l.source)) attached.add(l.target);
+        if (visibleNotes.has(l.target)) attached.add(l.source);
+      }
+      nodes = nodes.filter((n) => (n.kind === 'note' ? visibleNotes.has(n.id) : attached.has(n.id)));
+    }
     let ids = new Set(nodes.map((n) => n.id));
     let links = data.links.filter((l) => ids.has(l.source) && ids.has(l.target));
     if (depth > 0 && center && ids.has(center)) {
@@ -67,7 +93,7 @@ export function Graph() {
       deg.set(l.target, (deg.get(l.target) || 0) + 1);
     }
     return { nodes, links, deg };
-  }, [data, opts.ghosts, depth, center]);
+  }, [data, opts.ghosts, depth, center, until]);
 
   const neighbors = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -305,6 +331,14 @@ export function Graph() {
           </select>
         </label>
         <button className="btn btn--ghost small" onClick={() => view.current.fit()}>Encuadrar</button>
+        {times.length > 1 && (
+          <span className="timeline">
+            <button className="btn btn--ghost small" onClick={() => setPlaying((p) => !p)} title="Ver cómo creció tu grafo">{playing ? '⏹️' : '▶️'}</button>
+            <input type="range" min={0} max={times.length - 1} value={until === null ? times.length - 1 : Math.max(0, times.findIndex((t) => t >= until))}
+              onChange={(e) => { setPlaying(false); const k = Number(e.target.value); setUntil(k >= times.length - 1 ? null : times[k]); }} />
+            <small className="muted">{until === null ? 'Hoy' : new Date(until).toLocaleString()}</small>
+          </span>
+        )}
         <span className="muted small">{counts.notas} notas · {counts.enlaces} enlaces</span>
         <button className="btn btn--primary small" disabled={finding} onClick={async () => {
           setFinding(true);

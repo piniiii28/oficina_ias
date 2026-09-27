@@ -87,6 +87,7 @@ export type GraphNode = {
   kind: 'note' | 'ghost' | 'tag' | 'agent';
   type?: NoteType;
   agentId?: string;
+  createdAt?: string;
 };
 export type GraphLink = { source: string; target: string; kind: 'link' | 'tag' | 'author' };
 

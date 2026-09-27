@@ -132,7 +132,7 @@ export class Notes {
     const ghostIds = new Map();
 
     for (const n of this.all) {
-      nodes.push({ id: n.id, label: n.title, kind: 'note', type: n.type, tags: n.tags });
+      nodes.push({ id: n.id, label: n.title, kind: 'note', type: n.type, tags: n.tags, createdAt: n.createdAt });
     }
     for (const n of this.all) {
       for (const l of parseLinks(n.content)) {
