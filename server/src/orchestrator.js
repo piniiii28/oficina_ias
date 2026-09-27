@@ -41,14 +41,21 @@ function parseJson(text) {
   return JSON.parse(m[0]);
 }
 
-async function makePlan(store, task, forced) {
+async function makePlan(store, task, forced, template) {
   const { settings, agents } = store.data;
   const pool = agents.filter((a) => !a.isBrain && a.enabled && (!forced?.length || forced.includes(a.id)));
   if (forced?.length) {
-    return {
-      analysis: 'Trabajan los agentes que elegiste.',
-      subtasks: pool.map((a) => ({ agentId: a.id, instruction: `Desde tu rol de ${a.role}, aporta tu parte a: "${task}"` })),
-    };
+    // Respeta el orden elegido (y, al continuar una tarea, sus dependencias).
+    const byId = new Map(pool.map((a) => [a.id, a]));
+    const deps = new Map((template || []).map((s) => [s.agentId, s.dependsOn || []]));
+    return sanitizeDeps({
+      analysis: template ? 'El mismo equipo retoma la tarea con tu ajuste.' : 'Trabajan las IAs elegidas.',
+      subtasks: forced.filter((id) => byId.has(id)).map((id) => ({
+        agentId: id,
+        dependsOn: deps.get(id) || [],
+        instruction: `Desde tu rol de ${byId.get(id).role}, aporta tu parte a: "${task}"`,
+      })),
+    });
   }
   const brain = brainOf(store);
   const live = settings.demoMode !== 'always' && hasKey(settings, brain.provider);
@@ -125,8 +132,15 @@ function remember(store, agent, text) {
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
 /** Ejecuta una tarea completa en la oficina. */
-export async function runTask(store, notes, { prompt, agentIds, saveNotes = true }) {
+export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null }) {
+  // Continuación: el equipo recibe el resultado de la tarea anterior.
+  const parent = parentId ? store.data.tasks.find((t) => t.id === parentId) : null;
+  const background = parent
+    ? `Esta es una continuación de la tarea "${parent.prompt}". Resultado anterior del equipo:\n\n${parent.final.slice(0, 6000)}\n\nNuevo pedido: `
+    : '';
+  if (parent && !agentIds?.length) agentIds = parent.steps.map((s) => s.agentId);
   const task = {
+    parentId: parent?.id || null,
     id: Store.id('t_'),
     prompt,
     title: shortTitle(prompt),
@@ -148,7 +162,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   agentStatus(brain.id, 'thinking', 'Planificando…');
 
   try {
-    task.plan = await makePlan(store, prompt, agentIds);
+    task.plan = await makePlan(store, prompt, agentIds, parent?.steps);
     task.status = 'working';
     task.steps = task.plan.subtasks.map((s) => ({ ...s, status: 'pending', output: '', simulated: false, error: null }));
     emitTask();
@@ -174,7 +188,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
           system: buildSystem(agent),
           messages: [{
             role: 'user',
-            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${prompt}`,
+            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}`,
           }],
         });
         step.output = res.text;
@@ -203,7 +217,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       messages: [{
         role: 'user',
         content:
-          `Tarea original: ${prompt}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
+          `Tarea original: ${background}${prompt}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
           'Integra todo en una respuesta final única, coherente y accionable. Menciona a quién se debe cada parte cuando aporte valor. ' +
           'Termina con "### Ideas clave" (3 a 6 viñetas cortas, cada una una idea reutilizable).',
       }],
@@ -245,12 +259,13 @@ function demoSynthesis(prompt, steps, names) {
 
 /** Guarda la tarea en el grafo: nota de tarea, aportes enlazados e ideas. */
 function saveTaskNotes(store, notes, task, names) {
+  const parent = task.parentId ? store.data.tasks.find((t) => t.id === task.parentId) : null;
   const main = notes.create({
     title: task.title,
     type: 'tarea',
     tags: ['tarea'],
     source: { taskId: task.id, agentId: 'cerebro' },
-    content: `# ${task.title}\n\n> ${task.prompt}\n\n${task.final}\n\n## Equipo\n${task.steps
+    content: `# ${task.title}\n\n> ${task.prompt}\n\n${parent?.noteId ? `Continúa [[${notes.get(parent.noteId)?.title || parent.title}]]\n\n` : ''}${task.final}\n\n## Equipo\n${task.steps
       .filter((s) => s.status === 'done')
       .map((s) => `- [[${names(s.agentId)} · ${task.title}]]`)
       .join('\n')}`,

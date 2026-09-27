@@ -138,3 +138,16 @@ test('bibliotecaria: sugiere notas relacionadas y las enlaza en ambos sentidos',
   assert.match(notes.get(b.id).content, /\[\[Café de especialidad\]\]/);
   assert.equal(keywordSuggestions(notes.all).length, 0, 'ya enlazadas no se vuelven a sugerir');
 });
+
+test('continuar una tarea reutiliza el equipo y enlaza con la anterior', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  const first = await runTask(store, notes, { prompt: 'Plan de marketing en instagram con seo' });
+  const next = await runTask(store, notes, { prompt: 'Hazlo más corto', parentId: first.id });
+  assert.equal(next.status, 'done');
+  assert.equal(next.parentId, first.id);
+  assert.deepEqual(next.steps.map((s) => s.agentId), first.steps.map((s) => s.agentId));
+  assert.ok(notes.backlinks(first.noteId).some((b) => b.id === next.noteId));
+});

@@ -1,5 +1,5 @@
 // Historial de tareas: el plan del cerebro, cada aporte y la respuesta final.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
@@ -13,6 +13,15 @@ export function Tasks() {
   const { tasks, agents, reloadTasks, openNote } = useOffice();
   const [openId, setOpenId] = useState<string | null>(null);
   const current = tasks.find((t) => t.id === openId) || tasks[0];
+  // Al lanzar una continuación, se abre la nueva tarea.
+  const [followOf, setFollowOf] = useState<string | null>(null);
+  useEffect(() => {
+    const child = followOf && tasks.find((t) => t.parentId === followOf);
+    if (child) {
+      setOpenId(child.id);
+      setFollowOf(null);
+    }
+  }, [tasks, followOf]);
   const agent = (id: string) => agents.find((a) => a.id === id);
 
   if (!tasks.length) {
@@ -30,13 +39,16 @@ export function Tasks() {
           </button>
         ))}
       </aside>
-      {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} />}
+      {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} onFollow={() => setFollowOf(current.id)} parent={tasks.find((t) => t.id === current.parentId)} onOpen={setOpenId} />}
     </div>
   );
 }
 
-function TaskDetail({ task, agent, onDelete, openNote }: {
+function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen }: {
   task: Task;
+  onFollow: () => void;
+  parent?: Task;
+  onOpen: (id: string) => void;
   agent: (id: string) => ReturnType<typeof useOffice>['agents'][number] | undefined;
   onDelete: () => void;
   openNote: ReturnType<typeof useOffice>['openNote'];
@@ -50,6 +62,7 @@ function TaskDetail({ task, agent, onDelete, openNote }: {
           <button className="btn btn--danger small" onClick={onDelete}>Borrar</button>
         </div>
       </header>
+      {parent && <p className="small">↩ Continúa <a href="#" onClick={(e) => { e.preventDefault(); onOpen(parent.id); }}>{parent.title}</a></p>}
       <blockquote>{task.prompt}</blockquote>
       {task.plan && <p className="muted">🧠 {task.plan.analysis}</p>}
 
@@ -57,6 +70,8 @@ function TaskDetail({ task, agent, onDelete, openNote }: {
         <h3>Respuesta integrada</h3>
         {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : <p className="muted">El equipo sigue trabajando…</p>}
       </section>
+
+      {task.status === 'done' && <FollowUp task={task} onSent={onFollow} />}
 
       <h3>Aportes del equipo</h3>
       {task.steps.map((s) => {
@@ -77,5 +92,25 @@ function TaskDetail({ task, agent, onDelete, openNote }: {
         );
       })}
     </main>
+  );
+}
+
+function FollowUp({ task, onSent }: { task: Task; onSent: () => void }) {
+  const [text, setText] = useState('');
+  const { toast } = useOffice();
+  return (
+    <section className="card followup">
+      <h3>¿Algún ajuste?</h3>
+      <p className="muted small">El mismo equipo retoma el resultado anterior y lo mejora con tu pedido.</p>
+      <div className="chat-input">
+        <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ej.: Hazlo más corto y agrega un presupuesto…" />
+        <button className="btn btn--primary" disabled={!text.trim()} onClick={async () => {
+          await api.runTask(text.trim(), undefined, task.id);
+          setText('');
+          onSent();
+          toast('🔁 El equipo retoma la tarea');
+        }}>Continuar</button>
+      </div>
+    </section>
   );
 }

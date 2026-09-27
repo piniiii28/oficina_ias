@@ -179,7 +179,7 @@ export function createApp(store) {
   app.post('/api/tasks', (req, res) => {
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Escribe una tarea' });
-    const promise = runTask(store, notes, { prompt, agentIds: req.body.agentIds, saveNotes: req.body.saveNotes !== false });
+    const promise = runTask(store, notes, { prompt, agentIds: req.body.agentIds, parentId: req.body.parentId, saveNotes: req.body.saveNotes !== false });
     // Respondemos enseguida; el progreso llega por /api/events.
     promise.catch((err) => console.error('[tarea]', err));
     res.status(202).json({ id: store.data.tasks[0].id });

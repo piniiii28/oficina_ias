@@ -54,6 +54,7 @@ export type Task = {
   steps: Step[];
   final: string;
   noteId: string | null;
+  parentId?: string | null;
   createdAt: string;
   finishedAt: string | null;
 };
@@ -134,7 +135,7 @@ export const api = {
   clearChat: (id: string) => req('DELETE', `/api/agents/${id}/chat`),
 
   tasks: () => req<Task[]>('GET', '/api/tasks'),
-  runTask: (prompt: string, agentIds?: string[]) => req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds }),
+  runTask: (prompt: string, agentIds?: string[], parentId?: string) => req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
 
   notes: (q = '') => req<NoteSummary[]>('GET', `/api/notes?q=${encodeURIComponent(q)}`),
