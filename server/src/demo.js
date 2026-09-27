@@ -34,6 +34,18 @@ export async function simulate({ agent, messages }) {
   const raw = messages[messages.length - 1]?.content || '';
   // En tareas del cerebro, el texto útil va entre comillas o tras "Contexto completo".
   const last = raw.match(/Contexto completo de la tarea: ([\s\S]*?)(?:\n\nNotas relevantes|$)/)?.[1] || raw.match(/"([^"]+)"/)?.[1] || raw;
+  // Saludos o preguntas cortas en el chat: la IA se presenta.
+  const isChat = !/Contexto completo de la tarea|Tarea original/.test(raw);
+  if (isChat && (/^\s*(hola|buen[oa]s|hey|qu[eé] tal|qui[eé]n eres|qu[eé] (sabes|haces|puedes))/i.test(last) || last.split(/\s+/).length <= 4)) {
+    return [
+      `¡Hola! Soy **${agent?.name || 'una IA'}**, ${(agent?.role || 'especialista').toLowerCase()} de la oficina. 👋`,
+      '',
+      `Puedo ayudarte con: ${(agent?.skills || []).slice(0, 8).join(', ') || 'lo que necesites'}.`,
+      '',
+      agent?.knowledge?.length ? `Tengo ${agent.knowledge.length} ${agent.knowledge.length === 1 ? 'lección' : 'lecciones'} de entrenamiento y recuerdo nuestros trabajos anteriores.` : '',
+      'Cuéntame qué necesitas. *(Respuesta simulada: conecta mi proveedor en Ajustes para que responda de verdad.)*',
+    ].filter(Boolean).join('\n');
+  }
   const kw = keywords(last, 3);
   const topic = kw.length ? kw.join(', ') : 'la tarea';
   const angles = ANGLES[agent?.department] || ANGLES.direccion;
