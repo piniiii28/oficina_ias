@@ -102,7 +102,7 @@ export function Agents() {
               <strong>{a.name}</strong>
               <small>{a.role}</small>
               <small className="muted"><span className={`dot ${a.live ? 'dot--live' : 'dot--demo'}`} /> {a.provider} · {a.model}</small>
-              <small className="muted">{dept(a.department)?.emoji} {dept(a.department)?.name} · {a.stats?.tasks || 0} trabajos · {a.knowledge?.length || 0} lecciones</small>
+              <small className="muted">{dept(a.department)?.emoji} {dept(a.department)?.name} · {a.stats?.tasks || 0} {a.stats?.tasks === 1 ? 'trabajo' : 'trabajos'} · {a.knowledge?.length || 0} {a.knowledge?.length === 1 ? 'lección' : 'lecciones'}</small>
             </div>
           </button>
         ))}

@@ -30,6 +30,13 @@ export function createApp(store) {
     store.data.agents = structuredClone(DEFAULT_AGENTS);
     seedWelcome(notes);
     store.flush();
+  } else {
+    // Oficinas creadas antes de los manuales: se los agregamos una vez.
+    for (const a of store.data.agents) {
+      const d = DEFAULT_AGENTS.find((x) => x.id === a.id);
+      a.knowledge ||= [];
+      if (d && !a.knowledge.some((k) => k.builtin)) a.knowledge.unshift(...structuredClone(d.knowledge));
+    }
   }
 
   // Bóveda .md sincronizada para abrirla en Obsidian.
@@ -164,7 +171,9 @@ export function createApp(store) {
     const custom = store.data.agents.filter((a) => !DEFAULT_AGENTS.some((d) => d.id === a.id));
     store.data.agents = [
       ...structuredClone(DEFAULT_AGENTS).map((d) => ({
-        ...d, knowledge: old.get(d.id)?.knowledge || [], memory: old.get(d.id)?.memory || [], stats: old.get(d.id)?.stats || d.stats,
+        ...d,
+        knowledge: [...d.knowledge, ...(old.get(d.id)?.knowledge || []).filter((k) => !k.builtin)],
+        memory: old.get(d.id)?.memory || [], stats: old.get(d.id)?.stats || d.stats,
       })),
       ...custom,
     ];

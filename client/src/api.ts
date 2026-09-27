@@ -11,7 +11,7 @@ export type AvatarConfig = {
   costume?: string;
 };
 
-export type Knowledge = { id: string; title: string; content: string; at: string };
+export type Knowledge = { id: string; title: string; content: string; at: string; builtin?: boolean };
 export type Memory = { text: string; at: string };
 
 export type Agent = {

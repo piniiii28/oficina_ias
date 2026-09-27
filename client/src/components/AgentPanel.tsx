@@ -27,7 +27,7 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
             <p className="small">
               <span className={`dot ${agent.live ? 'dot--live' : 'dot--demo'}`} /> {agent.live ? 'Conectada' : 'Modo demo'} · {agent.provider} / <code>{agent.model || '—'}</code>
             </p>
-            <p className="small muted">{status} · {agent.stats?.tasks || 0} trabajos · {agent.knowledge?.length || 0} lecciones</p>
+            <p className="small muted">{status} · {agent.stats?.tasks || 0} trabajos · {agent.knowledge?.length || 0} {agent.knowledge?.length === 1 ? 'lección' : 'lecciones'}</p>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Cerrar">✕</button>
         </header>
@@ -168,7 +168,7 @@ function TrainingTab({ agent }: { agent: Agent }) {
       {(agent.knowledge || []).map((k) => (
         <details key={k.id} className="card">
           <summary>
-            <strong>{k.title}</strong> <small className="muted">{new Date(k.at).toLocaleDateString()}</small>
+            <strong>{k.title}</strong> {k.builtin ? <span className="pill">de fábrica</span> : <small className="muted">{new Date(k.at).toLocaleDateString()}</small>}
             <button className="link danger" onClick={async (e) => { e.preventDefault(); await api.deleteKnowledge(agent.id, k.id); reloadAgents(); }}>Quitar</button>
           </summary>
           <pre className="pre">{k.content}</pre>

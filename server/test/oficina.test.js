@@ -79,7 +79,8 @@ test('la memoria persiste en disco entre reinicios', () => {
   s1.data.agents[1].knowledge.push({ id: 'k1', title: 'Estilo', content: 'Usa emojis', at: '' });
   s1.flush();
   const s2 = new Store(dir);
-  assert.equal(s2.data.agents[1].knowledge[0].content, 'Usa emojis');
+  assert.equal(s2.data.agents[1].knowledge.at(-1).content, 'Usa emojis');
+  assert.ok(s2.data.agents[1].knowledge[0].builtin, 'trae su manual de fábrica');
   assert.ok(s2.data.notes.length >= 5);
 });
 

@@ -14,8 +14,11 @@ export const DEPARTMENTS = [
   { id: 'personas', name: 'Personas y Conocimiento', emoji: '📚', color: '#2dd4bf' },
 ];
 
+import { playbookFor } from './playbooks.js';
+
 const base = (a) => ({
-  knowledge: [], // "entrenamiento": ejemplos, guías y datos que el usuario le enseña
+  // "entrenamiento": su manual de fábrica más lo que el usuario le enseñe
+  knowledge: playbookFor(a.id, a.role),
   memory: [], // lo que el agente aprende al trabajar (se guarda solo)
   stats: { tasks: 0, lastActive: null },
   enabled: true,
