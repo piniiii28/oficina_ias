@@ -43,6 +43,20 @@ export function createApp(store) {
     store.save();
   }
 
+  // Tareas o reuniones que quedaron a medias por un reinicio.
+  for (const t of store.data.tasks) {
+    if (!['done', 'error'].includes(t.status)) {
+      t.status = 'error';
+      t.final ||= 'Interrumpida: la oficina se cerró mientras el equipo trabajaba. Puedes volver a enviarla.';
+      for (const st of t.steps) if (st.status === 'working' || st.status === 'pending') st.status = 'error', st.error ||= 'Interrumpida por un reinicio';
+    }
+  }
+  for (const m of store.data.meetings || []) if (m.status === 'running') m.status = 'error', m.speaking = null;
+  for (const c of store.data.cards || []) {
+    const t = c.taskId && store.data.tasks.find((x) => x.id === c.taskId);
+    if (c.column === 'doing' && (!t || t.status === 'error')) c.column = 'todo', c.taskId = null;
+  }
+
   // Uso por proveedor (llamadas reales, no simuladas).
   setUsageSink(({ provider, calls, inChars, outChars }) => {
     const u = ((store.data.usage ||= {})[provider] ||= { calls: 0, inChars: 0, outChars: 0 });

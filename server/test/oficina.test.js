@@ -380,3 +380,17 @@ test('uso por proveedor y tamaño máximo del equipo', async () => {
   assert.equal(got[0].calls, 1);
   setUsageSink(null);
 });
+
+test('al reiniciar, lo que quedó a medias se marca como interrumpido', () => {
+  const dir = tmp();
+  const s1 = new Store(dir);
+  createApp(s1);
+  s1.data.tasks.unshift({ id: 't_x', title: 'x', prompt: 'x', status: 'working', steps: [{ agentId: 'codex', status: 'working' }], final: '' });
+  s1.data.cards.push({ id: 'c_x', title: 'x', column: 'doing', taskId: 't_x' });
+  s1.flush();
+  const s2 = new Store(dir);
+  createApp(s2);
+  assert.equal(s2.data.tasks[0].status, 'error');
+  assert.equal(s2.data.tasks[0].steps[0].status, 'error');
+  assert.equal(s2.data.cards[0].column, 'todo');
+});
