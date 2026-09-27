@@ -115,6 +115,31 @@ export class Notes {
       .map((n) => ({ id: n.id, title: n.title, type: n.type }));
   }
 
+  /** Notas que nombran el título de esta sin enlazarla (como en Obsidian). */
+  unlinkedMentions(id) {
+    const note = this.get(id);
+    if (!note || note.title.length < 4) return [];
+    const t = norm(note.title);
+    const re = new RegExp(`(^|[^\\p{L}\\d])${escapeRe(note.title)}(?![\\p{L}\\d])`, 'iu');
+    return this.all
+      .filter((n) => n.id !== id && !parseLinks(n.content).some((l) => norm(l) === t) && re.test(stripCode(n.content)))
+      .map((n) => {
+        const m = n.content.match(re);
+        const at = m ? m.index : 0;
+        return { id: n.id, title: n.title, snippet: n.content.slice(Math.max(0, at - 40), at + note.title.length + 40).replace(/\s+/g, ' ') };
+      })
+      .slice(0, 20);
+  }
+
+  /** Convierte la primera mención del título en un [[enlace]]. */
+  linkMention(fromId, toId) {
+    const from = this.get(fromId), to = this.get(toId);
+    if (!from || !to) return null;
+    const re = new RegExp(`(^|[^\\p{L}\\d\\[])(${escapeRe(to.title)})(?![\\p{L}\\d\\]])`, 'iu');
+    const content = from.content.replace(re, (_m, pre, word) => `${pre}[[${to.title}${word === to.title ? '' : `|${word}`}]]`);
+    return content === from.content ? null : this.update(fromId, { content });
+  }
+
   search(q) {
     const s = norm(q);
     if (!s) return this.all;

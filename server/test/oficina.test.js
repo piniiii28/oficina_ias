@@ -524,3 +524,16 @@ test('los errores de la API llegan como JSON', async () => {
     server.close();
   }
 });
+
+test('menciones sin enlazar: se detectan y se enlazan con un clic', () => {
+  const store = new Store(tmp());
+  const notes = new Notes(store);
+  const a = notes.create({ title: 'Cafetería central', content: 'Idea base' });
+  const b = notes.create({ title: 'Plan', content: 'El local de la cafetería central abre en marzo' });
+  notes.create({ title: 'Otra', content: 'Ya enlazada: [[Cafetería central]]' });
+  const m = notes.unlinkedMentions(a.id);
+  assert.deepEqual(m.map((x) => x.id), [b.id]);
+  notes.linkMention(b.id, a.id);
+  assert.match(notes.get(b.id).content, /\[\[Cafetería central\|cafetería central\]\]/);
+  assert.equal(notes.unlinkedMentions(a.id).length, 0);
+});

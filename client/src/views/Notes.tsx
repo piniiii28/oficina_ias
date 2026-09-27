@@ -30,8 +30,12 @@ export function Notes() {
   const [title, setTitle] = useState('');
   const [editing, setEditing] = useState(false);
   const saveTimer = useRef<number>();
+  const [mentions, setMentions] = useState<{ id: string; title: string; snippet: string }[]>([]);
 
   const load = useCallback(async () => setList(await api.notes(q)), [q]);
+  useEffect(() => {
+    if (note) api.mentions(note.id).then(setMentions).catch(() => setMentions([]));
+  }, [note?.id, notesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load, notesVersion]);
 
   const open = useCallback(async (id: string) => {
@@ -231,6 +235,20 @@ export function Notes() {
             <ul className="link-list">
               {outLinks.map((t) => <li key={t}><a href="#" onClick={(e) => { e.preventDefault(); openByTitle(t); }}>{t}</a></li>)}
             </ul>
+            {mentions.length > 0 && (
+              <>
+                <h3>🔗 Menciones sin enlazar ({mentions.length})</h3>
+                <ul className="link-list mentions">
+                  {mentions.map((m) => (
+                    <li key={m.id}>
+                      <a href="#" onClick={(e) => { e.preventDefault(); open(m.id); }}>{m.title}</a>
+                      <small className="muted">…{m.snippet}…</small>
+                      <button className="link" onClick={async () => { await api.linkMention(note.id, m.id); toast('🔗 Enlazada'); }}>Enlazar</button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             {note.tags.length > 0 && (
               <>
                 <h3>Etiquetas</h3>

@@ -633,3 +633,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .badge-item.on { opacity: 1; border-color: #f59e0b; background: color-mix(in srgb, #fde047 12%, var(--panel)); }
 .badge-item span { font-size: 28px; }
 .badge-item small { color: var(--muted); font-size: 11px; }
+.mentions li { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.mentions li .link { align-self: flex-start; }

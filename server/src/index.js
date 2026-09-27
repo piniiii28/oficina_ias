@@ -438,6 +438,13 @@ export function createApp(store) {
     bus.emit('event', { type: 'notes' });
     res.status(201).json(n);
   });
+  app.get('/api/notes/:id/mentions', (req, res) => res.json(notes.unlinkedMentions(req.params.id)));
+  app.post('/api/notes/:id/mentions/:fromId/link', (req, res) => {
+    const n = notes.linkMention(req.params.fromId, req.params.id);
+    if (!n) return res.status(404).json({ error: 'No encontré la mención' });
+    bus.emit('event', { type: 'notes' });
+    res.json({ ok: true });
+  });
   app.post('/api/notes/resolve', (req, res) => {
     // Abrir un [[enlace]]: si la nota no existe, se crea (como en Obsidian).
     const title = String(req.body?.title || '').trim();
