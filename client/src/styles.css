@@ -560,3 +560,15 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .skin-btn:hover { background: rgba(255, 255, 255, 0.3); }
 .pet { position: absolute; left: 0; top: 0; font-size: 22px; line-height: 1; pointer-events: auto; cursor: default; transition-property: transform; transition-timing-function: linear; }
 .pet .walker-emote { top: -18px; }
+
+.palette-backdrop { position: fixed; inset: 0; background: rgba(10, 5, 25, 0.45); z-index: 80; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.palette { width: min(560px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 10px; animation: pop-in-plain 0.15s ease-out; }
+.palette input { font-size: 16px; }
+.palette ul { list-style: none; margin: 8px 0 4px; padding: 0; max-height: 50vh; overflow: auto; }
+.palette li { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.palette li.on { background: var(--accent-soft); }
+.palette li small { margin-left: auto; }
+.palette p { margin: 4px 6px 0; }
+kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 4px; color: var(--muted); }
+@keyframes pop-in-plain { from { transform: scale(0.97); opacity: 0; } }
+@media (max-width: 900px) { .search-hint { display: none; } }

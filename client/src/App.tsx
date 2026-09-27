@@ -6,6 +6,7 @@ import { Tasks } from './views/Tasks';
 import { Agents } from './views/Agents';
 import { Settings } from './views/Settings';
 import { Meetings } from './views/Meetings';
+import { Palette } from './components/Palette';
 
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'oficina', label: 'Oficina', icon: '🏢' },
@@ -37,6 +38,9 @@ function Shell() {
             {n.id === 'tareas' && running > 0 && <span className="badge">{running}</span>}
           </button>
         ))}
+        <button className="nav-item search-hint" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+          <span>🔍</span><span className="nav-label">Buscar <kbd>Ctrl K</kbd></span>
+        </button>
         <div className="sidebar-foot">
           <span className={`dot ${connected ? 'dot--live' : 'dot--off'}`} /> {connected ? 'En vivo' : 'Reconectando…'}
         </div>
@@ -50,6 +54,7 @@ function Shell() {
         {view === 'agentes' && <Agents />}
         {view === 'ajustes' && <Settings />}
       </main>
+      <Palette />
       <div className="toasts">
         {toasts.map((t) => <div key={t.id} className="toast">{t.msg}</div>)}
       </div>
