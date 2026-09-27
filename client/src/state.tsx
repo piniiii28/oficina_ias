@@ -1,7 +1,7 @@
 // Estado compartido de la app: agentes, estados animados, tareas y eventos.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { play } from './sounds';
-import { api, type Agent, type AgentState, type Department, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
+import { api, type Agent, type AgentState, type Department, type Flow, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
 
 export type Live = { status: AgentState; message: string; at: number };
 
@@ -10,6 +10,7 @@ type Ctx = {
   departments: Department[];
   providers: Provider[];
   vaultPath: string;
+  flows: Flow[];
   live: Record<string, Live>;
   tasks: Task[];
   meetings: Meeting[];
@@ -42,6 +43,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [vaultPath, setVaultPath] = useState('');
+  const [flows, setFlows] = useState<Flow[]>([]);
   const [live, setLive] = useState<Record<string, Live>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -84,6 +86,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setDepartments(m.departments);
       setProviders(m.providers);
       setVaultPath(m.vaultPath);
+      setFlows(m.flows || []);
     });
     reloadAgents();
     reloadTasks();
@@ -153,11 +156,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
+      agents, departments, providers, vaultPath, flows, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, flows, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

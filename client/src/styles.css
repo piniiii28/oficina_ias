@@ -618,3 +618,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .weather { font-size: 11px; color: #fff; background: rgba(0, 0, 0, 0.25); border-radius: 6px; padding: 1px 6px; }
 .bfloor--open.bfloor--rain { background: linear-gradient(#64748b, #94a3b8 70%); }
 .you-badge { font-size: 26px; width: 36px; text-align: center; }
+.flows { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.chip--on { border-color: var(--accent) !important; background: var(--accent-soft); font-weight: 700; }

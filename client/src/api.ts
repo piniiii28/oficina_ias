@@ -33,6 +33,7 @@ export type Agent = {
   live?: boolean;
 };
 
+export type Flow = { id: string; name: string; agentIds: string[] };
 export type Department = { id: string; name: string; emoji: string; color: string };
 export type Provider = { id: string; label: string; keyUrl: string; keyless: boolean; cli?: boolean };
 
@@ -143,7 +144,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
-  meta: () => req<{ departments: Department[]; providers: Provider[]; vaultPath: string }>('GET', '/api/meta'),
+  meta: () => req<{ departments: Department[]; providers: Provider[]; vaultPath: string; flows: Flow[] }>('GET', '/api/meta'),
 
   agents: () => req<Agent[]>('GET', '/api/agents'),
   createAgent: (a: Partial<Agent>) => req<Agent>('POST', '/api/agents', a),
@@ -161,8 +162,8 @@ export const api = {
   clearChat: (id: string) => req('DELETE', `/api/agents/${id}/chat`),
 
   tasks: () => req<Task[]>('GET', '/api/tasks'),
-  runTask: (prompt: string, agentIds?: string[], parentId?: string, attachments?: { name: string; content: string }[]) =>
-    req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments }),
+  runTask: (prompt: string, agentIds?: string[], parentId?: string, attachments?: { name: string; content: string }[], flow?: string) =>
+    req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments, flow }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
   cancelTask: (id: string) => req('POST', `/api/tasks/${id}/cancel`),
 

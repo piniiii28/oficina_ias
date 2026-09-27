@@ -431,3 +431,15 @@ test('reunión: el usuario puede intervenir y la siguiente IA le responde', asyn
   const k = m.transcript.findIndex((t) => t.agentId === 'usuario');
   assert.match(m.transcript[k + 1].text, /Buena pregunta/);
 });
+
+test('flujos de relevos: cada IA recibe la entrega de la anterior', async () => {
+  const { flowPlan } = await import('../src/flows.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const f = flowPlan('app', store.data.agents);
+  const t = await runTask(store, new Notes(store), { prompt: 'app de recetas', agentIds: f.agentIds, template: f.template });
+  assert.deepEqual(t.steps.map((s) => s.agentId), ['codex', 'opencode', 'sonnet-qa', 'guardian', 'llama-devops']);
+  assert.deepEqual(t.steps[2].dependsOn, ['opencode']);
+  assert.match(t.steps[1].output, /Partí del trabajo de Codex/);
+});

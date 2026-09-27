@@ -89,7 +89,8 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
 }
 
 export function Office() {
-  const { agents, departments, live, tasks, toast, setView } = useOffice();
+  const { agents, departments, live, tasks, toast, setView, flows } = useOffice();
+  const [flow, setFlow] = useState('');
   const [prompt, setPrompt] = useState('');
   const [files, setFiles] = useState<{ name: string; content: string }[]>([]);
   const [selected, setSelected] = useState<Agent | null>(null);
@@ -138,7 +139,7 @@ export function Office() {
     const p = prompt.trim();
     if (!p) return;
     try {
-      await api.runTask(p, picking && pick.length ? pick : undefined, undefined, files.length ? files : undefined);
+      await api.runTask(p, picking && pick.length ? pick : undefined, undefined, files.length ? files : undefined, flow || undefined);
       setPrompt('');
       setFiles([]);
       toast('🧠 Claude recibió la tarea y está armando el equipo');
@@ -203,6 +204,15 @@ export function Office() {
               {busy ? 'Enviar otra tarea' : 'Enviar al cerebro'} ⌘↵
             </button>
           </div>
+          {flows.length > 0 && (
+            <div className="flows">
+              <small className="muted">Flujo de relevos:</small>
+              <button className={`chip chip--example ${!flow ? 'chip--on' : ''}`} onClick={() => setFlow('')}>🧠 Que decida Claude</button>
+              {flows.map((f) => (
+                <button key={f.id} className={`chip chip--example ${flow === f.id ? 'chip--on' : ''}`} title={f.agentIds.map((id) => agents.find((a) => a.id === id)?.name || id).join(' → ')} onClick={() => { setFlow(f.id); setPicking(false); }}>{f.name}</button>
+              ))}
+            </div>
+          )}
           {!prompt && (
             <div className="examples">
               {EXAMPLES.map((e) => (

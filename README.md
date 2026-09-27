@@ -18,6 +18,7 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 |---|---|
 | 🏢 **Oficina** | Un **edificio estilo Habbo** con 8 pisos isométricos (penthouse, departamentos y lobby con cafetería y sala de reuniones) donde las IAs caminan, toman el ascensor, van a su escritorio cuando trabajan y se sientan en la mesa del lobby durante las reuniones. Cada una tiene su disfraz (mago, ninja, astronauta…). Le escribes una tarea a Claude. Él la divide, elige a los especialistas, los pone a trabajar **en paralelo** (los ves pensar, teclear y celebrar) e integra todo en una respuesta final. |
 | 📋 **Tablero** | Kanban por proyectos (Por hacer, En curso, Hecho). Envía una tarjeta al equipo con un clic; pasa sola a «Hecho» con el enlace al resultado. |
+| ⛓️ **Flujos** | Equipos con relevos listos (Crear una app, Lanzar un producto, Contenido para redes, Aprender un tema, Plan de negocio, Analizar datos): cada IA trabaja sobre la entrega de la anterior. |
 | 🗣️ **Reuniones** | Eliges varias IAs y un tema: conversan por turnos respondiéndose entre ellas y Claude resume acuerdos y próximos pasos. |
 | 🎯 **Tareas** | Historial con el plan del cerebro, el aporte de cada IA (escrito en vivo) y la respuesta integrada. Puedes pedir ajustes para que el mismo equipo continúe, y crear **rutinas automáticas** (por ejemplo, un resumen cada mañana a las 7:00). |
 | 📝 **Notas** | Editor Markdown con `[[enlaces]]`, `#etiquetas`, backlinks, notas fijadas, ideas y diario. Cada tarea genera notas enlazadas automáticamente. |

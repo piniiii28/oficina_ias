@@ -14,6 +14,7 @@ import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
 import { runMeeting } from './meetings.js';
 import { createRoutine, normalizeRoutine, startScheduler } from './routines.js';
+import { FLOWS, flowPlan } from './flows.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
@@ -104,6 +105,7 @@ export function createApp(store) {
       departments: DEPARTMENTS,
       providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, keyUrl: p.keyUrl, keyless: Boolean(p.keyless), cli: Boolean(p.cli) })),
       vaultPath: vault.dir,
+      flows: FLOWS.map((f) => ({ id: f.id, name: f.name, agentIds: f.steps.map(([a]) => a) })),
     });
   });
 
@@ -277,7 +279,10 @@ export function createApp(store) {
   app.post('/api/tasks', (req, res) => {
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Escribe una tarea' });
-    const promise = runTask(store, notes, { prompt, agentIds: req.body.agentIds, parentId: req.body.parentId, attachments: req.body.attachments, saveNotes: req.body.saveNotes !== false });
+    const flow = req.body.flow ? flowPlan(req.body.flow, store.data.agents) : null;
+    const promise = runTask(store, notes, {
+      prompt, agentIds: flow?.agentIds || req.body.agentIds, template: flow?.template, parentId: req.body.parentId, attachments: req.body.attachments, saveNotes: req.body.saveNotes !== false,
+    });
     // Respondemos enseguida; el progreso llega por /api/events.
     promise.catch((err) => console.error('[tarea]', err));
     res.status(202).json({ id: store.data.tasks[0].id });

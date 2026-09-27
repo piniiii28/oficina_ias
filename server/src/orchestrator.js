@@ -75,7 +75,7 @@ async function makePlan(store, task, forced, template) {
     const byId = new Map(pool.map((a) => [a.id, a]));
     const deps = new Map((template || []).map((s) => [s.agentId, s.dependsOn || []]));
     return sanitizeDeps({
-      analysis: template ? 'El mismo equipo retoma la tarea con tu ajuste.' : 'Trabajan las IAs elegidas.',
+      analysis: template ? (template.some((t) => t.dependsOn?.length) ? 'Flujo de relevos: cada IA trabaja sobre la entrega anterior.' : 'El mismo equipo retoma la tarea con tu ajuste.') : 'Trabajan las IAs elegidas.',
       subtasks: forced.filter((id) => byId.has(id)).map((id) => ({
         agentId: id,
         dependsOn: deps.get(id) || [],
@@ -172,7 +172,7 @@ function remember(store, agent, text) {
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
 /** Ejecuta una tarea completa en la oficina. */
-export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [] }) {
+export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null }) {
   // Continuación: el equipo recibe el resultado de la tarea anterior.
   const parent = parentId ? store.data.tasks.find((t) => t.id === parentId) : null;
   const background = parent
@@ -237,7 +237,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         emitTask();
       }
     }
-    task.plan = await makePlan(store, prompt, agentIds, parent?.steps);
+    task.plan = await makePlan(store, prompt, agentIds, template || parent?.steps);
     task.status = 'working';
     task.steps = task.plan.subtasks.map((s) => ({ ...s, status: 'pending', output: '', simulated: false, error: null }));
     emitTask();
