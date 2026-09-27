@@ -443,3 +443,12 @@ test('flujos de relevos: cada IA recibe la entrega de la anterior', async () => 
   assert.deepEqual(t.steps[2].dependsOn, ['opencode']);
   assert.match(t.steps[1].output, /Partí del trabajo de Codex/);
 });
+
+test('trabajar una nota: el resultado la enlaza', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  const t = await runTask(store, notes, { prompt: 'Idea: app de recetas', fromNote: 'Bienvenida a la Oficina' });
+  assert.ok(notes.backlinks(notes.findByTitle('Bienvenida a la Oficina').id).some((b) => b.id === t.noteId));
+});

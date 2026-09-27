@@ -172,7 +172,7 @@ function remember(store, agent, text) {
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
 /** Ejecuta una tarea completa en la oficina. */
-export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null, effort = 'medium' }) {
+export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null, effort = 'medium', fromNote = null }) {
   if (!['low', 'medium', 'high'].includes(effort)) effort = 'medium';
   // Continuación: el equipo recibe el resultado de la tarea anterior.
   const parent = parentId ? store.data.tasks.find((t) => t.id === parentId) : null;
@@ -200,6 +200,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   const task = {
     parentId: parent?.id || null,
     effort,
+    fromNote,
     contextNotes: related.map((n) => n.title),
     tags,
     attachments: files.map((f) => ({ name: f.name, size: f.content.length })),
@@ -391,7 +392,7 @@ function saveTaskNotes(store, notes, task, names) {
     type: 'tarea',
     tags: ['tarea', ...(task.tags || [])],
     source: { taskId: task.id, agentId: 'cerebro' },
-    content: `# ${task.title}\n\n> ${task.prompt}\n\n${parent?.noteId ? `Continúa [[${notes.get(parent.noteId)?.title || parent.title}]]\n\n` : ''}${task.final}\n\n## Equipo\n${task.steps
+    content: `# ${task.title}\n\n> ${task.prompt}\n\n${parent?.noteId ? `Continúa [[${notes.get(parent.noteId)?.title || parent.title}]]\n\n` : ''}${task.fromNote ? `A partir de la nota [[${task.fromNote}]]\n\n` : ''}${task.final}\n\n## Equipo\n${task.steps
       .filter((s) => s.status === 'done')
       .map((s) => `- [[${names(s.agentId)} · ${task.title}]]`)
       .join('\n')}`,

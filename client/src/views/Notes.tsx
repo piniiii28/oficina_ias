@@ -163,6 +163,10 @@ export function Notes() {
               </select>
               <button className="btn btn--ghost small" onClick={() => setEditing((e) => !e)}>{editing ? '👁 Ver' : '✏️ Editar'}</button>
               <button className="btn btn--ghost small" onClick={async () => { setNote(await api.updateNote(note.id, { pinned: !note.pinned })); load(); }}>{note.pinned ? 'Desfijar' : '📌 Fijar'}</button>
+              <button className="btn btn--ghost small" title="El equipo trabaja sobre esta nota y enlaza el resultado" onClick={async () => {
+                await api.runTask(`Trabaja sobre esta nota: "${note.title}"\n\n${draft.slice(0, 8000)}`, undefined, undefined, undefined, undefined, undefined, note.title);
+                toast('🧠 El equipo tomó la nota: mira el progreso en la Oficina');
+              }}>🧠 Trabajar esta nota</button>
               <button className="btn btn--ghost small" title="Descargar como Markdown" onClick={() => {
                 const url = URL.createObjectURL(new Blob([`# ${note.title}\n\n${draft}`], { type: 'text/markdown' }));
                 const a = document.createElement('a');
