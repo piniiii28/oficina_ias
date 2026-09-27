@@ -25,6 +25,8 @@ Necesitas [Node.js](https://nodejs.org) 20 o superior.
 - **macOS / Linux:** ejecuta `./iniciar.sh`.
 - **Manual:** `npm install` y luego `npm start`. Abre http://localhost:4747
 
+Desde Chrome o Edge puedes **instalarla como app** (ícono de instalar en la barra de direcciones) para abrirla en su propia ventana.
+
 Para desarrollar con recarga en vivo: `npm run dev`, que abre la interfaz en http://localhost:5173.
 
 ## Conectar las IAs

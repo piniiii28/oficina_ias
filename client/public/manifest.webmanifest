@@ -1,0 +1,13 @@
+{
+  "name": "Oficina de IAs",
+  "short_name": "Oficina IAs",
+  "description": "Un edificio de IAs especializadas coordinadas por Claude, con notas y grafo de ideas.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14111f",
+  "theme_color": "#8b5cf6",
+  "lang": "es",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
