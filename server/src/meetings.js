@@ -55,8 +55,9 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2 }) 
   const { settings } = store.data;
 
   try {
-    for (let r = 0; r < meeting.rounds; r++) {
+    rounds: for (let r = 0; r < meeting.rounds; r++) {
       for (const a of agents) {
+        if (meeting.stopRequested) break rounds;
         meeting.speaking = a.id;
         emit();
         agentStatus(a.id, 'thinking', 'Preparando su intervención…');

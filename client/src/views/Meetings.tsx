@@ -109,6 +109,7 @@ function MeetingRoom({ meeting, onDelete, openNote, live, agents, brainId }: {
         <h2>{meeting.topic}</h2>
         <div className="row">
           {meeting.noteId && <button className="btn btn--ghost small" onClick={() => openNote({ id: meeting.noteId! })}>📝 Ver nota</button>}
+          {meeting.status === 'running' && <button className="btn btn--ghost small" onClick={() => fetch(`/api/meetings/${meeting.id}/stop`, { method: 'POST' })}>⏹️ Terminar y resumir</button>}
           <button className="btn btn--danger small" onClick={onDelete}>Borrar</button>
         </div>
       </header>

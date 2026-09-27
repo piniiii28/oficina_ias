@@ -384,6 +384,12 @@ export function createApp(store) {
     bus.emit('event', { type: 'meeting', meeting: m });
     res.json({ ok: true });
   });
+  app.post('/api/meetings/:id/stop', (req, res) => {
+    const m = (store.data.meetings || []).find((x) => x.id === req.params.id);
+    if (!m || m.status !== 'running') return res.status(409).json({ error: 'La reunión no está en curso' });
+    m.stopRequested = true;
+    res.json({ ok: true });
+  });
   app.delete('/api/meetings/:id', (req, res) => {
     store.data.meetings = (store.data.meetings || []).filter((m) => m.id !== req.params.id);
     store.save();
