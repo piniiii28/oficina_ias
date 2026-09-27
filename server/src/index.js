@@ -537,6 +537,13 @@ export function createApp(store) {
     });
   });
 
+  // Errores inesperados o JSON mal formado: siempre como JSON.
+  app.use('/api', (err, _req, res, _next) => {
+    const status = err.status || err.statusCode || 500;
+    if (status >= 500) console.error('[api]', err);
+    res.status(status).json({ error: status === 413 ? 'El archivo es demasiado grande' : err.type === 'entity.parse.failed' ? 'Petición con JSON inválido' : err.message || 'Error interno' });
+  });
+
   // --- Interfaz compilada ---
   const dist = path.join(ROOT, 'client', 'dist');
   if (fs.existsSync(dist)) {

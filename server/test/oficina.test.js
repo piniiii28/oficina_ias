@@ -511,3 +511,16 @@ test('valorar un aporte: se guarda en la memoria y en las estadísticas de la IA
     server.close();
   }
 });
+
+test('los errores de la API llegan como JSON', async () => {
+  const app = createApp(new Store(tmp()));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  try {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/api/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{mal' });
+    assert.equal(r.status, 400);
+    assert.deepEqual(await r.json(), { error: 'Petición con JSON inválido' });
+  } finally {
+    server.close();
+  }
+});
