@@ -456,8 +456,10 @@ function RemoteSection() {
           </select>
         </label>
       </div>
+      {form.password.length > 0 && form.password.length < 8 && <p className="small warn">La contraseña necesita al menos 8 caracteres (van {form.password.length}).</p>}
+      {!form.name && form.password.length >= 8 && <p className="small warn">Escribe un nombre de usuario.</p>}
       <div className="row">
-        <button className="btn btn--primary small" disabled={!form.name || form.password.length < 8} onClick={async () => {
+        <button className="btn btn--primary small" disabled={!form.name || form.password.length < 8} title={form.password.length < 8 ? 'La contraseña necesita al menos 8 caracteres' : ''} onClick={async () => {
           try {
             await api.createUser({ ...form, hub: form.hub || null });
             setForm({ name: '', password: '', role: 'miembro', hub: '' });
