@@ -520,3 +520,8 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .walker-say::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 8px; height: 8px; background: #fff; border-right: 2px solid #111; border-bottom: 2px solid #111; transform: translateX(-50%) rotate(45deg); }
 .bfloor--open { background: linear-gradient(#7dd3fc, #bae6fd 70%); }
 .building--night .bfloor--open { background: linear-gradient(#1e1b4b, #312e81 70%); }
+@media (max-width: 900px) {
+  .nav-item { padding: 6px 2px; min-width: 0; font-size: 10px; }
+  .nav-item .nav-label { font-size: 10px; white-space: nowrap; }
+  .nav-item .badge { position: absolute; margin: -4px 0 0 18px; font-size: 9px; }
+}
