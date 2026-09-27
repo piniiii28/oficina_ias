@@ -11,6 +11,7 @@ import { PROVIDERS, hasKey } from './providers.js';
 import { bus, runTask, chatWithAgent } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
+import { suggestConnections, applyConnection } from './librarian.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
@@ -248,6 +249,20 @@ export function createApp(store) {
       includeAgents: req.query.agents !== '0',
       agents: store.data.agents,
     }));
+  });
+
+  app.post('/api/graph/suggest', async (_req, res) => {
+    try {
+      res.json(await suggestConnections(store));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app.post('/api/graph/connect', (req, res) => {
+    const list = Array.isArray(req.body?.connections) ? req.body.connections : [];
+    const applied = list.filter((c) => applyConnection(notes, c)).length;
+    bus.emit('event', { type: 'notes' });
+    res.json({ applied });
   });
 
   // --- Copia de seguridad ---

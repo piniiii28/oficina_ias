@@ -122,3 +122,19 @@ test('bóveda: escribe .md con frontmatter e importa de vuelta', async () => {
   vault.sync(notes.all);
   assert.deepEqual(fs.readdirSync(vault.dir), []);
 });
+
+test('bibliotecaria: sugiere notas relacionadas y las enlaza en ambos sentidos', async () => {
+  const { keywordSuggestions, applyConnection } = await import('../src/librarian.js');
+  const store = new Store(tmp());
+  const notes = new Notes(store);
+  const a = notes.create({ title: 'Café de especialidad', content: 'Granos de café tostado, baristas y cafetería de barrio' });
+  const b = notes.create({ title: 'Menú de la cafetería', content: 'Bebidas de café, baristas expertos y granos locales' });
+  notes.create({ title: 'Rutina de ejercicio', content: 'Sentadillas, flexiones y cardio tres veces por semana' });
+  const s = keywordSuggestions(notes.all);
+  assert.equal(s.length, 1);
+  assert.deepEqual([s[0].from, s[0].to].sort(), [a.id, b.id].sort());
+  applyConnection(notes, s[0]);
+  assert.match(notes.get(a.id).content, /## Relacionado\n- \[\[Menú de la cafetería\]\]/);
+  assert.match(notes.get(b.id).content, /\[\[Café de especialidad\]\]/);
+  assert.equal(keywordSuggestions(notes.all).length, 0, 'ya enlazadas no se vuelven a sugerir');
+});

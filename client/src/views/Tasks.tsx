@@ -5,6 +5,10 @@ import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { useOffice } from '../state';
 
+export const STATUS_ES: Record<string, string> = {
+  planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', done: 'lista', error: 'error', pending: 'en espera',
+};
+
 export function Tasks() {
   const { tasks, agents, reloadTasks, openNote } = useOffice();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -22,7 +26,7 @@ export function Tasks() {
           <button key={t.id} className={`task-item ${current?.id === t.id ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
             <strong>{t.title}</strong>
             <small className="muted">{new Date(t.createdAt).toLocaleString()} · {t.steps.length} IAs</small>
-            <span className={`pill pill--${t.status}`}>{t.status}</span>
+            <span className={`pill pill--${t.status}`}>{STATUS_ES[t.status]}</span>
           </button>
         ))}
       </aside>
@@ -66,7 +70,7 @@ function TaskDetail({ task, agent, onDelete, openNote }: {
                 <div className="small muted">{s.instruction}</div>
                 {s.dependsOn?.length ? <div className="small">↳ Trabajó sobre la entrega de {s.dependsOn.map((d) => agent(d)?.name || d).join(', ')}</div> : null}
               </div>
-              <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : s.status}</span>
+              <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
             {s.error ? <p className="danger">{s.error}</p> : <Markdown text={s.output || '…'} onLink={(t) => openNote({ title: t })} />}
           </details>

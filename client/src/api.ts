@@ -86,6 +86,8 @@ export type GraphNode = {
 };
 export type GraphLink = { source: string; target: string; kind: 'link' | 'tag' | 'author' };
 
+export type Suggestion = { from: string; to: string; fromTitle: string; toTitle: string; reason: string; score: number };
+
 export type ChatMessage = { role: 'user' | 'assistant'; content: string; at: string; simulated?: boolean };
 
 export type Settings = {
@@ -144,6 +146,9 @@ export const api = {
   importNotes: (files: { name: string; content: string }[]) => req<{ created: number; updated: number }>('POST', '/api/notes/import', { files }),
   graph: (opts: { tags: boolean; agents: boolean }) =>
     req<{ nodes: GraphNode[]; links: GraphLink[] }>('GET', `/api/graph?tags=${opts.tags ? 1 : 0}&agents=${opts.agents ? 1 : 0}`),
+
+  suggestLinks: () => req<{ suggestions: Suggestion[]; by: string; simulated: boolean }>('POST', '/api/graph/suggest'),
+  connect: (connections: Suggestion[]) => req<{ applied: number }>('POST', '/api/graph/connect', { connections }),
 
   settings: () => req<Settings>('GET', '/api/settings'),
   saveSettings: (s: Record<string, unknown>) => req<Settings>('PUT', '/api/settings', s),

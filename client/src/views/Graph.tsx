@@ -2,7 +2,8 @@
 // zoom, arrastre, resaltado de vecinos, búsqueda y grafo local.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force';
-import { api, type GraphLink, type GraphNode, type Note } from '../api';
+import { api, type GraphLink, type GraphNode, type Note, type Suggestion } from '../api';
+import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { useOffice } from '../state';
 import { TYPE_META } from './Notes';
@@ -18,7 +19,9 @@ function colorOf(n: N) {
 }
 
 export function Graph() {
-  const { notesVersion, openNote, agents } = useOffice();
+  const { notesVersion, openNote, agents, live, toast } = useOffice();
+  const [sugg, setSugg] = useState<{ list: Suggestion[]; chosen: Set<number>; by: string } | null>(null);
+  const [finding, setFinding] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
@@ -282,6 +285,7 @@ export function Graph() {
   }, [selected, notesVersion]);
 
   const sel = data.nodes.find((n) => n.id === selected);
+  const librarian = agents.find((a) => a.isLibrarian);
   const counts = { notas: data.nodes.filter((n) => n.kind === 'note').length, enlaces: data.links.filter((l) => l.kind === 'link').length };
 
   return (
@@ -302,6 +306,15 @@ export function Graph() {
         </label>
         <button className="btn btn--ghost small" onClick={() => view.current.fit()}>Encuadrar</button>
         <span className="muted small">{counts.notas} notas · {counts.enlaces} enlaces</span>
+        <button className="btn btn--primary small" disabled={finding} onClick={async () => {
+          setFinding(true);
+          try {
+            const r = await api.suggestLinks();
+            setSugg({ list: r.suggestions, chosen: new Set(r.suggestions.map((_, i) => i)), by: r.by });
+          } finally {
+            setFinding(false);
+          }
+        }}>{finding ? 'Buscando…' : '🕸️ Conectar ideas'}</button>
       </div>
       <div className="graph-canvas" ref={wrapRef}>
         <canvas ref={canvasRef} />
@@ -312,6 +325,40 @@ export function Graph() {
           <span><i style={{ background: KIND_COLOR.ghost }} />Sin crear</span>
         </div>
         {!data.nodes.length && <div className="empty overlay">Aún no hay notas. Envía una tarea en la Oficina o crea notas.</div>}
+        {sugg && (
+          <div className="graph-suggest">
+            <header>
+              {librarian && <Chibi avatar={librarian.avatar} size={44} state={live[librarian.id]?.status || 'idle'} />}
+              <div>
+                <strong>{sugg.by} propone {sugg.list.length} conexiones</strong>
+                <div className="muted small">Elige cuáles enlazar; se añaden en la sección «Relacionado» de ambas notas.</div>
+              </div>
+              <button className="icon-btn" onClick={() => setSugg(null)}>✕</button>
+            </header>
+            {!sugg.list.length && <p className="muted small">No encontré notas relacionadas sin enlazar. ¡Tu grafo está bien conectado!</p>}
+            <ul>
+              {sugg.list.map((s, i) => (
+                <li key={i}>
+                  <label className="check">
+                    <input type="checkbox" checked={sugg.chosen.has(i)} onChange={() => {
+                      const c = new Set(sugg.chosen);
+                      if (c.has(i)) c.delete(i); else c.add(i);
+                      setSugg({ ...sugg, chosen: c });
+                    }} />
+                    <span><b>{s.fromTitle}</b> ↔ <b>{s.toTitle}</b><br /><small className="muted">{s.reason}</small></span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {sugg.list.length > 0 && (
+              <button className="btn btn--primary small" disabled={!sugg.chosen.size} onClick={async () => {
+                const r = await api.connect(sugg.list.filter((_, i) => sugg.chosen.has(i)));
+                toast(`🔗 ${r.applied} conexiones nuevas en tu grafo`);
+                setSugg(null);
+              }}>Enlazar {sugg.chosen.size}</button>
+            )}
+          </div>
+        )}
         {sel && (
           <div className="graph-preview">
             <header>
