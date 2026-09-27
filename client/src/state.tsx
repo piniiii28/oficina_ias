@@ -1,5 +1,6 @@
 // Estado compartido de la app: agentes, estados animados, tareas y eventos.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { play } from './sounds';
 import { api, type Agent, type AgentState, type Department, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
 
 export type Live = { status: AgentState; message: string; at: number };
@@ -107,7 +108,10 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
           );
         }
         if (e.status === 'done') reloadAgents();
+        if (e.status === 'done') play('pop');
+        if (e.status === 'error') play('error');
       } else if (e.type === 'task') {
+        if (e.task.status === 'done') play('ding');
         setTasks((ts) => {
           const i = ts.findIndex((t) => t.id === e.task.id);
           if (i === -1) return [e.task, ...ts];

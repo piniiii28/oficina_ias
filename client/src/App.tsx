@@ -9,6 +9,8 @@ import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
 import { Board } from './views/Board';
 import { Welcome } from './components/Welcome';
+import { useState } from 'react';
+import { play, setSounds, soundsOn } from './sounds';
 
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'oficina', label: 'Oficina', icon: '🏢' },
@@ -24,6 +26,7 @@ const NAV: { id: View; label: string; icon: string }[] = [
 function Shell() {
   const { view, setView, connected, toasts, tasks, agents } = useOffice();
   const running = tasks.filter((t) => t.status !== 'done' && t.status !== 'error').length;
+  const [sound, setSound] = useState(soundsOn);
   return (
     <div className="app">
       <nav className="sidebar">
@@ -43,6 +46,9 @@ function Shell() {
         ))}
         <button className="nav-item search-hint" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
           <span>🔍</span><span className="nav-label">Buscar <kbd>Ctrl K</kbd></span>
+        </button>
+        <button className="nav-item search-hint" onClick={() => { setSounds(!sound); setSound(!sound); if (!sound) setTimeout(() => play('ding'), 50); }}>
+          <span>{sound ? '🔊' : '🔈'}</span><span className="nav-label">Sonidos {sound ? 'activos' : 'apagados'}</span>
         </button>
         <div className="sidebar-foot">
           <span className={`dot ${connected ? 'dot--live' : 'dot--off'}`} /> {connected ? 'En vivo' : 'Reconectando…'}
