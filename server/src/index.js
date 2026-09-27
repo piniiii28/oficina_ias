@@ -73,7 +73,7 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));

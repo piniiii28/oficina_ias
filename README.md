@@ -77,7 +77,7 @@ Proveedores y las IAs de la plantilla que los usan:
 | **Cohere** (clave de prueba gratis) | Forma (diseño de producto) |
 | **Hugging Face** (créditos gratis) | Disponible para cualquier IA |
 | **Mistral** (gratis) | Codestral, Mistral, Babel |
-| **Ollama** (local, gratis) | Gemma, Phi |
+| **Ollama** (local, gratis) | Gemma, Phi, Gemma 4 (12B) |
 | **Anthropic** (de pago, o tu plan con Claude Code) | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |
 | **OpenAI** (de pago, o tu ChatGPT con Codex CLI) | Codex, ChatGPT |
 | **xAI** / **Perplexity** (de pago) | Grok / Perplexity, Sonar |

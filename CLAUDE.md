@@ -29,7 +29,7 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 - `server/src/bambu.js`: impresora Bambu Lab por MQTT local (8883) y cámara (6000). `mcp/oficina-mcp.mjs`: servidor MCP para Claude Desktop (usa `settings.apiToken`).
 - `server/src/metrics.js`: medidores de acierto y carga, verificador y jurado.
 - `server/src/hubs.js`: núcleos del grafo (Cerebro, Nicolás, Santiago, Miguel…). El núcleo activo llega en el encabezado `X-Nucleo` y cada nota guarda su `hub`.
-- `server/src/agents.js` y `playbooks.js`: la plantilla de 28 IAs y sus manuales de fábrica.
+- `server/src/agents.js` y `playbooks.js`: la plantilla de IAs y sus manuales de fábrica.
 - `server/src/notes.js`: notas, `[[enlaces]]`, `#etiquetas` y el grafo. `vault.js` escribe la bóveda `.md` para Obsidian.
 - `librarian.js` (sugerencias y notas relacionadas), `meetings.js`, `routines.js`.
 - `server/src/store.js`: persistencia en `oficina.json` (escritura atómica, copia `.bak` y respaldos diarios). La carpeta la decide `datadir.js` (por defecto Documentos/Oficina de IAs; en pruebas, `OFICINA_DATA` o `new Store(dir)`).

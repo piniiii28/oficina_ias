@@ -61,6 +61,7 @@ export const FREE_MODELS = {
     { id: 'open-mistral-nemo', label: 'Mistral Nemo', for: 'rápido' },
   ],
   ollama: [
+    { id: 'gemma4:12b', label: 'Gemma 4 12B (7,6 GB, lee imágenes)', for: 'documentos largos' },
     { id: 'gemma3', label: 'Gemma 3', for: 'general' },
     { id: 'qwen2.5-coder', label: 'Qwen 2.5 Coder', for: 'código' },
     { id: 'llama3.2', label: 'Llama 3.2 (liviano)', for: 'rápido' },

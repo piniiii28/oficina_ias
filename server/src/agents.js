@@ -222,6 +222,13 @@ export const DEFAULT_AGENTS = [
     avatar: { skin: '#eab88f', hair: '#0369a1', hairStyle: 'messy', eyes: 'glasses', outfit: '#0078d4', accessory: 'gradcap', prop: '🎓', costume: 'mago' },
   }),
   base({
+    id: 'gemma4', name: 'Gemma 4', role: 'Analista privada de documentos largos', department: 'datos',
+    provider: 'ollama', model: 'gemma4:12b',
+    skills: ['documento', 'pdf', 'contrato', 'resumen', 'privado', 'confidencial', 'leer', 'informe', 'extraer', 'comparar', 'sin internet'],
+    system: P('Eres Gemma 4 (12B), la analista que trabaja 100 % en el computador del usuario: nada de lo que lees sale de su casa. Lees documentos largos (contratos, informes, apuntes, código) y extraes lo importante: resumen, datos clave con la cita exacta de dónde salen, riesgos y dudas. Si algo no está en el texto, lo dices en vez de inventarlo.'),
+    avatar: { skin: '#f1c7a5', hair: '#4338ca', hairStyle: 'bob', eyes: 'glasses', outfit: '#0f766e', accessory: 'magnifier', prop: '🔒', costume: 'ninja' },
+  }),
+  base({
     id: 'babel', name: 'Babel', role: 'Traductora multilingüe', department: 'personas',
     provider: 'mistral', model: 'mistral-small-latest',
     skills: ['traducir', 'traducción', 'inglés', 'francés', 'portugués', 'idioma', 'gramática', 'ortografía'],

@@ -1592,6 +1592,7 @@ test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se u
   try {
     await withApp(store, async (call) => {
       store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${local.address().port}/v1` };
+      await call('PUT', '/api/agents/gemma4', { enabled: false }); // solo Gemma y Phi en esta prueba
       const nodeId = (await call('POST', '/api/nodes', { url: `http://127.0.0.1:${nodeServer.address().port}`, token: cfg.data.token, name: 'Bogotá' })).data.id;
       // Al agregarlo, el nodo recibe la lista de modelos de las IAs y descarga los que le faltan.
       for (let i = 0; i < 60 && !nodeModels.includes('gemma3:latest'); i++) await new Promise((res) => setTimeout(res, 50));
@@ -1658,4 +1659,19 @@ test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se u
     remote.close();
     delete process.env.OLLAMA_URL;
   }
+});
+
+test('Gemma 4 (12B, local) llega a las oficinas que ya existían', async () => {
+  const store = new Store(tmp());
+  store.data.agents = store.data.agents.filter((a) => a.id !== 'gemma4');
+  store.data.settings.agentsV3Seeded = true;
+  createApp(store).locals.stop?.();
+  const g = store.data.agents.find((a) => a.id === 'gemma4');
+  assert.equal(g.provider, 'ollama');
+  assert.equal(g.model, 'gemma4:12b');
+  assert.ok(g.knowledge.length, 'trae su manual');
+  // Si la despides, no vuelve a aparecer.
+  store.data.agents = store.data.agents.filter((a) => a.id !== 'gemma4');
+  createApp(store).locals.stop?.();
+  assert.ok(!store.data.agents.some((a) => a.id === 'gemma4'));
 });
