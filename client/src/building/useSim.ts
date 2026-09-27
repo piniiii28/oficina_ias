@@ -17,10 +17,16 @@ export type Walker = {
   wait: number; // ticks antes de decidir de nuevo
   inElevator: number; // ticks dentro del ascensor
   emote?: string;
+  running?: boolean;
 };
 
 export const TICK_MS = 340;
 export const ME = '__yo';
+export const PETS = [
+  { id: '__michi', name: 'Michi', emoji: '🐈', floor: 'lobby' },
+  { id: '__firulais', name: 'Firulais', emoji: '🐕', floor: 'azotea' },
+  { id: '__kiwi', name: 'Kiwi', emoji: '🦜', floor: 'penthouse' },
+];
 const CHATS = ['¡Hola!', '¿Café?', 'Buen trabajo 👏', 'Jaja 😂', '¿Viste la tarea nueva?', '¡Qué idea!', 'Te paso el dato', '🤝'];
 const EMOTES = ['☕', '💭', '🎵', '💡', '😄', '📱', '🍪', '👋', '✨', '📚'];
 
@@ -58,6 +64,19 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
       };
       const ws = walkers.current;
       step(ws[ME]);
+      // Mascotas: pasean al azar por su piso.
+      for (const pet of PETS) {
+        const f = floorById.get(pet.floor)!;
+        let w = ws[pet.id];
+        if (!w) w = ws[pet.id] = { floor: f.id, ...randomWalkable(f), dir: 1, moving: false, goal: null, reason: 'pasear', wait: 0, inElevator: 0 };
+        if (!w.goal && --w.wait <= 0) {
+          w.goal = { floor: f.id, ...randomWalkable(f) };
+          w.wait = 6 + Math.floor(Math.random() * 20);
+          if (Math.random() < 0.3) w.emote = pet.emoji === '🐈' ? '😺' : pet.emoji === '🐕' ? '🦴' : '🎶';
+        }
+        step(w);
+      }
+      const night = new Date().getHours() >= 22 || new Date().getHours() < 6;
       for (const a of agents) {
         let w = ws[a.id];
         const home = homeFloor(a);
@@ -89,6 +108,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
             w.wait--;
             w.moving = false;
             if (w.emote && Math.random() < 0.15) w.emote = undefined;
+            if (night && !w.emote && Math.random() < 0.05) w.emote = '💤';
             continue;
           }
           // Decide qué hacer en su tiempo libre.
@@ -133,18 +153,25 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           }
           continue;
         }
-        const step = nextStep(f, w, target);
-        if (!step || (!walkable(f, step.i, step.j) && !(step.i === target.i && step.j === target.j))) {
-          w.goal = null;
-          w.wait = 2;
-          continue;
+        // Con trabajo pendiente corren: dos casillas por paso.
+        const hurry = (busy && w.reason === 'escritorio') || w.reason === 'reunion' ? 2 : 1;
+        for (let k = 0; k < hurry; k++) {
+          const t = w.goal.floor === w.floor ? w.goal : { floor: w.floor, ...f.elevator };
+          if (w.i === t.i && w.j === t.j) break;
+          const next = nextStep(f, w, t);
+          if (!next || (!walkable(f, next.i, next.j) && !(next.i === t.i && next.j === t.j))) {
+            w.goal = null;
+            w.wait = 2;
+            break;
+          }
+          // En pantalla, +i va abajo a la derecha y +j abajo a la izquierda.
+          const dx = next.i - w.i - (next.j - w.j);
+          if (dx !== 0) w.dir = dx > 0 ? 1 : -1;
+          w.i = next.i;
+          w.j = next.j;
+          w.moving = true;
         }
-        // En pantalla, +i va abajo a la derecha y +j abajo a la izquierda.
-        const dx = step.i - w.i - (step.j - w.j);
-        if (dx !== 0) w.dir = dx > 0 ? 1 : -1;
-        w.i = step.i;
-        w.j = step.j;
-        w.moving = true;
+        w.running = hurry > 1;
       }
       // Charlas espontáneas entre IAs libres que se cruzan.
       const idle = agents.filter((a) => {

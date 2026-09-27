@@ -5,7 +5,7 @@ import { levelOf, type Agent } from '../api';
 import { Chibi } from '../components/Chibi';
 import { useOffice } from '../state';
 import { FLOORS, TH, TW, WALL, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
-import { ME, TICK_MS, useSim, type Walker } from './useSim';
+import { ME, PETS, TICK_MS, useSim, type Walker } from './useSim';
 import type { AvatarConfig } from '../api';
 
 const CHIBI = 40;
@@ -154,6 +154,7 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
     zIndex: (w.i + w.j) * 10 + 5,
     transitionDuration: `${TICK_MS}ms`,
   };
+  if (w.running) style.filter = 'drop-shadow(-6px 0 2px rgba(255,255,255,0.35))';
   const msg = state === 'working' ? '⌨️' : state === 'thinking' ? '💭' : state === 'done' ? '✅' : state === 'error' ? '💥' : state === 'talking' ? '💬' : w.emote;
   return (
     <button className={`walker ${w.moving ? 'walker--moving' : ''} ${me ? 'walker--me' : ''}`} style={style} onClick={(e) => { e.stopPropagation(); onClick(); }} title={`${a.name} · ${a.role}`}>
@@ -231,6 +232,17 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
           <Room f={f} night={night} doorOpen={doorOpen} />
           {f.furniture.map((m, k) => <Box key={k} f={f} m={m} />)}
           {here.map((a) => <Person key={a.id} f={f} a={a} w={walkers[a.id]} onClick={() => onSelect(a)} idx={agents.indexOf(a)} />)}
+          {PETS.filter((p) => walkers[p.id]?.floor === f.id).map((p) => {
+            const w = walkers[p.id];
+            const c = tileCenter(f, w.i, w.j);
+            return (
+              <span key={p.id} className={`pet ${w.moving ? 'walker--moving' : ''}`} title={p.name}
+                style={{ transform: `translate(${c.x - 12}px, ${c.y - 22}px)`, zIndex: (w.i + w.j) * 10 + 4, transitionDuration: `${TICK_MS}ms` }}>
+                {w.emote && !w.moving && <span className="walker-emote">{w.emote}</span>}
+                <span className="walker-body" style={{ transform: `scaleX(${-w.dir})` }}>{p.emoji}</span>
+              </span>
+            );
+          })}
           {walkers[ME]?.floor === f.id && !walkers[ME].inElevator && <Person f={f} a={me} w={walkers[ME]} onClick={() => {}} idx={99} me />}
           {walkers[ME]?.goal?.floor === f.id && <span className="tile-marker" style={{ transform: `translate(${tileCenter(f, walkers[ME].goal!.i, walkers[ME].goal!.j).x - 14}px, ${tileCenter(f, walkers[ME].goal!.i, walkers[ME].goal!.j).y - 7}px)` }} />}
         </div>

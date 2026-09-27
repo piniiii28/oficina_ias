@@ -558,3 +558,5 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .timeline input[type='range'] { width: 140px; padding: 0; accent-color: var(--accent); }
 .skin-btn { border: 0; background: rgba(255, 255, 255, 0.15); border-radius: 8px; cursor: pointer; font-size: 14px; padding: 2px 6px; }
 .skin-btn:hover { background: rgba(255, 255, 255, 0.3); }
+.pet { position: absolute; left: 0; top: 0; font-size: 22px; line-height: 1; pointer-events: auto; cursor: default; transition-property: transform; transition-timing-function: linear; }
+.pet .walker-emote { top: -18px; }
