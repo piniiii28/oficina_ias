@@ -7,6 +7,7 @@ import { callModel, hasKey } from './providers.js';
 import { demoPlan } from './demo.js';
 import { extractKeyIdeas } from './notes.js';
 import { relatedNotes } from './librarian.js';
+import { readLinks } from './links.js';
 
 export const bus = new EventEmitter();
 /** Controladores para cancelar tareas en curso (id de tarea → AbortController). */
@@ -190,9 +191,11 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     : '';
   // Memoria compartida: notas del grafo relacionadas con la tarea.
   const related = relatedNotes(store.data.notes, prompt + ' ' + (parent?.prompt || ''), 4);
-  const knowledge = filesText + (related.length
+  let extraText = '';
+  const knowledgeBase = filesText + (related.length
     ? `\n\nNotas relevantes de la base de conocimiento de la oficina:\n${related.map((n) => `### ${n.title}\n${n.content.slice(0, 900)}`).join('\n\n')}\n`
     : '');
+  const ctx = () => knowledgeBase + extraText;
   const task = {
     parentId: parent?.id || null,
     contextNotes: related.map((n) => n.title),
@@ -224,6 +227,16 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   agentStatus(brain.id, 'thinking', 'Planificando…');
 
   try {
+    // Enlaces en la tarea: se leen y se agregan como adjuntos.
+    if (settings.readLinks !== false && /https?:\/\//.test(prompt)) {
+      agentStatus(brain.id, 'thinking', 'Leyendo los enlaces…');
+      const pages = await readLinks(prompt);
+      if (pages.length) {
+        extraText = `\n\nPáginas enlazadas por el usuario:\n${pages.map((p) => `--- ${p.name} ---\n${p.content.slice(0, 30000)}`).join('\n\n')}\n`;
+        task.attachments = [...(task.attachments || []), ...pages.map((p) => ({ name: p.name, size: p.content.length }))];
+        emitTask();
+      }
+    }
     task.plan = await makePlan(store, prompt, agentIds, parent?.steps);
     task.status = 'working';
     task.steps = task.plan.subtasks.map((s) => ({ ...s, status: 'pending', output: '', simulated: false, error: null }));
@@ -256,7 +269,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
           system: buildSystem(agent),
           messages: [{
             role: 'user',
-            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}${knowledge}`,
+            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}${ctx()}`,
           }],
         });
         step.output = res.text;
@@ -289,7 +302,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       messages: [{
         role: 'user',
         content:
-          `Tarea original: ${background}${prompt}${knowledge}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
+          `Tarea original: ${background}${prompt}${ctx()}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
           'Integra todo en una respuesta final única, coherente y accionable. Menciona a quién se debe cada parte cuando aporte valor. ' +
           'Termina con "### Ideas clave" (3 a 6 viñetas cortas, cada una una idea reutilizable).',
       }],

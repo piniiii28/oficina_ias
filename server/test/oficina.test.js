@@ -408,3 +408,13 @@ test('cancelar una tarea en curso la detiene', async () => {
   assert.match(t.final, /Cancelada por ti/);
   assert.equal(running.size, 0);
 });
+
+test('lectura de enlaces: extrae URLs, limpia HTML y bloquea direcciones privadas', async () => {
+  const { extractUrls, htmlToText, isPrivateIp, fetchReadable } = await import('../src/links.js');
+  assert.deepEqual(extractUrls('Mira https://ejemplo.com/a, y http://x.org.'), ['https://ejemplo.com/a', 'http://x.org']);
+  const { title, text } = htmlToText('<html><title>Hola</title><script>x()</script><p>Uno &amp; dos</p><p>Tres</p></html>');
+  assert.equal(title, 'Hola');
+  assert.match(text, /Uno & dos\s+Tres/);
+  assert.ok(isPrivateIp('192.168.1.5') && isPrivateIp('127.0.0.1') && isPrivateIp('::1') && !isPrivateIp('8.8.8.8'));
+  await assert.rejects(fetchReadable('http://localhost:4747/api/settings'), /locales o privadas/);
+});
