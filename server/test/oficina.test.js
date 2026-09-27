@@ -164,3 +164,19 @@ test('reunión: las IAs hablan por turnos y el cerebro resume en una nota', asyn
   assert.match(m.transcript[1].text, /O-Estratega/, 'responde a quien habló antes');
   assert.equal(notes.get(m.noteId).tags[0], 'reunion');
 });
+
+test('CLIs: el prompt va por stdin o como un solo argumento, sin pasar por la consola', { skip: process.platform === 'win32' }, async () => {
+  const { callModel, splitCommand } = await import('../src/providers.js');
+  assert.deepEqual(splitCommand('tool run "a b" {prompt}', 'x; rm -rf /'), ['tool', 'run', 'a b', 'x; rm -rf /']);
+  const viaStdin = await callModel({ apiKeys: {}, cli: { 'cli-claude': { enabled: true, command: 'cat' } } }, {
+    provider: 'cli-claude', model: '', system: 'SYS', messages: [{ role: 'user', content: 'hola $(whoami)' }],
+  });
+  assert.equal(viaStdin.simulated, false);
+  assert.match(viaStdin.text, /Usuario: hola \$\(whoami\)/);
+  const viaArg = await callModel({ apiKeys: {}, cli: { 'cli-opencode': { enabled: true, command: 'echo {prompt}' } } }, {
+    provider: 'cli-opencode', model: '', system: 'S', messages: [{ role: 'user', content: 'a && b' }],
+  });
+  assert.match(viaArg.text, /Usuario: a && b/);
+  const off = await callModel({ apiKeys: {}, cli: {} }, { provider: 'cli-codex', model: '', system: 'S', messages: [{ role: 'user', content: 'x' }] });
+  assert.equal(off.simulated, true, 'sin activar, responde en modo demo');
+});

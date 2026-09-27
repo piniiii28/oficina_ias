@@ -1,5 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
+import type { Settings as SettingsT } from '../api';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
 
@@ -40,7 +41,7 @@ export function Settings() {
           Consejo: con una sola clave de <b>OpenRouter</b> se conectan varias IAs de la oficina a la vez.
         </p>
         <div className="keys">
-          {providers.filter((p) => !p.keyless).map((p) => {
+          {providers.filter((p) => !p.keyless && !p.cli).map((p) => {
             const k = s.keys[p.id];
             const who = usage(p.id);
             return (
@@ -69,6 +70,8 @@ export function Settings() {
           </div>
         </div>
       </section>
+
+      <CliSection s={s} save={save} />
 
       <section className="card">
         <h2>⚙️ Comportamiento</h2>
@@ -105,5 +108,66 @@ export function Settings() {
         </div>
       </section>
     </div>
+  );
+}
+
+// Qué IAs de la plantilla encajan con cada herramienta de línea de comandos.
+const CLI_MATCH: Record<string, string[]> = {
+  'cli-codex': ['codex', 'chatgpt', 'estratega', 'coach'],
+  'cli-claude': ['cerebro', 'sonnet-qa', 'bibliotecaria'],
+  'cli-opencode': ['opencode'],
+  'cli-gemini': ['gemini-data', 'gemini-visual'],
+};
+
+function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, unknown>, msg?: string) => Promise<void> }) {
+  const { providers, agents, reloadAgents, toast } = useOffice();
+  const [found, setFound] = useState<Record<string, string | null> | null>(null);
+  const [cmds, setCmds] = useState<Record<string, string>>({});
+  const clis = providers.filter((p) => p.cli);
+
+  async function assign(pid: string) {
+    const ids = CLI_MATCH[pid].filter((id) => agents.some((a) => a.id === id));
+    await Promise.all(ids.map((id) => api.updateAgent(id, { provider: pid })));
+    await reloadAgents();
+    toast(`🔁 ${ids.length} IAs ahora usan ${providers.find((p) => p.id === pid)?.label}`);
+  }
+
+  return (
+    <section className="card">
+      <h2>🖥️ Herramientas de línea de comandos</h2>
+      <p className="muted">
+        Si ya tienes instaladas y con sesión iniciada herramientas como <b>Codex CLI</b>, <b>Claude Code</b>, <b>OpenCode</b> o <b>Gemini CLI</b>,
+        la oficina puede usarlas en lugar de claves de API (usan tu suscripción). Se ejecutan en una carpeta temporal vacía y, por defecto, en modo solo lectura cuando la herramienta lo permite.
+      </p>
+      <button className="btn btn--ghost small" onClick={async () => setFound(await api.detectClis())}>🔍 Detectar instaladas</button>
+      <div className="keys">
+        {clis.map((p) => {
+          const c = s.cli?.[p.id];
+          const who = agents.filter((a) => a.provider === p.id).map((a) => a.name);
+          return (
+            <div key={p.id} className="key-row">
+              <div>
+                <strong>{p.label}</strong>{' '}
+                {c?.enabled ? <span className="pill pill--done">activada</span> : <span className="pill">apagada</span>}{' '}
+                {found && (found[p.id] ? <span className="pill pill--done">instalada</span> : <span className="pill pill--error">no encontrada</span>)}
+                <div className="small muted">
+                  {who.length ? `La usan: ${who.join(', ')}` : 'Ninguna IA la usa todavía'} · <a href={p.keyUrl} target="_blank" rel="noreferrer">instalar ↗</a>
+                </div>
+              </div>
+              <div className="row">
+                <input
+                  title="Comando. Usa {prompt} para pasar el texto como argumento; si no está, se envía por la entrada estándar."
+                  value={cmds[p.id] ?? c?.command ?? ''}
+                  onChange={(e) => setCmds({ ...cmds, [p.id]: e.target.value })}
+                  onBlur={() => cmds[p.id] !== undefined && cmds[p.id] !== c?.command && save({ cli: { [p.id]: { command: cmds[p.id] } } }, 'Comando guardado')}
+                />
+                <label className="check"><input type="checkbox" checked={Boolean(c?.enabled)} onChange={(e) => save({ cli: { [p.id]: { enabled: e.target.checked } } })} /> Activar</label>
+                <button className="btn btn--ghost small" onClick={() => assign(p.id)} title={`Asignar a: ${CLI_MATCH[p.id].join(', ')}`}>Asignar a sus IAs</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

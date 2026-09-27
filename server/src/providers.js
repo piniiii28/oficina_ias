@@ -5,6 +5,10 @@
 // - Google Gemini: API generateContent.
 // Si falta la clave de un proveedor, la oficina funciona en "modo demo".
 import Anthropic from '@anthropic-ai/sdk';
+import { spawn, execFile } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { simulate } from './demo.js';
 
 export const PROVIDERS = {
@@ -19,10 +23,35 @@ export const PROVIDERS = {
   perplexity: { label: 'Perplexity (búsqueda web)', baseUrl: 'https://api.perplexity.ai', keyUrl: 'https://www.perplexity.ai/settings/api' },
   together: { label: 'Together AI (open source)', baseUrl: 'https://api.together.xyz/v1', keyUrl: 'https://api.together.xyz/settings/api-keys' },
   ollama: { label: 'Ollama (local, gratis)', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
+  // Herramientas de línea de comandos instaladas en tu computador: usan tu
+  // sesión ya iniciada (suscripción), sin clave de API.
+  'cli-codex': { label: 'Codex CLI (tu sesión de ChatGPT)', cli: true, bin: 'codex', command: 'codex exec --skip-git-repo-check --sandbox read-only -', keyUrl: 'https://github.com/openai/codex' },
+  'cli-claude': { label: 'Claude Code (tu sesión de Claude)', cli: true, bin: 'claude', command: 'claude -p', keyUrl: 'https://code.claude.com/docs' },
+  'cli-opencode': { label: 'OpenCode CLI', cli: true, bin: 'opencode', command: 'opencode run {prompt}', keyUrl: 'https://opencode.ai' },
+  'cli-gemini': { label: 'Gemini CLI (tu cuenta de Google)', cli: true, bin: 'gemini', command: 'gemini', keyUrl: 'https://github.com/google-gemini/gemini-cli' },
 };
+
+/** Comando configurado para una CLI (editable en Ajustes). */
+export function cliCommand(settings, provider) {
+  return settings.cli?.[provider]?.command || PROVIDERS[provider].command;
+}
+
+/** Detecta qué CLIs están instaladas. */
+export async function detectClis() {
+  const finder = process.platform === 'win32' ? 'where' : 'which';
+  const out = {};
+  await Promise.all(Object.entries(PROVIDERS).filter(([, p]) => p.cli).map(([id, p]) => new Promise((resolve) => {
+    execFile(finder, [p.bin], { timeout: 4000 }, (err, stdout) => {
+      out[id] = err ? null : stdout.toString().split(/\r?\n/)[0].trim();
+      resolve();
+    });
+  })));
+  return out;
+}
 
 /** ¿Hay credenciales para este proveedor? */
 export function hasKey(settings, provider) {
+  if (PROVIDERS[provider]?.cli) return Boolean(settings.cli?.[provider]?.enabled);
   if (PROVIDERS[provider]?.keyless) return Boolean(settings.apiKeys?.ollamaEnabled);
   return Boolean(settings.apiKeys?.[provider] || envKey(provider));
 }
@@ -55,7 +84,8 @@ export async function callModel(settings, { provider, model, system, messages, a
   }
   const emit = onDelta || (() => {});
   let text;
-  if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit);
+  if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, emit);
+  else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit);
   else if (provider === 'google') text = await callGemini(keyFor(settings, provider), model, system, messages, emit);
   else text = await callOpenAICompatible(provider, keyFor(settings, provider), model, system, messages, settings, emit);
   return { text, simulated: false, provider, model };
@@ -176,4 +206,58 @@ async function callGemini(apiKey, model, system, messages, onDelta) {
     }
   });
   return text;
+}
+
+/** Protege un texto para cmd.exe (sin saltos de línea ni expansiones). */
+function winQuote(text) {
+  return `"${text.replace(/\r?\n/g, ' ').replace(/"/g, '""').replace(/%/g, ' por ciento').replace(/[\^&|<>!]/g, ' ')}"`;
+}
+
+/** Divide un comando en argumentos respetando comillas; {prompt} va como un solo argumento. */
+export function splitCommand(command, prompt) {
+  const parts = command.match(/"[^"]*"|'[^']*'|\S+/g) || [];
+  return parts.map((p) => (p === '{prompt}' ? prompt : p.replace(/^["']|["']$/g, '')));
+}
+
+const CLI_DIR = path.join(os.tmpdir(), 'oficina-ias-cli');
+
+/**
+ * Ejecuta una CLI (Codex, Claude Code, OpenCode, Gemini…) con la conversación
+ * como un único prompt. Se ejecuta en una carpeta temporal vacía para que no
+ * toque tus proyectos.
+ */
+function callCli(settings, provider, system, messages, onDelta) {
+  const convo = messages.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
+  const prompt = `${system}\n\n---\n\n${convo}\n\nAsistente:`;
+  const command = cliCommand(settings, provider);
+  // Si el comando no tiene {prompt}, el prompt se envía por la entrada estándar.
+  const viaArg = command.includes('{prompt}');
+  const win = process.platform === 'win32';
+  const argPrompt = viaArg && win ? winQuote(prompt) : prompt;
+  const [cmd, ...args] = splitCommand(command, argPrompt);
+  fs.mkdirSync(CLI_DIR, { recursive: true });
+  return new Promise((resolve, reject) => {
+    // En Windows las CLIs de npm son .cmd y requieren la consola.
+    const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: process.env });
+    if (!viaArg) child.stdin.end(prompt);
+    else child.stdin.end();
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => child.kill(), 10 * 60 * 1000);
+    child.stdout.on('data', (d) => {
+      const t = d.toString();
+      out += t;
+      onDelta(t);
+    });
+    child.stderr.on('data', (d) => (err += d.toString()));
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      reject(new Error(`${PROVIDERS[provider].label}: no pude ejecutar "${cmd}" (${e.code === 'ENOENT' ? 'no está instalado' : e.message})`));
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0 || out.trim()) resolve(out.trim());
+      else reject(new Error(`${PROVIDERS[provider].label} terminó con código ${code}: ${err.slice(-400)}`));
+    });
+  });
 }

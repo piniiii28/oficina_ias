@@ -34,7 +34,7 @@ export type Agent = {
 };
 
 export type Department = { id: string; name: string; emoji: string; color: string };
-export type Provider = { id: string; label: string; keyUrl: string; keyless: boolean };
+export type Provider = { id: string; label: string; keyUrl: string; keyless: boolean; cli?: boolean };
 
 export type Step = {
   agentId: string;
@@ -98,6 +98,7 @@ export type Settings = {
   keys: Record<string, { configured: boolean; preview: string | null }>;
   ollamaEnabled: boolean;
   ollamaUrl: string;
+  cli: Record<string, { enabled: boolean; command: string; defaultCommand: string }>;
 };
 
 export type Meeting = {
@@ -171,6 +172,7 @@ export const api = {
   suggestLinks: () => req<{ suggestions: Suggestion[]; by: string; simulated: boolean }>('POST', '/api/graph/suggest'),
   connect: (connections: Suggestion[]) => req<{ applied: number }>('POST', '/api/graph/connect', { connections }),
 
+  detectClis: () => req<Record<string, string | null>>('GET', '/api/cli/detect'),
   settings: () => req<Settings>('GET', '/api/settings'),
   saveSettings: (s: Record<string, unknown>) => req<Settings>('PUT', '/api/settings', s),
   importBackup: (data: unknown) => req('POST', '/api/import', data),

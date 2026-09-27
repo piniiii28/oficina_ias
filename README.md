@@ -6,7 +6,8 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 
 | Sección | Qué hace |
 |---|---|
-| 🏢 **Oficina** | Le escribes una tarea a Claude. Él la divide, elige a los especialistas, los pone a trabajar **en paralelo** (los ves pensar, teclear y celebrar) e integra todo en una respuesta final. |
+| 🏢 **Oficina** | Un **edificio estilo Habbo** con 8 pisos isométricos (penthouse, departamentos y lobby con cafetería y sala de reuniones) donde las IAs caminan, toman el ascensor, van a su escritorio cuando trabajan y se sientan en la mesa del lobby durante las reuniones. Cada una tiene su disfraz (mago, ninja, astronauta…). Le escribes una tarea a Claude. Él la divide, elige a los especialistas, los pone a trabajar **en paralelo** (los ves pensar, teclear y celebrar) e integra todo en una respuesta final. |
+| 🗣️ **Reuniones** | Eliges varias IAs y un tema: conversan por turnos respondiéndose entre ellas y Claude resume acuerdos y próximos pasos. |
 | 🎯 **Tareas** | Historial con el plan del cerebro, el aporte de cada IA y la respuesta integrada. |
 | 📝 **Notas** | Editor Markdown con `[[enlaces]]`, `#etiquetas`, backlinks, notas fijadas, ideas y diario. Cada tarea genera notas enlazadas automáticamente. |
 | 🕸️ **Grafo** | Mapa interactivo de tus ideas: zoom, arrastre, búsqueda, grafo local (1–2 saltos), nodos de IAs, etiquetas y notas por crear. |
@@ -40,6 +41,10 @@ Sin claves, todo funciona en **modo demo** con respuestas simuladas, así que pu
 | **Perplexity** | Perplexity, Sonar |
 | **Together** | Qwen, Llama Finanzas |
 | **Ollama** (local, gratis) | Gemma, Phi |
+
+### Con herramientas de línea de comandos (sin claves)
+
+Si tienes instaladas y con sesión iniciada **Codex CLI**, **Claude Code**, **OpenCode** o **Gemini CLI**, actívalas en **Ajustes → Herramientas de línea de comandos**. Ahí mismo puedes detectar cuáles están instaladas y usar **Asignar a sus IAs**: por ejemplo, Codex y ChatGPT pasan a usar tu sesión de ChatGPT a través de Codex CLI. El comando de cada herramienta es editable: con `{prompt}` el texto se pasa como argumento y, si no aparece, se envía por la entrada estándar. Se ejecutan en una carpeta temporal vacía y, por defecto, en modo de solo lectura cuando la herramienta lo admite.
 
 Puedes cambiar el proveedor y el modelo de cualquier IA desde su perfil. Los modelos se actualizan seguido, así que si uno deja de existir escribe el id nuevo. Por ejemplo, puedes pasar todas las IAs a OpenRouter y usar una sola clave.
 

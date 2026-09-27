@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
-import { PROVIDERS, hasKey } from './providers.js';
+import { PROVIDERS, hasKey, detectClis, cliCommand } from './providers.js';
 import { bus, runTask, chatWithAgent } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
@@ -46,23 +46,37 @@ export function createApp(store) {
       const v = apiKeys?.[p];
       keys[p] = { configured: hasKey(store.data.settings, p), preview: v ? `${v.slice(0, 4)}…${v.slice(-4)}` : null };
     }
-    return { ...rest, keys, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
+    const cli = {};
+    for (const [p, def] of Object.entries(PROVIDERS)) {
+      if (def.cli) cli[p] = { enabled: Boolean(rest.cli?.[p]?.enabled), command: cliCommand(store.data.settings, p), defaultCommand: def.command };
+    }
+    return { ...rest, keys, cli, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
 
   // --- Meta ---
   app.get('/api/meta', (_req, res) => {
     res.json({
       departments: DEPARTMENTS,
-      providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, keyUrl: p.keyUrl, keyless: Boolean(p.keyless) })),
+      providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, keyUrl: p.keyUrl, keyless: Boolean(p.keyless), cli: Boolean(p.cli) })),
       vaultPath: vault.dir,
     });
   });
 
   // --- Ajustes ---
   app.get('/api/settings', (_req, res) => res.json(publicSettings()));
+  app.get('/api/cli/detect', async (_req, res) => res.json(await detectClis()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;
-    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl } = req.body || {};
+    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli } = req.body || {};
+    if (cli && typeof cli === 'object') {
+      s.cli ||= {};
+      for (const [p, v] of Object.entries(cli)) {
+        if (!PROVIDERS[p]?.cli || !v) continue;
+        s.cli[p] = { ...s.cli[p] };
+        if (v.enabled !== undefined) s.cli[p].enabled = Boolean(v.enabled);
+        if (typeof v.command === 'string') s.cli[p].command = v.command.includes('{prompt}') ? v.command.trim() : s.cli[p].command;
+      }
+    }
     if (apiKeys) {
       s.apiKeys ||= {};
       for (const [k, v] of Object.entries(apiKeys)) {
