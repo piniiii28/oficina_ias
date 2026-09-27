@@ -124,6 +124,13 @@ function ChatTab({ agent }: { agent: Agent }) {
           }}
         />
         <MicButton onText={(t) => setText((p) => (p ? `${p} ${t}` : t))} />
+        {agent.isBrain && (
+          <button className="btn btn--ghost" disabled={!text.trim()} title="En lugar de responder solo, Claude reparte esto entre el equipo" onClick={async () => {
+            await api.runTask(text.trim());
+            setText('');
+            toast('🧠 Claude armó el equipo: mira el progreso en la Oficina');
+          }}>🚀 Al equipo</button>
+        )}
         <button className="btn btn--primary" onClick={send} disabled={sending || !text.trim()}>Enviar</button>
       </div>
       {msgs.length > 0 && (
