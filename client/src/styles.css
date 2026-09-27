@@ -621,3 +621,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .flows { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
 .chip--on { border-color: var(--accent) !important; background: var(--accent-soft); font-weight: 700; }
 .effort { width: auto; padding: 5px 8px; font-size: 12px; }
+.plan-diagram { flex-shrink: 0; overflow-x: auto; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.plan-diagram svg { display: block; }

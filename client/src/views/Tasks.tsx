@@ -5,6 +5,7 @@ import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { Routines } from '../components/Routines';
 import { SpeakButton } from '../components/Voice';
+import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice } from '../state';
 
 export const STATUS_ES: Record<string, string> = {
@@ -54,7 +55,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
   onDelete: () => void;
   openNote: ReturnType<typeof useOffice>['openNote'];
 }) {
-  const { streams } = useOffice();
+  const { streams, agents } = useOffice();
   const liveFinal = streams[`task:${task.id}:final`];
   return (
     <main className="task-detail">
@@ -77,6 +78,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       {parent && <p className="small">↩ Continúa <a href="#" onClick={(e) => { e.preventDefault(); onOpen(parent.id); }}>{parent.title}</a></p>}
       <blockquote>{task.prompt}</blockquote>
       {task.plan && <p className="muted">🧠 {task.plan.analysis}</p>}
+      <PlanDiagram task={task} agents={agents} />
       {task.attachments?.length ? <p className="small">📎 Adjuntos: {task.attachments.map((f) => f.name).join(', ')}</p> : null}
       {task.contextNotes?.length ? (
         <p className="small">📚 Usó de tu grafo:{' '}
