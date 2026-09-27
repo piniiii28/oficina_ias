@@ -10,7 +10,7 @@ import { relatedNotes } from './librarian.js';
 import { readLinks } from './links.js';
 import { callWithAccess } from './access.js';
 import { callWithAssistants } from './assistants.js';
-import { verifyStep, juryStep, healthOf } from './metrics.js';
+import { verifyStep, juryStep, healthOf, speedOf } from './metrics.js';
 import { onTaskFinished } from './automations.js';
 
 export const bus = new EventEmitter();
@@ -95,11 +95,15 @@ async function makePlan(store, task, forced, template) {
   const maxTeam = settings.maxTeam || 5;
   if (!live) return demoPlan(task, pool, maxTeam);
 
-  const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}${a.isHead ? ' (jefe de su departamento)' : ''}${a.assistants?.length ? ` (tiene asistentes en ${a.assistants.map((x) => x.focus).join(' y ')})` : ''}. Habilidades: ${a.skills.join(', ')}${a.stats?.likes || a.stats?.dislikes ? `. Valoración del usuario: ${a.stats.likes || 0} 👍 / ${a.stats.dislikes || 0} 👎` : ''}`).join('\n');
+  const secs = (a) => {
+    const ms = speedOf(store, a.id);
+    return ms ? `. Suele tardar ${Math.round(ms / 1000)} s` : '';
+  };
+  const roster = pool.map((a) => `- ${a.id}: ${a.name}, ${a.role}${secs(a)}${a.isHead ? ' (jefe de su departamento)' : ''}${a.assistants?.length ? ` (tiene asistentes en ${a.assistants.map((x) => x.focus).join(' y ')})` : ''}. Habilidades: ${a.skills.join(', ')}${a.stats?.likes || a.stats?.dislikes ? `. Valoración del usuario: ${a.stats.likes || 0} 👍 / ${a.stats.dislikes || 0} 👎` : ''}`).join('\n');
   const prompt =
     `Tarea del usuario:\n"""${task}"""\n\nEquipo disponible:\n${roster}\n\n` +
     `Elige entre ${Math.min(2, maxTeam)} y ${maxTeam} especialistas (solo los necesarios)`+ ' y escribe una instrucción concreta para cada uno. ' +
-    'Ante empates, prefiere a las IAs mejor valoradas por el usuario. ' +
+    'Ante empates, prefiere a las IAs mejor valoradas por el usuario y, si sirven igual, a las más rápidas (menos segundos). Usa solo las dependencias necesarias: cada relevo hace esperar a los demás. ' +
     'Si alguien necesita el trabajo de otro (p. ej. el tester necesita el código, el redactor necesita la investigación), ' +
     'indícalo en "dependsOn" con los agentId de los que depende; los demás trabajan en paralelo. ' +
     'Responde SOLO con JSON: {"analysis": "una frase", "subtasks": [{"agentId": "...", "instruction": "...", "dependsOn": []}]}';
@@ -266,6 +270,8 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       }
       const agent = store.data.agents.find((a) => a.id === step.agentId);
       step.status = 'working';
+      const t0 = Date.now();
+      step.startedAt = new Date(t0).toISOString();
       emitTask();
       agentStatus(agent.id, 'working', step.instruction);
       // Trabajo en conjunto: recibe lo que ya entregaron sus compañeros.
@@ -307,6 +313,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         step.error = err.message;
         agentStatus(agent.id, 'error', err.message);
       }
+      step.ms = Date.now() - t0;
       onDelta.end();
       emitTask();
     });
@@ -322,7 +329,9 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     const names = (id) => store.data.agents.find((a) => a.id === id)?.name || id;
     const contributions = ok.map((s) => `## Aporte de ${names(s.agentId)}\n${s.output}`).join('\n\n');
     const synthDelta = streamer(`task:${task.id}:final`);
-    const synth = await callModel(settings, {
+    const tSynth = Date.now();
+    // Con un solo aporte no hace falta integrar: se entrega tal cual (ahorra una llamada al cerebro).
+    const synth = ok.length === 1 && !ok[0].simulated ? { text: ok[0].output, simulated: false } : await callModel(settings, {
       provider: brain.provider, model: brain.model, agent: brain, effort,
       onDelta: synthDelta, signal,
       system: buildSystem(brain),
@@ -335,6 +344,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       }],
     });
     synthDelta.end();
+    task.synthMs = Date.now() - tSynth;
     task.final = synth.simulated ? demoSynthesis(prompt, ok, names) : synth.text;
     // Las imágenes que generaron las IAs no se pierden en el resumen final.
     const imgs = [...new Set(ok.flatMap((s) => (s.output || '').match(/!?\[[^\]]*\]\(\/api\/(?:images|videos)\/[\w.-]+\)/g) || []))].filter((m) => !task.final.includes(m.match(/\(([^)]+)\)/)[1]));
@@ -363,6 +373,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     }
     task.status = 'done';
     task.finishedAt = new Date().toISOString();
+    task.ms = Date.parse(task.finishedAt) - Date.parse(task.createdAt || task.finishedAt);
     remember(store, store.data.agents.find((a) => a.id === brain.id), `Coordiné "${task.title}" con ${ok.map((s) => names(s.agentId)).join(', ')}`);
     agentStatus(brain.id, 'done', '¡Tarea completada!');
 

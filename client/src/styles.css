@@ -892,3 +892,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .connect-extra { display: grid; gap: 6px; margin: 8px 0; }
 .connect-extra label:not(.check) { display: grid; gap: 4px; max-width: 420px; }
 .connect-extra > button { justify-self: start; }
+.steps li .check { display: inline-flex !important; flex-direction: row !important; width: auto; align-items: center; gap: 6px; margin-right: 8px; }

@@ -173,6 +173,10 @@ async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
     // CLIs: si rechaza el modelo, se deja que la herramienta elija el suyo (y la IA queda así);
     // si su servidor falló, se reintenta una vez.
     if (cli) {
+      if (/strict-mcp-config/.test(err.message) && /unknown|unrecognized|invalid/i.test(err.message)) {
+        noStrictMcp = true;
+        return run(model);
+      }
       if (model && isCliModelError(err.message)) {
         console.warn(`[modelos] ${PROVIDERS[provider].label} no acepta «${model}»: uso el modelo que elija la herramienta`);
         onSwitch('', true);
@@ -503,6 +507,9 @@ const CLI_DIR = path.join(os.tmpdir(), 'oficina-ias-cli');
  */
 export function cliEnv(provider, home) {
   const env = { ...process.env };
+  // Gemini CLI solo trabaja sin preguntar en carpetas «de confianza»: la carpeta de
+  // trabajo de la oficina lo es (no contiene nada tuyo).
+  if (provider === 'cli-gemini') env.GEMINI_CLI_TRUST_WORKSPACE = 'true';
   if (!home) return env;
   fs.mkdirSync(home, { recursive: true });
   const name = PROVIDERS[provider]?.homeEnv;
@@ -523,6 +530,8 @@ export function cliEnv(provider, home) {
  * Opción de cada CLI para elegir el modelo, y qué ids le sirven (si la IA venía
  * de otro proveedor con otro modelo, no se pasa y la herramienta usa el suyo).
  */
+// Si la versión de Claude Code no conoce --strict-mcp-config, se deja de usar.
+let noStrictMcp = false;
 const CLI_MODEL_FLAG = { 'cli-claude': '--model', 'cli-codex': '-m', 'cli-gemini': '-m', 'cli-opencode': '-m' };
 const CLI_MODEL_OK = { 'cli-claude': /^(claude|opus|sonnet|haiku|fable)/i, 'cli-codex': /^(gpt|o\d|codex)/i, 'cli-gemini': /^gemini/i, 'cli-opencode': /\// };
 
@@ -556,6 +565,8 @@ function callCli(settings, provider, system, messages, onDelta, signal, home = n
   if (m && /^[\w.:/-]+$/.test(m) && !settings.cli?.[provider]?.command && CLI_MODEL_OK[provider]?.test(m)) args.push(CLI_MODEL_FLAG[provider], m);
   // Servicios MCP (p. ej. Undermind): permiso solo para las herramientas de ese servicio.
   if (provider === 'cli-claude' && mcp.length) args.push('--allowedTools', ...mcp.map((n) => `mcp__${n}`));
+  // Si la IA no usa servicios MCP, Claude Code no los carga: arranca bastante más rápido.
+  else if (provider === 'cli-claude' && !settings.cli?.[provider]?.command && !noStrictMcp) args.push('--strict-mcp-config');
   return new Promise((resolve, reject) => {
     // En Windows las CLIs de npm son .cmd y requieren la consola.
     const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: cliEnv(provider, home) });

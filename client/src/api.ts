@@ -109,6 +109,8 @@ export type Step = {
   dependsOn?: string[];
   rating?: { value: number; comment: string; at: string };
   review?: boolean;
+  ms?: number;
+  startedAt?: string;
   verify?: { score: number; reason: string; by: string };
   jury?: { score: number; votes: { judgeId: string; name: string; score: number; reason: string }[]; at: string };
   assistants?: { name: string; focus: string; task: string; output: string; simulated?: boolean; error?: string }[];
@@ -125,6 +127,8 @@ export type Task = {
   status: 'planning' | 'working' | 'synthesizing' | 'reviewing' | 'done' | 'error';
   plan: { analysis: string } | null;
   steps: Step[];
+  ms?: number;
+  synthMs?: number;
   final: string;
   noteId: string | null;
   parentId?: string | null;

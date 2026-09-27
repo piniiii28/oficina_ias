@@ -12,6 +12,9 @@ export const STATUS_ES: Record<string, string> = {
   planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', reviewing: 'revisando', done: 'lista', error: 'error', pending: 'en espera',
 };
 
+/** 75000 → «1 min 15 s». */
+const fmtSecs = (ms: number) => (ms < 60000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
+
 export function Tasks() {
   const { tasks, agents, reloadTasks, openNote } = useOffice();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -87,7 +90,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       ) : null}
 
       <section className="card final">
-        <div className="row between"><h3>Respuesta integrada</h3>
+        <div className="row between"><h3>Respuesta integrada{task.ms != null && <small className="muted"> · ⏱ {fmtSecs(task.ms)} en total{task.synthMs ? ` (integrar: ${fmtSecs(task.synthMs)})` : ''}</small>}</h3>
           <div className="row">
             {task.status === 'done' && <CardsButton task={task} />}
             {task.final && <SpeakButton text={task.final} />}
@@ -112,6 +115,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
               </div>
               {s.jury && <span className={`pill ${s.jury.score >= 4 ? 'pill--done' : s.jury.score <= 2 ? 'pill--error' : ''}`} title={s.jury.votes.map((v) => `${v.name}: ${v.score} — ${v.reason}`).join('\n')}>⚖️ {s.jury.score}/5</span>}
               {s.verify && <span className={`pill ${s.verify.score >= 4 ? 'pill--done' : s.verify.score <= 2 ? 'pill--error' : ''}`} title={`${s.verify.by}: ${s.verify.reason}`}>✔ {s.verify.score}/5</span>}
+              {s.ms != null && <span className={`small ${s.ms > 90000 ? 'warn' : 'muted'}`} title="Lo que tardó esta IA">⏱ {fmtSecs(s.ms)}</span>}
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
             {s.error ? <p className="danger">{s.error}</p> : <div className={s.status === 'working' ? 'streaming' : ''}><Markdown text={s.output || streams[`task:${task.id}:${s.agentId}`] || '…'} onLink={(t) => openNote({ title: t })} /></div>}

@@ -32,6 +32,13 @@ export function healthOf(store, agentId) {
   return { ok: false, error: last[1].error || 'Falló dos veces seguidas', at: last[1].at };
 }
 
+/** Cuánto tarda una IA en responder (promedio de sus últimas respuestas reales, en ms). */
+export function speedOf(store, agentId) {
+  const ok = (store.data.metrics?.[agentId]?.recent || []).filter((r) => r.ok && !r.sim && r.ms).slice(-8);
+  if (!ok.length) return null;
+  return Math.round(ok.reduce((n, r) => n + r.ms, 0) / ok.length);
+}
+
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 
 /** Acierto (0–100) con de qué señales sale. */

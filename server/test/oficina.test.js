@@ -2238,3 +2238,35 @@ console.log('hola desde opencode');
     delete process.env.OFICINA_RETRY_MS;
   }
 });
+
+test('tiempos: cada paso mide cuánto tardó, con un solo aporte no se integra de nuevo y Gemini CLI confía en su carpeta', async () => {
+  const http = await import('node:http');
+  const { cliEnv } = await import('../src/providers.js');
+  assert.equal(cliEnv('cli-gemini', null).GEMINI_CLI_TRUST_WORKSPACE, 'true');
+  let calls = 0;
+  const fake = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      calls++;
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Aporte único.\n\n### Ideas clave\n- una' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      await call('PUT', '/api/agents/cerebro', { provider: 'ollama', model: 'm' });
+      const t = await runTask(store, new Notes(store), { prompt: 'Una pregunta corta', agentIds: ['phi-tutor'] });
+      assert.equal(t.steps.length, 1);
+      assert.equal(typeof t.steps[0].ms, 'number');
+      assert.equal(typeof t.ms, 'number');
+      assert.match(t.final, /Aporte único/);
+      assert.equal(calls, 1, 'el cerebro no vuelve a escribir lo mismo');
+    });
+  } finally {
+    fake.close();
+  }
+});
