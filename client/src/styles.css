@@ -352,7 +352,7 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .note-editor { display: flex; flex-direction: column; padding: 16px 24px; min-height: 0; overflow: hidden; }
 .note-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .note-toolbar select { width: auto; }
-.note-title { font-size: 22px; font-weight: 800; border: 0; background: none; padding: 4px 0; flex: 1; min-width: 200px; }
+.note-title { font-size: 22px; font-weight: 800; border: 0; background: none; padding: 4px 0; flex: 1 1 100%; min-width: 200px; }
 .note-textarea { flex: 1; font: 14px/1.6 ui-monospace, 'Cascadia Code', monospace; resize: none; min-height: 300px; }
 .note-preview { flex: 1; overflow: auto; padding-right: 8px; }
 .note-side { border-left: 1px solid var(--border); padding: 12px 14px; overflow: auto; background: var(--panel); }
