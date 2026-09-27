@@ -35,6 +35,7 @@ export function Settings() {
     <div className="settings">
       <ConnectCenter s={s} setS={setS} />
       <CliSection s={s} save={save} />
+      <AccessSection s={s} setS={setS} />
       <HubsSection s={s} setS={setS} />
       <CadSection s={s} save={save} />
       <MeSection />
@@ -144,6 +145,64 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
         })}
       </div>
     </details>
+  );
+}
+
+/** Carpetas del computador que las IAs pueden ver (o donde pueden guardar). */
+function AccessSection({ s, setS }: { s: SettingsT; setS: (s: SettingsT) => void }) {
+  const { toast } = useOffice();
+  const [grants, setGrants] = useState(s.grants);
+  const [p, setP] = useState('');
+  const [mode, setMode] = useState<'leer' | 'escribir'>('leer');
+  const [sugg, setSugg] = useState<string[]>([]);
+  useEffect(() => {
+    api.suggestGrants().then((r) => setSugg(r.folders)).catch(() => {});
+  }, []);
+  const add = async (path: string, m = mode) => {
+    try {
+      setGrants(await api.addGrant(path, m));
+      setP('');
+      toast('🔓 Acceso guardado');
+    } catch (err) {
+      toast(`❌ ${(err as Error).message}`);
+    }
+  };
+  return (
+    <section className="card">
+      <h2>🔐 Accesos a tu computador</h2>
+      <p className="muted small">
+        Las IAs (sobre todo Claude) pueden pedir permiso para buscar y leer archivos en tus carpetas, abrir modelos en Blender u otros programas del Taller 3D y copiar sus modelos a una carpeta tuya.
+        Cada petición te aparece abajo a la derecha y tú decides. Nunca pueden ver los datos ni las claves de la oficina, carpetas del sistema ni credenciales.
+      </p>
+      <label className="check">
+        <input type="checkbox" checked={s.accessEnabled} onChange={async (e) => setS(await api.saveSettings({ accessEnabled: e.target.checked }))} />
+        Permitir que las IAs pidan acceso
+      </label>
+      <ul className="grant-list">
+        {grants.map((g) => (
+          <li key={g.id}>
+            <span className={`pill ${g.mode === 'escribir' ? 'pill--error' : 'pill--done'}`}>{g.mode === 'escribir' ? 'leer y guardar' : 'solo leer'}</span> <code>{g.path}</code>
+            <button className="link" onClick={async () => setGrants(await api.deleteGrant(g.id))}>quitar</button>
+          </li>
+        ))}
+        {!grants.length && <li className="muted small">Todavía no diste acceso a ninguna carpeta.</li>}
+      </ul>
+      <div className="row">
+        <input value={p} onChange={(e) => setP(e.target.value)} placeholder="Ruta completa, p. ej. C:\Users\Nicolas\Documents\Modelos 3D" />
+        <select value={mode} onChange={(e) => setMode(e.target.value as 'leer' | 'escribir')}>
+          <option value="leer">Solo leer</option>
+          <option value="escribir">Leer y guardar</option>
+        </select>
+        <button className="btn btn--primary small" disabled={!p.trim()} onClick={() => add(p.trim())}>Dar acceso</button>
+      </div>
+      {sugg.filter((f) => !grants.some((g) => g.path === f)).length > 0 && (
+        <div className="row small">
+          <span className="muted">Rápido:</span>
+          {sugg.filter((f) => !grants.some((g) => g.path === f)).map((f) => <button key={f} className="btn btn--ghost small" onClick={() => add(f, 'leer')}>＋ {f.split(/[\\/]/).pop()}</button>)}
+        </div>
+      )}
+      <p className="muted small">Consejo: con Claude Code o Gemini CLI activados, las carpetas permitidas también se les pasan para que puedan leerlas directamente.</p>
+    </section>
   );
 }
 

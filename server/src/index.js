@@ -13,6 +13,8 @@ import { FREE_MODELS, freePlan } from './freeModels.js';
 import { CAD_TOOLS, detectCad, runCad, openInApp, sliceJob, extractCadBlocks, listFiles } from './cad.js';
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
 import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
+import { listRequests, decide, addGrant } from './access.js';
+import os from 'node:os';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
@@ -116,7 +118,7 @@ export function createApp(store) {
       if (def.cli) cli[p] = { enabled: Boolean(rest.cli?.[p]?.enabled), command: cliCommand(store.data.settings, p), defaultCommand: def.command };
     }
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
-    return { ...rest, keys, cli, accounts, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
+    return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
 
   // --- Meta ---
@@ -159,7 +161,8 @@ export function createApp(store) {
   app.get('/api/cli/detect', async (_req, res) => res.json(await detectClis()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;
-    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths } = req.body || {};
+    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
+    if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (hubs !== undefined) s.hubs = normalizeHubs(hubs);
     if (cadPaths && typeof cadPaths === 'object') {
       s.cadPaths ||= {};
@@ -683,6 +686,34 @@ export function createApp(store) {
     res.json({ restored: n });
   });
 
+  // --- Accesos: las IAs piden permiso para ver carpetas o abrir programas ---
+  app.get('/api/access', (_req, res) => res.json({ requests: listRequests(), grants: store.data.settings.grants || [] }));
+  app.post('/api/access/:id', (req, res) => {
+    const ok = decide(req.params.id, String(req.body?.decision || 'deny'));
+    res.status(ok ? 200 : 404).json(ok ? { ok } : { error: 'Esa petición ya no está pendiente' });
+  });
+  app.post('/api/grants', (req, res) => {
+    try {
+      const p = String(req.body?.path || '').trim();
+      if (!p || !path.isAbsolute(p)) return res.status(400).json({ error: 'Escribe la ruta completa de la carpeta' });
+      res.status(201).json(addGrant(store, { path: p, mode: req.body?.mode, label: req.body?.label }));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.delete('/api/grants/:id', (req, res) => {
+    const s = store.data.settings;
+    s.grants = (s.grants || []).filter((g) => g.id !== req.params.id);
+    store.save();
+    res.json(s.grants);
+  });
+  // Carpetas comunes para dar acceso con un clic.
+  app.get('/api/grants/suggest', (_req, res) => {
+    const home = os.homedir();
+    const names = ['Desktop', 'Escritorio', 'Documents', 'Documentos', 'Downloads', 'Descargas', 'Pictures', 'Imágenes', 'OneDrive', '3D Objects', 'Modelos'];
+    res.json({ home, folders: names.map((n) => path.join(home, n)).filter((p) => fs.existsSync(p)) });
+  });
+
   // --- Taller de Impresión 3D ---
   app.get('/api/cad/detect', async (_req, res) => res.json(await detectCad(store.data.settings)));
   app.get('/api/cad/jobs', (_req, res) => res.json(store.data.cadJobs || []));
@@ -803,9 +834,10 @@ Estado actual de la oficina:\n${status}`,
     const b = req.body || {};
     if (!Array.isArray(b.agents) || !Array.isArray(b.notes)) return res.status(400).json({ error: 'Archivo de respaldo no válido' });
     // Las claves y los comandos de las CLIs son de este computador: un respaldo ajeno no debe poder cambiarlos.
-    const { apiKeys, cli, accounts, cadPaths } = store.data.settings;
-    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, ...importedSettings } = b.settings || {};
-    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths } };
+    // Los permisos de carpetas también son de este computador.
+    const { apiKeys, cli, accounts, cadPaths, grants } = store.data.settings;
+    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, ...importedSettings } = b.settings || {};
+    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants } };
     store.flush();
     bus.emit('event', { type: 'notes' });
     res.json({ ok: true });

@@ -1,7 +1,7 @@
 // Estado compartido de la app: agentes, estados animados, tareas y eventos.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { play } from './sounds';
-import { api, setActiveHub, type Agent, type AgentState, type CadTool, type Department, type FreeModel, type Flow, type Hub, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
+import { api, setActiveHub, type Agent, type AgentState, type CadTool, type Department, type FreeModel, type Flow, type Hub, type Meeting, type OfficeEvent, type Provider, type Task, type AccessRequest } from './api';
 
 export type Live = { status: AgentState; message: string; at: number };
 
@@ -18,6 +18,7 @@ type Ctx = {
   hub: string;
   setHub: (id: string) => void;
   cadVersion: number;
+  accessRequests: AccessRequest[];
   live: Record<string, Live>;
   tasks: Task[];
   meetings: Meeting[];
@@ -55,6 +56,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [cadTools, setCadTools] = useState<CadTool[]>([]);
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [cadVersion, setCadVersion] = useState(0);
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   // Quién usa la oficina en este computador (su núcleo del grafo).
   const [hub, setHubState] = useState<string>(() => {
     let h = 'cerebro';
@@ -123,6 +125,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setCadTools(m.cadTools || []);
     });
     reloadHubs();
+    api.access().then((a) => setAccessRequests(a.requests)).catch(() => {});
     reloadAgents();
     reloadTasks();
     api.meetings().then(setMeetings);
@@ -172,6 +175,9 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
           copy[i] = e.meeting;
           return copy;
         });
+      } else if (e.type === 'access') {
+        if (e.requests.length) play('ding');
+        setAccessRequests(e.requests);
       } else if (e.type === 'cad') {
         setCadVersion((v) => v + 1);
       } else if (e.type === 'cards') {
@@ -193,11 +199,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
+      agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

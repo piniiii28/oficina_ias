@@ -9,6 +9,7 @@ import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
 import { Board } from './views/Board';
 import { Taller } from './views/Taller';
+import { AccessRequests } from './components/AccessRequests';
 import { Welcome } from './components/Welcome';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AchievementWatcher } from './components/Achievements';
@@ -102,6 +103,7 @@ function Shell() {
       <Palette />
       <Welcome />
       <AchievementWatcher />
+      <AccessRequests />
       <div className="toasts">
         {toasts.map((t) => <div key={t.id} className="toast">{t.msg}</div>)}
       </div>

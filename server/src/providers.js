@@ -349,6 +349,13 @@ function callCli(settings, provider, system, messages, onDelta, signal, home = n
   }
   const argPrompt = viaArg && win ? winQuote(argText) : argText;
   const [cmd, ...args] = splitCommand(command, argPrompt);
+  // Carpetas que el usuario permitió (Ajustes → Accesos): Claude Code y Gemini CLI pueden leerlas.
+  const dirs = (settings.grants || []).map((g) => g.path).filter((d) => fs.existsSync(d));
+  const q = (d) => (win ? `"${d}"` : d);
+  if (dirs.length && !settings.cli?.[provider]?.command) {
+    if (provider === 'cli-claude') for (const d of dirs) args.push('--add-dir', q(d));
+    if (provider === 'cli-gemini') args.push('--include-directories', q(dirs.join(',')));
+  }
   return new Promise((resolve, reject) => {
     // En Windows las CLIs de npm son .cmd y requieren la consola.
     const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: cliEnv(provider, home) });

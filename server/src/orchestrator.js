@@ -8,6 +8,7 @@ import { demoPlan } from './demo.js';
 import { extractKeyIdeas } from './notes.js';
 import { relatedNotes } from './librarian.js';
 import { readLinks } from './links.js';
+import { callWithAccess } from './access.js';
 
 export const bus = new EventEmitter();
 /** Controladores para cancelar tareas en curso (id de tarea → AbortController). */
@@ -269,7 +270,8 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         .join('\n\n');
       const onDelta = streamer(`task:${task.id}:${agent.id}`);
       try {
-        const res = await callModel(settings, {
+        // Puede pedir acceso a carpetas o programas del usuario (con su permiso).
+        const res = await callWithAccess(store, {
           provider: agent.provider, model: agent.model, agent, onDelta, signal, effort,
           system: buildSystem(agent),
           messages: [{
@@ -456,7 +458,7 @@ export async function chatWithAgent(store, agentId, message) {
   agentStatus(agentId, 'thinking', 'Pensando…');
   const onDelta = streamer(`chat:${agentId}`);
   try {
-    const res = await callModel(store.data.settings, {
+    const res = await callWithAccess(store, {
       provider: agent.provider, model: agent.model, agent, onDelta,
       system: buildSystem(agent),
       messages: history.slice(-20).map(({ role, content }) => ({ role, content })),

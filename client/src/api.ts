@@ -42,6 +42,8 @@ export type Provider = { id: string; label: string; keyUrl: string; keyless: boo
 export type FreeModel = { id: string; label: string; for: string };
 export type CadTool = { id: string; label: string; url: string };
 export type Account = { id: string; provider: string; label: string; preview?: string | null; home?: string };
+export type Grant = { id: string; path: string; mode: 'leer' | 'escribir'; label: string; createdAt: string };
+export type AccessRequest = { id: string; agentId?: string; agentName: string; path: string; mode: 'leer' | 'escribir'; reason: string; action: string; at: string };
 export type Hub = { id: string; name: string; emoji: string; color: string };
 export type HubInfo = Hub & {
   notes: number;
@@ -132,6 +134,8 @@ export type Settings = {
   ollamaUrl: string;
   cli: Record<string, { enabled: boolean; command: string; defaultCommand: string }>;
   accounts: Account[];
+  grants: Grant[];
+  accessEnabled: boolean;
   hubs: Hub[];
   cadPaths: Record<string, string>;
 };
@@ -155,6 +159,7 @@ export type OfficeEvent =
   | { type: 'delta'; key: string; text: string | null }
   | { type: 'cards' }
   | { type: 'cad' }
+  | { type: 'access'; requests: AccessRequest[] }
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 
@@ -256,6 +261,12 @@ export const api = {
   askHub: (id: string, question: string, save = false) => req<{ answer: string; simulated: boolean; sources: { id: string; title: string }[]; noteId?: string }>('POST', `/api/hubs/${id}/ask`, { question, save }),
   hubProfile: (id: string) => req<Note>('POST', `/api/hubs/${id}/profile`),
   hubSuggest: () => req<{ suggestions: Suggestion[] }>('GET', '/api/hubs/suggest'),
+
+  access: () => req<{ requests: AccessRequest[]; grants: Grant[] }>('GET', '/api/access'),
+  decideAccess: (id: string, decision: 'always' | 'once' | 'deny') => req('POST', `/api/access/${id}`, { decision }),
+  addGrant: (path: string, mode: 'leer' | 'escribir') => req<Grant[]>('POST', '/api/grants', { path, mode }),
+  deleteGrant: (id: string) => req<Grant[]>('DELETE', `/api/grants/${id}`),
+  suggestGrants: () => req<{ home: string; folders: string[] }>('GET', '/api/grants/suggest'),
 
   cadDetect: () => req<Record<string, string | null>>('GET', '/api/cad/detect'),
   cadJobs: () => req<CadJob[]>('GET', '/api/cad/jobs'),

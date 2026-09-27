@@ -22,6 +22,7 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 - `server/src/providers.js`: Anthropic (SDK oficial, con streaming), los proveedores compatibles con OpenAI, Gemini y las CLIs. Sin clave responde el modo demo (`demo.js`). Cada proveedor tiene `tier` (gratis, mixto, suscripción o pago) y puede tener varias cuentas (`settings.accounts`); `credentials()` da el orden y, si una cuenta se queda sin cupo, se usa la siguiente.
 - `server/src/freeModels.js`: modelos gratis recomendados y el «modo gratis».
 - `server/src/cad.js`: Taller 3D. Detecta Blender, OpenSCAD, FreeCAD y laminadores, y ejecuta los scripts en `data/taller3d/`. `system.js` abre terminales, instala CLIs y abre archivos.
+- `server/src/access.js`: accesos con permiso. Las IAs escriben acciones (`<<buscar ruta="…">>`, `<<abrir … programa="blender">>`…); `callWithAccess` las ejecuta si hay permiso o pide aprobación (evento `access`) y le devuelve los resultados a la IA.
 - `server/src/hubs.js`: núcleos del grafo (Cerebro, Nicolás, Santiago, Miguel…). El núcleo activo llega en el encabezado `X-Nucleo` y cada nota guarda su `hub`.
 - `server/src/agents.js` y `playbooks.js`: la plantilla de 28 IAs y sus manuales de fábrica.
 - `server/src/notes.js`: notas, `[[enlaces]]`, `#etiquetas` y el grafo. `vault.js` escribe la bóveda `.md` para Obsidian.

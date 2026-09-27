@@ -786,3 +786,69 @@ test('oficinas antiguas reciben las IAs del Taller 3D una sola vez', () => {
   createApp(s3);
   assert.ok(!s3.data.agents.some((a) => a.id === 'slicer-3d'), 'si la despides no vuelve');
 });
+
+test('accesos: la IA pide ver una carpeta, tú apruebas y sigue con el resultado', async () => {
+  const http = await import('node:http');
+  const folder = tmp();
+  fs.writeFileSync(path.join(folder, 'soporte.stl'), 'solid x');
+  fs.writeFileSync(path.join(folder, 'notas.txt'), 'medidas: 80 mm');
+  const bodies = [];
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const data = JSON.parse(body);
+      bodies.push(data);
+      const last = data.messages.at(-1).content;
+      const reply = /Resultados de tus acciones/.test(last)
+        ? `Encontré: ${/soporte\.stl/.test(last) ? 'soporte.stl' : 'nada'}`
+        : `Voy a revisar.\n<<buscar ruta="${folder}" nombre="*.stl">>\n<<leer ruta="${store.dir}/oficina.json">>`;
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      await call('PUT', '/api/agents/blender-3d', { provider: 'ollama', model: 'm' });
+      const chat = call('POST', '/api/agents/blender-3d/chat', { message: 'busca mis modelos stl' });
+      // Aparece la petición de permiso.
+      let reqs = [];
+      for (let i = 0; i < 50 && !reqs.length; i++) {
+        await new Promise((r) => setTimeout(r, 40));
+        reqs = (await call('GET', '/api/access')).data.requests;
+      }
+      assert.equal(reqs.length, 1);
+      assert.equal(path.resolve(reqs[0].path), path.resolve(folder));
+      assert.equal(reqs[0].mode, 'leer');
+      await call('POST', `/api/access/${reqs[0].id}`, { decision: 'always' });
+      const r = await chat;
+      assert.match(r.data.reply, /Encontré: soporte\.stl/);
+      assert.match(r.data.reply, /Accesos usados/);
+      // Los datos de la oficina (con las claves) nunca se leen, ni se pregunta.
+      const results = bodies[1].messages.at(-1).content;
+      assert.match(results, /No permitido/);
+      assert.ok(!results.includes('apiKeys'));
+      assert.equal(store.data.settings.grants.length, 1, 'quedó guardado el permiso');
+      // Con el permiso guardado ya no pregunta.
+      const again = await call('POST', '/api/agents/blender-3d/chat', { message: 'otra vez' });
+      assert.match(again.data.reply, /soporte\.stl/);
+      // No se permite un disco completo.
+      const bad = await call('POST', '/api/grants', { path: path.parse(folder).root });
+      assert.equal(bad.status, 400);
+    });
+  } finally {
+    fake.close();
+  }
+});
+
+test('accesos: solo se reconocen las acciones conocidas', async () => {
+  const { parseActions } = await import('../src/access.js');
+  const acts = parseActions('hola\n<<listar ruta="C:\\Users\\Nico\\Modelos">>\n<<abrir ruta="/tmp/a.stl" programa="blender">>\n<<borrar ruta="/">>');
+  assert.deepEqual(acts.map((a) => a.kind), ['listar', 'abrir']);
+  assert.equal(acts[0].attrs.ruta, 'C:\\Users\\Nico\\Modelos');
+  assert.equal(acts[1].attrs.programa, 'blender');
+});

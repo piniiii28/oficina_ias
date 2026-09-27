@@ -92,6 +92,15 @@ El piso 1 del edificio es el taller, con cuatro IAs (todas con modelos gratis):
 
 En la sección **Taller 3D** eliges el programa y describes la pieza. Cuando el equipo entrega el script, pulsa **▶ Abrir en…**: la oficina lo ejecuta en el programa instalado en tu computador, guarda el STL y el proyecto en `data/taller3d/` y lo abre en el programa para que sigas editando. También puedes pegar un script propio. Los programas son gratis: [Blender](https://www.blender.org/download/), [OpenSCAD](https://openscad.org/downloads.html), [FreeCAD](https://www.freecad.org/downloads.php), [PrusaSlicer](https://www.prusa3d.com/page/prusaslicer_424/) y [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer/releases). Si alguno está en otra carpeta, pon su ruta en **Ajustes → Taller 3D**. Antes de ejecutar un script, la oficina te pide confirmación.
 
+## Accesos a tu computador (con permiso)
+
+Las IAs, sobre todo Claude, pueden **pedir acceso** a cosas fuera de su carpeta: buscar carpetas y archivos, leer textos, abrir un modelo en **Blender** (u OpenSCAD, FreeCAD, PrusaSlicer, OrcaSlicer) y copiar sus modelos a una carpeta tuya. Por ejemplo: «Claude, busca mis archivos .blend en Documentos y abre el último en Blender».
+
+- Cada petición aparece abajo a la derecha con la carpeta y el motivo: **Permitir siempre**, **Solo esta vez** o **Rechazar**.
+- Los permisos guardados se ven y se quitan en **Ajustes → Accesos a tu computador**; ahí también puedes dar acceso a una carpeta por adelantado (solo leer, o leer y guardar).
+- Las IAs no tocan los archivos: escriben la acción y la oficina la ejecuta solo si está permitida. Nunca se permite ver los datos y claves de la oficina, carpetas del sistema, discos completos ni credenciales.
+- Si usas Claude Code o Gemini CLI, las carpetas permitidas también se les pasan para que puedan leerlas.
+
 ## Núcleos del grafo
 
 Arriba a la izquierda eliges **quién usa la oficina** en ese computador (Nicolás, Santiago, Miguel o el Cerebro). Las notas, tareas y reuniones nuevas quedan en su núcleo. En el **Grafo**:
