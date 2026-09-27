@@ -5,6 +5,7 @@ import { api, type CadJob, type CadKind } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { StlViewer } from '../components/StlViewer';
+import { BlenderLive } from '../components/BlenderLive';
 import { useOffice } from '../state';
 
 const APPS: { kind: CadKind; label: string; flow: string; hint: string }[] = [
@@ -81,6 +82,8 @@ export function Taller() {
         ))}
         {!team.length && <p className="muted small">No hay IAs del taller. Ve a Equipo → Restaurar plantilla para contratarlas.</p>}
       </section>
+
+      <BlenderLive />
 
       <section className="card">
         <h3>Programas en tu computador</h3>

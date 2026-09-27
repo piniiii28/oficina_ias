@@ -9,7 +9,7 @@ export function AccessRequests() {
   const answer = async (id: string, decision: 'always' | 'once' | 'deny') => {
     try {
       await api.decideAccess(id, decision);
-      toast(decision === 'deny' ? '🚫 Acceso rechazado' : decision === 'always' ? '🔓 Acceso permitido (queda guardado en Ajustes → Accesos)' : '🔓 Permitido solo esta vez');
+      toast(decision === 'deny' ? '🚫 Acceso rechazado' : decision === 'always' ? '🔓 Permitido siempre (lo puedes quitar en Ajustes → Accesos)' : '🔓 Permitido solo esta vez');
     } catch (err) {
       toast(`❌ ${(err as Error).message}`);
     }
@@ -23,12 +23,13 @@ export function AccessRequests() {
             <header>
               {a && <Chibi avatar={a.avatar} size={40} state="thinking" />}
               <div>
-                <strong>🔐 {r.agentName} pide {r.mode === 'escribir' ? 'guardar archivos en' : 'ver'}</strong>
+                <strong>🔐 {r.agentName} pide {r.mode === 'controlar' ? 'trabajar en' : r.mode === 'escribir' ? 'guardar archivos en' : 'ver'}</strong>
                 <code>{r.path}</code>
               </div>
             </header>
             {r.reason && <p className="small">«{r.reason}»</p>}
             <p className="muted small">Acción: {r.action}</p>
+            {r.code && <details><summary className="small">Ver el código que va a ejecutar</summary><pre className="log">{r.code}</pre></details>}
             <div className="row">
               <button className="btn btn--primary small" onClick={() => answer(r.id, 'always')}>Permitir siempre</button>
               <button className="btn btn--ghost small" onClick={() => answer(r.id, 'once')}>Solo esta vez</button>

@@ -1,6 +1,6 @@
 // Centro de conexión: conecta IAs paso a paso (primero las gratis), con varias
 // cuentas por proveedor, modo gratis y un asistente (el cerebro) que te guía.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, TIER_LABEL, type ChatMessage, type Provider, type Settings, type Tier } from '../api';
 import { Markdown } from './Markdown';
 import { useOffice } from '../state';
@@ -301,7 +301,7 @@ function AssignAgents({ p, refresh }: { p: Provider; refresh: () => Promise<void
 }
 
 /** El cerebro como asistente de conexión; sus respuestas traen botones de acción. */
-function Assistant({ onAction, refresh }: { onAction: (kind: string, arg: string) => void; refresh: () => Promise<void> }) {
+export function Assistant({ onAction = () => {}, refresh = async () => {}, starters = ['Quiero conectar todo gratis', 'Tengo el plan de Claude', 'Tengo dos cuentas de Gemini Pro'] }: { onAction?: (kind: string, arg: string) => void; refresh?: () => Promise<void>; starters?: string[] }) {
   const { streams, toast } = useOffice();
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
@@ -310,6 +310,10 @@ function Assistant({ onAction, refresh }: { onAction: (kind: string, arg: string
     api.assistant().then(setHistory);
   }, []);
   const live = streams['chat:_asistente'];
+  const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
+  }, [history, live]);
 
   async function send(msg: string) {
     if (!msg.trim() || busy) return;
@@ -339,6 +343,15 @@ function Assistant({ onAction, refresh }: { onAction: (kind: string, arg: string
         toast(`⏳ Descargando ${arg}…`);
         const r = await api.ollamaPull(arg);
         toast(r.ok ? `✅ ${arg} listo` : '⚠️ No se pudo: ¿Ollama está abierto?');
+      } else if (kind === 'blender-instalar') {
+        toast('⏳ Instalando el complemento en Blender…');
+        const r = await api.blenderInstall();
+        toast(r.ok ? '✅ Complemento instalado. Cierra Blender (si estaba abierto) y ábrelo otra vez.' : '⚠️ No se pudo instalar: revisa que Blender esté instalado');
+      } else if (kind === 'blender-probar') {
+        const st = await api.blenderStatus();
+        toast(st.connected ? `✅ Blender ${st.version} está conectado con la oficina` : `❌ ${st.error || 'Blender no está conectado'}`);
+      } else if (kind === 'blender-descargar') {
+        window.location.href = '/api/blender/addon';
       } else if (kind === 'modo-gratis') {
         const r = await api.freeMode();
         toast(`🆓 ${r.changed} IAs pasaron a modelos gratis`);
@@ -352,7 +365,7 @@ function Assistant({ onAction, refresh }: { onAction: (kind: string, arg: string
 
   return (
     <div className="assistant">
-      <div className="assistant-log">
+      <div className="assistant-log" ref={logRef}>
         {!history.length && <p className="muted small">Pregúntame, por ejemplo: «quiero conectar todo gratis», «tengo Gemini Pro en dos correos» o «¿cómo conecto Codex con mi ChatGPT?».</p>}
         {history.map((m, i) => (
           <div key={i} className={`msg msg--${m.role}`}>{m.role === 'assistant' ? <WithActions text={m.content} onAct={act} /> : m.content}</div>
@@ -362,7 +375,7 @@ function Assistant({ onAction, refresh }: { onAction: (kind: string, arg: string
       <div className="row">
         <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send(text)} placeholder="Escribe tu pregunta…" />
         <button className="btn btn--primary small" disabled={busy || !text.trim()} onClick={() => send(text)}>Enviar</button>
-        {['Quiero conectar todo gratis', 'Tengo el plan de Claude', 'Tengo dos cuentas de Gemini Pro'].map((q) => (
+        {starters.map((q) => (
           <button key={q} className="btn btn--ghost small" disabled={busy} onClick={() => send(q)}>{q}</button>
         ))}
         {history.length > 0 && <button className="link small" onClick={async () => { await api.clearAssistant(); setHistory([]); }}>borrar</button>}
@@ -377,6 +390,9 @@ const ACTION_LABEL: Record<string, (arg: string) => string> = {
   clave: (a) => `🔑 Conectar ${a}`,
   ollama: (a) => `⬇️ Descargar ${a}`,
   'modo-gratis': () => '🆓 Activar modo gratis',
+  'blender-instalar': () => '🧊 Instalar el complemento en Blender',
+  'blender-probar': () => '🔌 Probar la conexión con Blender',
+  'blender-descargar': () => '⬇️ Descargar el complemento',
 };
 
 /** Convierte las marcas {{accion:arg}} del asistente en botones. */

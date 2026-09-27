@@ -178,6 +178,9 @@ function AccessSection({ s, setS }: { s: SettingsT; setS: (s: SettingsT) => void
         <input type="checkbox" checked={s.accessEnabled} onChange={async (e) => setS(await api.saveSettings({ accessEnabled: e.target.checked }))} />
         Permitir que las IAs pidan acceso
       </label>
+      {s.blenderControl && (
+        <p className="small">🧊 Las IAs pueden trabajar en tu Blender abierto sin preguntar cada vez. <button className="link" onClick={async () => setS(await api.saveSettings({ blenderControl: false }))}>Volver a preguntar</button></p>
+      )}
       <ul className="grant-list">
         {grants.map((g) => (
           <li key={g.id}>

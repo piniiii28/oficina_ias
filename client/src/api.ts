@@ -43,7 +43,8 @@ export type FreeModel = { id: string; label: string; for: string };
 export type CadTool = { id: string; label: string; url: string };
 export type Account = { id: string; provider: string; label: string; preview?: string | null; home?: string };
 export type Grant = { id: string; path: string; mode: 'leer' | 'escribir'; label: string; createdAt: string };
-export type AccessRequest = { id: string; agentId?: string; agentName: string; path: string; mode: 'leer' | 'escribir'; reason: string; action: string; at: string };
+export type AccessRequest = { id: string; agentId?: string; agentName: string; path: string; mode: 'leer' | 'escribir' | 'controlar'; reason: string; action: string; code?: string | null; at: string };
+export type BlenderStatus = { connected: boolean; version?: string; archivo?: string; error?: string; blenderPath: string | null; control: boolean };
 export type Hub = { id: string; name: string; emoji: string; color: string };
 export type HubInfo = Hub & {
   notes: number;
@@ -136,6 +137,7 @@ export type Settings = {
   accounts: Account[];
   grants: Grant[];
   accessEnabled: boolean;
+  blenderControl?: boolean;
   hubs: Hub[];
   cadPaths: Record<string, string>;
 };
@@ -160,6 +162,7 @@ export type OfficeEvent =
   | { type: 'cards' }
   | { type: 'cad' }
   | { type: 'access'; requests: AccessRequest[] }
+  | { type: 'blender'; capture?: string }
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 
@@ -267,6 +270,12 @@ export const api = {
   addGrant: (path: string, mode: 'leer' | 'escribir') => req<Grant[]>('POST', '/api/grants', { path, mode }),
   deleteGrant: (id: string) => req<Grant[]>('DELETE', `/api/grants/${id}`),
   suggestGrants: () => req<{ home: string; folders: string[] }>('GET', '/api/grants/suggest'),
+
+  blenderStatus: () => req<BlenderStatus>('GET', '/api/blender/status'),
+  blenderInstall: () => req<{ ok: boolean; folder: string | null; log: string }>('POST', '/api/blender/install'),
+  blenderScene: () => req<{ texto: string; objetos: { nombre: string; tipo: string; dimensiones: number[] }[] }>('GET', '/api/blender/escena'),
+  blenderCapture: () => req<{ file: string }>('POST', '/api/blender/captura'),
+  blenderCaptures: () => req<string[]>('GET', '/api/blender/capturas'),
 
   cadDetect: () => req<Record<string, string | null>>('GET', '/api/cad/detect'),
   cadJobs: () => req<CadJob[]>('GET', '/api/cad/jobs'),

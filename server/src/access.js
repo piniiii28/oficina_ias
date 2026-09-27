@@ -12,6 +12,7 @@ import { callModel } from './providers.js';
 import { bus, agentStatus } from './orchestrator.js';
 import { detectCad, CAD_TOOLS } from './cad.js';
 import { launchApp, openPath } from './system.js';
+import { blenderCall, blenderStatus, sceneText } from './blender.js';
 
 const win = process.platform === 'win32';
 export const MODES = ['leer', 'escribir'];
@@ -74,16 +75,17 @@ function emitRequests() {
 }
 
 /** Pide permiso y espera tu respuesta: 'always' | 'once' | 'deny'. */
-export function requestAccess(store, { agent, path: p, mode, reason, action }) {
-  const why = forbidden(p, store.dir);
+export function requestAccess(store, { agent, path: p, mode, reason, action, code = null, special = false }) {
+  const why = special ? null : forbidden(p, store.dir);
   if (why) return Promise.resolve({ decision: 'deny', why });
   const request = {
-    id: Store.id('r_'), agentId: agent?.id, agentName: agent?.name || 'Una IA', path: path.resolve(p), mode, reason: String(reason || '').slice(0, 300), action, at: new Date().toISOString(),
+    id: Store.id('r_'), agentId: agent?.id, agentName: agent?.name || 'Una IA', path: special ? p : path.resolve(p), mode, reason: String(reason || '').slice(0, 300), action,
+    code: code ? String(code).slice(0, 4000) : null, at: new Date().toISOString(),
   };
   return new Promise((resolve) => {
     const timer = setTimeout(() => decide(request.id, 'deny', 'No respondiste a tiempo'), WAIT_MS);
     pending.set(request.id, { request, resolve: (r) => { clearTimeout(timer); resolve(r); } });
-    if (agent) agentStatus(agent.id, 'thinking', `🔐 Esperando tu permiso para ${mode} ${path.basename(p) || p}`);
+    if (agent) agentStatus(agent.id, 'thinking', `🔐 Esperando tu permiso para ${mode} ${special ? p : path.basename(p) || p}`);
     emitRequests();
   });
 }
@@ -102,8 +104,18 @@ export function decide(id, decision, why = '') {
 // <<accion atributo="valor" …>>
 const ACTION_RE = /<<(listar|buscar|leer|abrir|copiar|pedir-acceso|buscar-programa)((?:\s+[a-z]+="[^"]*")*)\s*\/?>>/g;
 
+const BLENDER_RE = /<<blender-(escena|captura|guardar|stl)((?:\s+[a-z]+="[^"]*")*)\s*\/?>>|<<blender-ejecutar((?:\s+[a-z]+="[^"]*")*)\s*>>([\s\S]*?)<<\/blender-ejecutar>>/g;
+
 export function parseActions(text) {
   const out = [];
+  // Blender en vivo: <<blender-ejecutar>> código <</blender-ejecutar>>, <<blender-escena>>…
+  for (const m of String(text).matchAll(BLENDER_RE)) {
+    const attrs = {};
+    for (const a of (m[2] || m[3] || '').matchAll(/([a-z]+)="([^"]*)"/g)) attrs[a[1]] = a[2];
+    const kind = m[1] ? `blender-${m[1]}` : 'blender-ejecutar';
+    if (kind === 'blender-ejecutar') attrs.codigo = m[4].replace(/^\s*```[\w-]*\n?/, '').replace(/\n?```\s*$/, '');
+    out.push({ kind, attrs, raw: kind === 'blender-ejecutar' ? `<<blender-ejecutar>> (${attrs.codigo.split('\n').length} líneas)` : m[0] });
+  }
   for (const m of String(text).matchAll(ACTION_RE)) {
     const attrs = {};
     for (const a of m[2].matchAll(/([a-z]+)="([^"]*)"/g)) attrs[a[1]] = a[2];
@@ -113,9 +125,22 @@ export function parseActions(text) {
 }
 
 /** Instrucciones que recibe cada IA sobre cómo pedir acceso. */
-export function accessGuide(settings, dataDir) {
+export function accessGuide(settings, dataDir, blender = null) {
   const grants = settings.grants || [];
-  return `
+  const live = blender?.connected ? `
+
+## Blender en vivo (el usuario tiene Blender ${blender.version} abierto con la oficina conectada)
+Puedes modelar directamente en su escena, paso a paso, y revisar el resultado antes de seguir:
+<<blender-escena>>   ver los objetos de la escena (nombres, medidas, modificadores)
+<<blender-ejecutar>>
+import bpy
+# pasos de modelado en Python (bpy); usa print() para devolver datos
+<</blender-ejecutar>>
+<<blender-captura>>   toma una imagen de la vista 3D para que el usuario vea cómo va
+<<blender-guardar ruta="C:\\...\\proyecto.blend">>   guarda el proyecto (si no das ruta, va al Taller 3D)
+<<blender-stl ruta="C:\\...\\pieza.stl">>   exporta las mallas visibles a STL en milímetros
+Trabaja en pasos cortos: ejecuta, mira el resultado y la escena, corrige y sigue. No borres objetos que ya existían sin que el usuario lo pida. Blender usa metros: 1 mm = 0.001.` : '';
+  return `${live}
 
 ## Acceso a archivos del computador del usuario (con su permiso)
 Si necesitas ver carpetas o archivos del usuario, escribe una acción en una línea propia; la oficina la ejecuta y te devuelve el resultado. Si la ruta aún no está permitida, el usuario recibe una petición y decide. Usa rutas completas.
@@ -174,7 +199,43 @@ async function runAction(store, agent, act, onceGrants) {
     if (r.decision === 'always') addGrant(store, { path: target, mode });
     else onceGrants.push({ path: target, mode });
   };
+  // Tocar la escena abierta de Blender también necesita tu permiso.
+  const needBlender = async (what, code) => {
+    if (store.data.settings.blenderControl || onceGrants.some((g) => g.blender)) return;
+    const r = await requestAccess(store, { agent, path: 'Tu Blender abierto', mode: 'controlar', reason: attrs.motivo, action: what, code, special: true });
+    if (r.decision === 'deny') throw new Error(`El usuario no dio permiso${r.why ? ` (${r.why})` : ''}`);
+    if (r.decision === 'always') {
+      store.data.settings.blenderControl = true;
+      store.save();
+    } else onceGrants.push({ blender: true });
+  };
   try {
+    if (kind.startsWith('blender-')) {
+      if (kind === 'blender-escena') return sceneText(await blenderCall(store, 'escena'));
+      if (kind === 'blender-captura') {
+        const r = await blenderCall(store, 'captura');
+        if (!r.ok) return `No pude tomar la captura: ${r.error}`;
+        const dir = path.join(dataDir, 'taller3d', 'capturas');
+        fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, `blender-${Date.now()}.png`);
+        fs.writeFileSync(file, Buffer.from(r.png, 'base64'));
+        bus.emit('event', { type: 'blender', capture: path.basename(file) });
+        return 'Captura tomada: el usuario la ve en el Taller 3D.';
+      }
+      if (kind === 'blender-ejecutar') {
+        await needBlender('ejecutar un paso de modelado en tu escena', attrs.codigo);
+        const r = await blenderCall(store, 'ejecutar', { codigo: attrs.codigo });
+        bus.emit('event', { type: 'blender' });
+        const scene = sceneText(await blenderCall(store, 'escena'));
+        return `${r.ok ? 'Se ejecutó bien.' : 'Hubo un error.'}${r.salida ? `\nSalida:\n${r.salida}` : ''}${r.error ? `\nError:\n${r.error}` : ''}\n\nEscena ahora:\n${scene}`;
+      }
+      const ext = kind === 'blender-stl' ? '.stl' : '.blend';
+      const target = attrs.ruta || path.join(dataDir, 'taller3d', `blender-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}${ext}`);
+      await need(path.dirname(target), 'escribir');
+      await needBlender(kind === 'blender-stl' ? `exportar un STL a ${target}` : `guardar el proyecto en ${target}`);
+      const r = await blenderCall(store, kind === 'blender-stl' ? 'exportar_stl' : 'guardar', { ruta: target, copia: true });
+      return r.ok ? `Guardado en ${target}.` : `No pude guardar: ${r.error}`;
+    }
     if (kind === 'buscar-programa') {
       const tools = await detectCad(store.data.settings);
       const id = Object.keys(CAD_TOOLS).find((k) => k.toLowerCase().startsWith(String(attrs.nombre || '').toLowerCase().replace(/\s/g, '')));
@@ -239,7 +300,8 @@ async function runAction(store, agent, act, onceGrants) {
 export async function callWithAccess(store, params) {
   const settings = store.data.settings;
   if (settings.accessEnabled === false) return callModel(settings, params);
-  const system = params.system + accessGuide(settings, store.dir);
+  const blender = await blenderStatus(store);
+  const system = params.system + accessGuide(settings, store.dir, blender);
   const messages = [...params.messages];
   const log = [];
   const onceGrants = [];

@@ -14,6 +14,7 @@ import { CAD_TOOLS, detectCad, runCad, openInApp, sliceJob, extractCadBlocks, li
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
 import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
 import { listRequests, decide, addGrant } from './access.js';
+import { addonSource, blenderCall, blenderStatus, installAddon, sceneText } from './blender.js';
 import os from 'node:os';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
@@ -117,6 +118,7 @@ export function createApp(store) {
     for (const [p, def] of Object.entries(PROVIDERS)) {
       if (def.cli) cli[p] = { enabled: Boolean(rest.cli?.[p]?.enabled), command: cliCommand(store.data.settings, p), defaultCommand: def.command };
     }
+    delete rest.blenderToken; // la clave del complemento no sale del servidor
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
     return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
@@ -163,6 +165,7 @@ export function createApp(store) {
     const s = store.data.settings;
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
+    if (req.body?.blenderControl !== undefined) s.blenderControl = Boolean(req.body.blenderControl);
     if (hubs !== undefined) s.hubs = normalizeHubs(hubs);
     if (cadPaths && typeof cadPaths === 'object') {
       s.cadPaths ||= {};
@@ -714,6 +717,64 @@ export function createApp(store) {
     res.json({ home, folders: names.map((n) => path.join(home, n)).filter((p) => fs.existsSync(p)) });
   });
 
+  // --- Blender en vivo (complemento «Oficina de IAs») ---
+  app.get('/api/blender/status', async (_req, res) => {
+    const st = await blenderStatus(store);
+    res.json({ ...st, blenderPath: (await detectCad(store.data.settings)).blender, control: Boolean(store.data.settings.blenderControl) });
+  });
+  app.get('/api/blender/addon', (_req, res) => {
+    res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="oficina_ias.py"');
+    res.send(addonSource(store));
+  });
+  app.post('/api/blender/install', async (_req, res) => {
+    const log = streamer('install:blender');
+    try {
+      const r = await installAddon(store, log);
+      log.end();
+      res.json(r);
+    } catch (err) {
+      log.end();
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.get('/api/blender/escena', async (_req, res) => {
+    try {
+      const scene = await blenderCall(store, 'escena');
+      res.json({ ...scene, texto: sceneText(scene) });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  const capturas = path.join(store.dir, 'taller3d', 'capturas');
+  app.post('/api/blender/captura', async (_req, res) => {
+    try {
+      const r = await blenderCall(store, 'captura');
+      if (!r.ok) return res.status(400).json({ error: r.error });
+      fs.mkdirSync(capturas, { recursive: true });
+      const name = `blender-${Date.now()}.png`;
+      fs.writeFileSync(path.join(capturas, name), Buffer.from(r.png, 'base64'));
+      res.json({ file: name });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.get('/api/blender/capturas', (_req, res) => {
+    let files = [];
+    try {
+      files = fs.readdirSync(capturas).filter((f) => f.endsWith('.png')).sort().reverse().slice(0, 12);
+    } catch {
+      /* todavía no hay capturas */
+    }
+    res.json(files);
+  });
+  app.get('/api/blender/capturas/:name', (req, res) => {
+    const name = path.basename(req.params.name);
+    const file = path.join(capturas, name);
+    if (!/^blender-\d+\.png$/.test(name) || !fs.existsSync(file)) return res.status(404).json({ error: 'No existe' });
+    res.sendFile(file);
+  });
+
   // --- Taller de Impresión 3D ---
   app.get('/api/cad/detect', async (_req, res) => res.json(await detectCad(store.data.settings)));
   app.get('/api/cad/jobs', (_req, res) => res.json(store.data.cadJobs || []));
@@ -788,6 +849,9 @@ export function createApp(store) {
       const extra = (s.accounts || []).filter((a) => a.provider === id).length;
       return `- ${id} (${p.label}, ${p.tier}): ${hasKey(s, id) ? 'CONECTADO' : 'sin conectar'}${p.cli ? `, ${clis[id] ? 'instalada' : 'no instalada'}` : ''}${extra ? `, ${extra} cuentas extra` : ''}. IAs: ${users.join(', ') || 'ninguna'}`;
     }).join('\n');
+    const blender = await blenderStatus(store);
+    const blenderPath = (await detectCad(s)).blender;
+    const blenderLine = `- Blender: ${blenderPath ? `instalado en ${blenderPath}` : 'no encontrado'}; complemento «Oficina de IAs»: ${blender.connected ? `CONECTADO (Blender ${blender.version})` : 'sin conectar (Blender cerrado o complemento no instalado)'}`;
     const history = (store.data.chats._asistente ||= []);
     history.push({ role: 'user', content: message, at: new Date().toISOString() });
     const onDelta = streamer('chat:_asistente');
@@ -803,11 +867,18 @@ Puedes proponer acciones que el usuario ejecuta con un clic escribiendo exactame
 {{clave:google}} (o groq, cerebras, openrouter, mistral…) → abre el formulario para pegar la clave de ese proveedor.
 {{ollama:gemma3}} → descarga ese modelo de Ollama.
 {{modo-gratis}} → pasa las IAs de pago a modelos gratis.
-Estado actual de la oficina:\n${status}`,
+{{blender-instalar}} → instala y activa el complemento «Oficina de IAs» en Blender (después hay que cerrar y abrir Blender).
+{{blender-probar}} → revisa si Blender está conectado con la oficina.
+{{blender-descargar}} → descarga el complemento para instalarlo a mano (Edit → Preferences → Add-ons → Install from Disk, y activarlo).
+El complemento deja que las IAs modelen en vivo en el Blender abierto del usuario, con su permiso. Si Blender no está instalado, que lo descargue gratis de blender.org.
+Estado actual de la oficina:\n${status}\n${blenderLine}`,
         messages: history.slice(-12).map(({ role, content }) => ({ role, content })),
       });
       onDelta.end();
-      const reply = r.simulated
+      const blenderDemo = `Te ayudo a conectar Blender con la oficina (respuesta simulada: conecta a Claude para que te responda de verdad):\n\n1. ${blenderPath ? 'Ya tienes Blender instalado ✓' : 'Instala Blender gratis desde blender.org y vuelve aquí.'}\n2. Instala el complemento «Oficina de IAs» con un clic:\n{{blender-instalar}}\n3. Cierra Blender si estaba abierto y ábrelo otra vez. En la vista 3D, pulsa N y busca la pestaña **Oficina**: debe decir «Conectado».\n4. Comprueba la conexión:\n{{blender-probar}}\n\nSi prefieres hacerlo a mano, descarga el complemento y en Blender ve a Edit → Preferences → Add-ons → Install from Disk:\n{{blender-descargar}}`;
+      const reply = r.simulated && /blender/i.test(message)
+        ? blenderDemo
+        : r.simulated
         ? 'Te ayudo a conectar las IAs gratis (respuesta simulada: conecta a Claude para que te responda de verdad):\n\n1. Lo más fácil y gratis es **Gemini CLI** con tu cuenta de Google.\n{{instalar:cli-gemini}}\n{{sesion:cli-gemini}}\n2. Luego saca una clave gratis de **Groq** (muy rápida).\n{{clave:groq}}\n3. Y pasa las IAs de pago a modelos gratis.\n{{modo-gratis}}'
         : r.text;
       history.push({ role: 'assistant', content: reply, simulated: r.simulated, at: new Date().toISOString() });

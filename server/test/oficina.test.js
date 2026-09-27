@@ -852,3 +852,105 @@ test('accesos: solo se reconocen las acciones conocidas', async () => {
   assert.equal(acts[0].attrs.ruta, 'C:\\Users\\Nico\\Modelos');
   assert.equal(acts[1].attrs.programa, 'blender');
 });
+
+test('Blender en vivo: con tu permiso, la IA modela en la escena abierta y revisa el resultado', async () => {
+  const http = await import('node:http');
+  const net = await import('node:net');
+  const { BLENDER_PORT, addonSource } = await import('../src/blender.js');
+  const store = new Store(tmp());
+  // Un "Blender" falso que habla como el complemento.
+  const received = [];
+  const objects = [];
+  const blender = net.createServer((sock) => {
+    let buf = '';
+    sock.on('data', (d) => {
+      buf += d;
+      if (!buf.endsWith('\n')) return;
+      const msg = JSON.parse(buf);
+      received.push(msg);
+      let res;
+      if (msg.token !== store.data.settings.blenderToken) res = { ok: false, error: 'Clave incorrecta' };
+      else if (msg.cmd === 'ping') res = { ok: true, version: '4.2.0', archivo: '(sin guardar)' };
+      else if (msg.cmd === 'ejecutar') {
+        objects.push({ nombre: 'Soporte', tipo: 'MESH', ubicacion: [0, 0, 0], dimensiones: [0.08, 0.07, 0.004], modificadores: ['BEVEL'], materiales: [], caras: 6 });
+        res = { ok: true, salida: 'creado\n' };
+      } else if (msg.cmd === 'escena') res = { ok: true, archivo: '(sin guardar)', unidades: 'METRIC', escala_unidades: 1, objetos: objects, seleccion: [], activo: 'Soporte' };
+      else res = { ok: false, error: 'no' };
+      sock.end(`${JSON.stringify(res)}\n`);
+    });
+  });
+  blender.listen(BLENDER_PORT, '127.0.0.1');
+  await new Promise((r) => blender.once('listening', r));
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const data = JSON.parse(body);
+      const last = data.messages.at(-1).content;
+      assert.match(data.messages[0].content, /Blender en vivo/, 'la IA sabe que Blender está conectado');
+      const reply = /Resultados de tus acciones/.test(last)
+        ? `Listo: ${/Soporte \(MESH\)/.test(last) ? 'el soporte ya está en tu escena' : 'no veo nada'}`
+        : 'Creo el soporte.\n<<blender-ejecutar>>\n```python\nimport bpy\nbpy.ops.mesh.primitive_cube_add()\n```\n<</blender-ejecutar>>';
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  try {
+    await withApp(store, async (call) => {
+      const st = await call('GET', '/api/blender/status');
+      assert.equal(st.data.connected, true);
+      assert.equal(st.data.version, '4.2.0');
+      assert.ok(!('blenderToken' in (await call('GET', '/api/settings')).data), 'la clave no sale del servidor');
+      assert.ok(addonSource(store).includes(store.data.settings.blenderToken));
+      assert.ok(!addonSource(store).includes('__TOKEN__'));
+
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      await call('PUT', '/api/agents/cerebro', { provider: 'ollama', model: 'm' });
+      const chat = call('POST', '/api/agents/cerebro/chat', { message: 'hazme un soporte en blender' });
+      let reqs = [];
+      for (let i = 0; i < 50 && !reqs.length; i++) {
+        await new Promise((r) => setTimeout(r, 40));
+        reqs = (await call('GET', '/api/access')).data.requests;
+      }
+      assert.equal(reqs.length, 1, 'pide permiso antes de tocar la escena');
+      assert.equal(reqs[0].mode, 'controlar');
+      assert.match(reqs[0].code, /primitive_cube_add/, 'muestra el código que va a ejecutar');
+      assert.ok(!received.some((m) => m.cmd === 'ejecutar'), 'no ejecuta nada antes del permiso');
+      await call('POST', `/api/access/${reqs[0].id}`, { decision: 'once' });
+      const r = await chat;
+      assert.match(r.data.reply, /el soporte ya está en tu escena/);
+      assert.equal(received.find((m) => m.cmd === 'ejecutar').codigo.trim(), 'import bpy\nbpy.ops.mesh.primitive_cube_add()');
+      assert.equal(store.data.settings.blenderControl, undefined, '«solo esta vez» no queda guardado');
+      const scene = await call('GET', '/api/blender/escena');
+      assert.match(scene.data.texto, /Soporte \(MESH\)/);
+    });
+  } finally {
+    fake.close();
+    blender.close();
+  }
+});
+
+test('Blender: instala el complemento con la clave de la oficina', { skip: process.platform === 'win32' }, async () => {
+  const { installAddon } = await import('../src/blender.js');
+  const store = new Store(tmp());
+  const addons = tmp();
+  // Un "Blender" falso que ejecuta la parte de copiar del script de instalación.
+  const fakeExe = path.join(tmp(), 'blender-falso');
+  fs.writeFileSync(fakeExe, `#!/usr/bin/env node
+const fs = require('fs'), path = require('path');
+const code = process.argv[process.argv.indexOf('--python-expr') + 1];
+const src = JSON.parse(code.match(/shutil\\.copy\\(("[^"]+")/)[1]);
+fs.copyFileSync(src, path.join(${JSON.stringify(addons)}, 'oficina_ias.py'));
+if (!code.includes("addon_enable(module='oficina_ias')") || !code.includes('save_userpref')) process.exit(1);
+console.log('OFICINA_LISTO:' + ${JSON.stringify(addons)});
+`, { mode: 0o755 });
+  store.data.settings.cadPaths = { blender: fakeExe };
+  const r = await installAddon(store);
+  assert.equal(r.ok, true);
+  assert.equal(r.folder, addons);
+  const installed = fs.readFileSync(path.join(addons, 'oficina_ias.py'), 'utf8');
+  assert.ok(installed.includes(`TOKEN = "${store.data.settings.blenderToken}"`));
+  assert.match(installed, /PORT = \d+/);
+});

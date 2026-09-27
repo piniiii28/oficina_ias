@@ -767,3 +767,13 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .grant-list { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
 .grant-list code { font-size: 12px; word-break: break-all; }
 @media (max-width: 900px) { .access-requests { bottom: 76px; } }
+
+/* --- Blender en vivo --- */
+.blender-live h3 { margin: 0; }
+.blender-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 10px 0; }
+.blender-grid .log { max-height: 260px; }
+.blender-shot { width: 100%; border-radius: 10px; border: 1px solid var(--border); margin-top: 6px; }
+.blender-live > .row { flex-wrap: wrap; }
+.blender-live > .row input { flex: 1; min-width: 200px; }
+.blender-reply { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); }
+.blender-live > .row select { width: auto; flex: none; }

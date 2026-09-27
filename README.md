@@ -92,6 +92,16 @@ El piso 1 del edificio es el taller, con cuatro IAs (todas con modelos gratis):
 
 En la sección **Taller 3D** eliges el programa y describes la pieza. Cuando el equipo entrega el script, pulsa **▶ Abrir en…**: la oficina lo ejecuta en el programa instalado en tu computador, guarda el STL y el proyecto en `data/taller3d/` y lo abre en el programa para que sigas editando. También puedes pegar un script propio. Los programas son gratis: [Blender](https://www.blender.org/download/), [OpenSCAD](https://openscad.org/downloads.html), [FreeCAD](https://www.freecad.org/downloads.php), [PrusaSlicer](https://www.prusa3d.com/page/prusaslicer_424/) y [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer/releases). Si alguno está en otra carpeta, pon su ruta en **Ajustes → Taller 3D**. Antes de ejecutar un script, la oficina te pide confirmación.
 
+### Blender en vivo
+
+Además de ejecutar scripts, Claude y Blendi pueden **trabajar sobre el Blender que tienes abierto**, como la extensión de Claude para Blender: ven la escena, crean y modifican objetos, revisan cómo quedó y corrigen paso a paso; también guardan el `.blend` y exportan el STL.
+
+1. En **Taller 3D → Blender en vivo** pulsa **Instalar con un clic** (o **💬 Que Claude me ayude a instalarlo** y sigue sus botones). Si prefieres, descarga el complemento y en Blender ve a *Edit → Preferences → Add-ons → Install from Disk*.
+2. Abre Blender (o ciérralo y ábrelo otra vez). En la vista 3D pulsa **N**: la pestaña **Oficina** debe decir «Conectado».
+3. Escribe lo que quieres, por ejemplo «crea un soporte para celular de 8 cm con bordes redondeados», y pulsa **Modelar en Blender**. La primera vez te pide permiso para tocar tu escena y te deja ver el código antes.
+
+El complemento solo escucha en tu computador (127.0.0.1) y exige una clave secreta propia de tu oficina.
+
 ## Accesos a tu computador (con permiso)
 
 Las IAs, sobre todo Claude, pueden **pedir acceso** a cosas fuera de su carpeta: buscar carpetas y archivos, leer textos, abrir un modelo en **Blender** (u OpenSCAD, FreeCAD, PrusaSlicer, OrcaSlicer) y copiar sus modelos a una carpeta tuya. Por ejemplo: «Claude, busca mis archivos .blend en Documentos y abre el último en Blender».
