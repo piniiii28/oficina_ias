@@ -11,6 +11,11 @@ import type { AvatarConfig } from '../api';
 
 const CHIBI = 40;
 
+const ACTIVITY: Record<string, string> = {
+  working: '⌨️ Trabajando en una tarea', thinking: '💭 Pensando', talking: '💬 Hablando', done: '✅ Acaba de entregar', error: '💥 Tuvo un error',
+  escritorio: '🪑 En su escritorio', reunion: '🗣️ En reunión', cafe: '☕ Descansando', volver: '🛗 Volviendo a su piso', pasear: '🚶 Paseando', ascensor: '🛗 En el ascensor',
+};
+
 // Skins de piso: se rotan con el botón 🎨 de cada piso.
 const THEMES = [
   null, // colores originales
@@ -164,7 +169,16 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
         <Chibi avatar={a.avatar} size={CHIBI} legs walking={w.moving} seed={idx} state={w.moving ? 'idle' : state} />
       </span>
-      <span className="walker-name">{a.name}{!me && <em> · Nv {levelOf(a)} · ⚡{Math.round(w.energy ?? 100)}</em>}</span>
+      {me ? (
+        <span className="walker-name">{a.name}</span>
+      ) : (
+        <span className="walker-name walker-card">
+          <span><b>{a.name}</b> <em>Nv {levelOf(a)}</em></span>
+          <small>{a.role}</small>
+          <small>{ACTIVITY[state] || ACTIVITY[w.inElevator ? 'ascensor' : w.reason] || 'Paseando'}</small>
+          <span className="energy"><i style={{ width: `${Math.round(w.energy ?? 100)}%` }} /></span>
+        </span>
+      )}
     </button>
   );
 }

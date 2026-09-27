@@ -604,3 +604,9 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .meeting-sign { position: absolute; left: 0; top: 0; z-index: 400; pointer-events: none; font: 800 11px system-ui, sans-serif; color: #111; background: #fde047; border: 2px solid #111; border-radius: 8px; padding: 2px 8px; white-space: nowrap; box-shadow: 0 3px 0 #111; animation: floaty 2s ease-in-out infinite; }
 @keyframes floaty { 50% { translate: 0 -4px; } }
 .building-wrap:fullscreen { background: var(--bg); padding: 16px; overflow: auto; }
+.walker-card { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px !important; top: -62px !important; text-align: left; min-width: 150px; border-radius: 8px !important; z-index: 10; }
+.walker-card b { font-size: 11px; }
+.walker-card small { font-size: 10px; color: #e5e7eb; font-weight: 500; white-space: nowrap; }
+.walker-card .energy { display: block; height: 4px; background: rgba(255, 255, 255, 0.2); border-radius: 2px; margin-top: 2px; }
+.walker-card .energy i { display: block; height: 100%; background: #fde047; border-radius: 2px; }
+.walker:hover { z-index: 9999 !important; }
