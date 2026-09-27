@@ -25,6 +25,13 @@ export type Walker = {
 
 export const TICK_MS = 340;
 export const ME = '__yo';
+/** Clima de la azotea: cambia cada ~5 minutos. */
+export function weatherNow(t = Date.now()) {
+  const slot = Math.floor(t / 300000);
+  const r = Math.abs(Math.sin(slot * 12.9898) * 43758.5453) % 1;
+  return r < 0.55 ? 'sol' : r < 0.8 ? 'nubes' : 'lluvia';
+}
+
 export const PETS = [
   { id: '__michi', name: 'Michi', emoji: '🐈', floor: 'lobby' },
   { id: '__firulais', name: 'Firulais', emoji: '🐕', floor: 'azotea' },
@@ -126,7 +133,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           const r = Math.random();
           const cur = floorById.get(w.floor)!;
           if ((w.energy ?? 100) < 25 && w.floor !== 'lobby' && w.floor !== 'azotea') {
-            const dest = floorById.get(Math.random() < 0.7 ? 'lobby' : 'azotea')!;
+            const dest = floorById.get(Math.random() < 0.7 || weatherNow() === 'lluvia' ? 'lobby' : 'azotea')!;
             const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
             w.goal = { floor: dest.id, ...spot };
             w.reason = 'cafe';
@@ -136,7 +143,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
             w.reason = 'volver';
           } else if (w.floor === home.id && r < 0.14) {
             // Descanso: cafetería del lobby o la azotea.
-            const dest = floorById.get(Math.random() < 0.6 ? 'lobby' : 'azotea')!;
+            const dest = floorById.get(Math.random() < 0.6 || weatherNow() === 'lluvia' ? 'lobby' : 'azotea')!;
             const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
             w.goal = { floor: dest.id, ...spot };
             w.reason = 'cafe';

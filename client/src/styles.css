@@ -613,3 +613,7 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .usage { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .usage th, .usage td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); }
 .usage th { color: var(--muted); font-weight: 600; }
+.rain { position: absolute; inset: 0; pointer-events: none; z-index: 900; background-image: repeating-linear-gradient(105deg, transparent 0 14px, rgba(191, 219, 254, 0.55) 14px 15px, transparent 15px 30px); background-size: 60px 60px; animation: rain 0.5s linear infinite; }
+@keyframes rain { from { background-position: 0 0; } to { background-position: -12px 60px; } }
+.weather { font-size: 11px; color: #fff; background: rgba(0, 0, 0, 0.25); border-radius: 6px; padding: 1px 6px; }
+.bfloor--open.bfloor--rain { background: linear-gradient(#64748b, #94a3b8 70%); }

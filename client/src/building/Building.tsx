@@ -6,7 +6,7 @@ import { Chibi } from '../components/Chibi';
 import { useOffice } from '../state';
 import { FLOORS, TH, TW, WALL, USE, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
 
-import { ME, PETS, TICK_MS, useSim, type Walker } from './useSim';
+import { ME, PETS, TICK_MS, useSim, weatherNow, type Walker } from './useSim';
 import type { AvatarConfig } from '../api';
 
 const CHIBI = 40;
@@ -101,7 +101,7 @@ function Box({ f, m }: { f: FloorDef; m: Furniture }) {
   );
 }
 
-function Room({ f, night, doorOpen }: { f: FloorDef; night: boolean; doorOpen: boolean }) {
+function Room({ f, night, doorOpen, weather }: { f: FloorDef; night: boolean; doorOpen: boolean; weather: string }) {
   const { w: W, h: H } = roomSize(f);
   const top = P(f, 0, 0), right = P(f, f.cols, 0), left = P(f, 0, f.rows);
   const tiles = [];
@@ -127,7 +127,12 @@ function Room({ f, night, doorOpen }: { f: FloorDef; night: boolean; doorOpen: b
         <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#7dd3fc" /><stop offset="1" stopColor="#e0f2fe" /></linearGradient>
         <linearGradient id="night" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#1e1b4b" /><stop offset="1" stopColor="#4338ca" /></linearGradient>
       </defs>
-      {f.open && <circle cx={W - 60} cy={30} r={night ? 16 : 22} fill={night ? '#e5e7eb' : '#fde047'} opacity="0.9" />}
+      {f.open && weather !== 'lluvia' && <circle cx={W - 60} cy={30} r={night ? 16 : 22} fill={night ? '#e5e7eb' : '#fde047'} opacity="0.9" />}
+      {f.open && weather !== 'sol' && (
+        <g fill={weather === 'lluvia' ? '#94a3b8' : '#f8fafc'} opacity="0.9">
+          <ellipse cx={W - 90} cy={34} rx={34} ry={14} /><ellipse cx={W - 60} cy={26} rx={26} ry={16} /><ellipse cx={W - 150} cy={50} rx={26} ry={10} />
+        </g>
+      )}
       <polygon points={pts([left, top, up(top, wallH), up(left, wallH)])} fill={shade(f.wall, -0.12)} opacity={f.open ? 0.8 : 1} />
       <polygon points={pts([top, right, up(right, wallH), up(top, wallH)])} fill={f.wall} opacity={f.open ? 0.8 : 1} />
       <polygon points={pts([up(left, wallH), up(top, wallH), up(top, wallH + 6), up(left, wallH + 6)])} fill={shade(f.wall, 0.15)} />
@@ -224,11 +229,12 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
   const here = agents.filter((a) => walkers[a.id]?.floor === f.id && !walkers[a.id]?.inElevator);
   const working = here.filter((a) => ['working', 'thinking'].includes(live[a.id]?.status || '')).length;
   return (
-    <section className={`bfloor ${f.open ? 'bfloor--open' : ''}`} id={`piso-${f.id}`} style={{ ['--wall' as string]: f.wall }}>
+    <section className={`bfloor ${f.open ? 'bfloor--open' : ''} ${f.open && weatherNow() === 'lluvia' ? 'bfloor--rain' : ''}`} id={`piso-${f.id}`} style={{ ['--wall' as string]: f.wall }}>
       <header className="bfloor-head">
         <span className="bfloor-num">{number}</span>
         <strong>{f.emoji} {f.name}</strong>
         {(f.id === 'lobby' || f.id === 'penthouse') && current && <span className="bfloor-tv" title={current.prompt}>📺 {current.title}</span>}
+        {f.open && <span className="weather" title="Clima">{({ sol: night ? '🌙 Despejado' : '☀️ Soleado', nubes: '⛅ Nublado', lluvia: '🌧️ Lluvia' } as Record<string, string>)[weatherNow()]}</span>}
         <small className="muted">{here.length} aquí{working ? ` · ${working} trabajando` : ''}</small>
         <button className="skin-btn" onClick={cycle} title={`Cambiar skin del piso (${THEMES[theme]?.name || 'original'})`}>🎨</button>
       </header>
@@ -263,7 +269,8 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
             if (near) onTile(f.id, near[0], near[1], USE[m.kind] || '👀');
           }}
         >
-          <Room f={f} night={night} doorOpen={doorOpen} />
+          <Room f={f} night={night} doorOpen={doorOpen} weather={weatherNow()} />
+          {f.open && weatherNow() === 'lluvia' && <div className="rain" />}
           {f.furniture.map((m, k) => <Box key={k} f={f} m={m} />)}
           {here.map((a) => <Person key={a.id} f={f} a={a} w={walkers[a.id]} onClick={() => onSelect(a)} idx={agents.indexOf(a)} />)}
           {meeting && (() => {
