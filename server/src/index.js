@@ -8,7 +8,7 @@ import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink } from './providers.js';
-import { bus, runTask, chatWithAgent, selfTrain, dailySummary } from './orchestrator.js';
+import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
@@ -281,6 +281,12 @@ export function createApp(store) {
     // Respondemos enseguida; el progreso llega por /api/events.
     promise.catch((err) => console.error('[tarea]', err));
     res.status(202).json({ id: store.data.tasks[0].id });
+  });
+  app.post('/api/tasks/:id/cancel', (req, res) => {
+    const ctrl = running.get(req.params.id);
+    if (!ctrl) return res.status(404).json({ error: 'Esa tarea no está en curso' });
+    ctrl.abort();
+    res.json({ ok: true });
   });
   app.delete('/api/tasks/:id', (req, res) => {
     store.data.tasks = store.data.tasks.filter((t) => t.id !== req.params.id);

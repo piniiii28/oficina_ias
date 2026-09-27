@@ -164,6 +164,7 @@ export const api = {
   runTask: (prompt: string, agentIds?: string[], parentId?: string, attachments?: { name: string; content: string }[]) =>
     req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
+  cancelTask: (id: string) => req('POST', `/api/tasks/${id}/cancel`),
 
   meetings: () => req<Meeting[]>('GET', '/api/meetings'),
   startMeeting: (topic: string, agentIds: string[], rounds: number) => req<{ id: string }>('POST', '/api/meetings', { topic, agentIds, rounds }),

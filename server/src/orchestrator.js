@@ -9,6 +9,8 @@ import { extractKeyIdeas } from './notes.js';
 import { relatedNotes } from './librarian.js';
 
 export const bus = new EventEmitter();
+/** Controladores para cancelar tareas en curso (id de tarea → AbortController). */
+export const running = new Map();
 bus.setMaxListeners(100);
 
 const MAX_MEMORY = 40;
@@ -216,6 +218,9 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
 
   const brain = brainOf(store);
   const { settings } = store.data;
+  const ctrl = new AbortController();
+  const signal = ctrl.signal;
+  running.set(task.id, ctrl);
   agentStatus(brain.id, 'thinking', 'Planificando…');
 
   try {
@@ -229,6 +234,11 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     for (const s of task.steps) if (s.dependsOn?.length) agentStatus(s.agentId, 'thinking', `Esperando a ${s.dependsOn.map(nameOf).join(', ')}`);
 
     await runGraph(task.steps, settings.maxParallel || 4, async (step) => {
+      if (signal.aborted) {
+        step.status = 'error';
+        step.error = 'Cancelada';
+        return;
+      }
       const agent = store.data.agents.find((a) => a.id === step.agentId);
       step.status = 'working';
       emitTask();
@@ -242,7 +252,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       const onDelta = streamer(`task:${task.id}:${agent.id}`);
       try {
         const res = await callModel(settings, {
-          provider: agent.provider, model: agent.model, agent, onDelta,
+          provider: agent.provider, model: agent.model, agent, onDelta, signal,
           system: buildSystem(agent),
           messages: [{
             role: 'user',
@@ -263,6 +273,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       emitTask();
     });
 
+    if (signal.aborted) throw new Error('Cancelada por ti');
     // Síntesis del cerebro.
     task.status = 'synthesizing';
     emitTask();
@@ -273,7 +284,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     const synthDelta = streamer(`task:${task.id}:final`);
     const synth = await callModel(settings, {
       provider: brain.provider, model: brain.model, agent: brain, effort: 'medium',
-      onDelta: synthDelta,
+      onDelta: synthDelta, signal,
       system: buildSystem(brain),
       messages: [{
         role: 'user',
@@ -315,9 +326,11 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     if (saveNotes) saveTaskNotes(store, notes, task, names);
   } catch (err) {
     task.status = 'error';
-    task.final = `Error: ${err.message}`;
-    agentStatus(brain.id, 'error', err.message);
+    task.final = signal.aborted ? 'Cancelada por ti. Puedes reintentarla cuando quieras.' : `Error: ${err.message}`;
+    agentStatus(brain.id, signal.aborted ? 'idle' : 'error', signal.aborted ? '' : err.message);
+    for (const st of task.steps) if (st.status === 'pending' || st.status === 'working') st.status = 'error', st.error ||= 'Cancelada';
   }
+  running.delete(task.id);
   // Tarjetas del tablero ligadas a esta tarea pasan a «Hecho».
   for (const c of store.data.cards || []) {
     if (c.taskId === task.id) {

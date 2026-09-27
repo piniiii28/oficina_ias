@@ -78,6 +78,9 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
           </span>
         ))}
       </div>
+      {task.status !== 'done' && task.status !== 'error' && (
+        <button className="link danger small" onClick={() => api.cancelTask(task.id)}>✖ Cancelar tarea</button>
+      )}
       {task.status === 'done' && task.noteId && (
         <button className="btn btn--ghost small" onClick={() => openNote({ id: task.noteId! })}>Ver resultado en notas →</button>
       )}

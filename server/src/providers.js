@@ -81,19 +81,29 @@ export function setUsageSink(fn) {
  * messages: [{ role: 'user' | 'assistant', content: string }]
  * onDelta(fragmento): se llama con cada trozo de texto a medida que llega.
  */
-export async function callModel(settings, { provider, model, system, messages, agent, effort = 'medium', onDelta }) {
+export async function callModel(settings, { provider, model, system, messages, agent, effort = 'medium', onDelta, signal }) {
+  if (signal?.aborted) throw new Error('Cancelada');
   const live = settings.demoMode !== 'always' && hasKey(settings, provider);
   if (!live) {
     const text = await simulate({ agent, system, messages });
+    if (signal?.aborted) throw new Error('Cancelada');
     if (onDelta) await typeOut(text, onDelta);
     return { text, simulated: true, provider, model };
   }
   const emit = onDelta || (() => {});
   let text;
-  if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, emit);
-  else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit);
-  else if (provider === 'google') text = await callGemini(keyFor(settings, provider), model, system, messages, emit);
-  else text = await callOpenAICompatible(provider, keyFor(settings, provider), model, system, messages, settings, emit);
+  // Tiempo límite de 10 minutos por llamada, y cancelable desde la interfaz.
+  const sig = signal ? AbortSignal.any([signal, AbortSignal.timeout(600000)]) : AbortSignal.timeout(600000);
+  try {
+    if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, emit, sig);
+    else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit, sig);
+    else if (provider === 'google') text = await callGemini(keyFor(settings, provider), model, system, messages, emit, sig);
+    else text = await callOpenAICompatible(provider, keyFor(settings, provider), model, system, messages, settings, emit, sig);
+  } catch (err) {
+    if (signal?.aborted) throw new Error('Cancelada');
+    if (sig.aborted) throw new Error(`${PROVIDERS[provider]?.label || provider}: no respondió en 10 minutos`);
+    throw err;
+  }
   const inChars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
   usageSink?.({ provider, model, calls: 1, inChars, outChars: text.length });
   return { text, simulated: false, provider, model };
@@ -110,7 +120,7 @@ async function typeOut(text, onDelta) {
 
 const anthropicClients = new Map();
 
-async function callAnthropic(apiKey, model, system, messages, effort, onDelta) {
+async function callAnthropic(apiKey, model, system, messages, effort, onDelta, signal) {
   if (!anthropicClients.has(apiKey)) anthropicClients.set(apiKey, new Anthropic({ apiKey }));
   const client = anthropicClients.get(apiKey);
   const params = {
@@ -124,8 +134,8 @@ async function callAnthropic(apiKey, model, system, messages, effort, onDelta) {
 
   // Si el modelo declina por seguridad, el servidor reintenta con otro modelo.
   const stream = /opus-5|fable/.test(model)
-    ? client.beta.messages.stream({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
-    : client.messages.stream(params);
+    ? client.beta.messages.stream({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, { signal })
+    : client.messages.stream(params, { signal });
   stream.on('text', (delta) => onDelta(delta));
   let response;
   try {
@@ -167,7 +177,7 @@ async function readSSE(res, onEvent) {
   }
 }
 
-async function callOpenAICompatible(provider, apiKey, model, system, messages, settings, onDelta) {
+async function callOpenAICompatible(provider, apiKey, model, system, messages, settings, onDelta, signal) {
   const base = provider === 'ollama' && settings.apiKeys?.ollamaUrl ? settings.apiKeys.ollamaUrl : PROVIDERS[provider].baseUrl;
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -177,6 +187,7 @@ async function callOpenAICompatible(provider, apiKey, model, system, messages, s
   }
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
+    signal,
     headers,
     body: JSON.stringify({
       model,
@@ -200,10 +211,11 @@ async function callOpenAICompatible(provider, apiKey, model, system, messages, s
   return text;
 }
 
-async function callGemini(apiKey, model, system, messages, onDelta) {
+async function callGemini(apiKey, model, system, messages, onDelta, signal) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
   const res = await fetch(url, {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
@@ -246,7 +258,7 @@ const CLI_DIR = path.join(os.tmpdir(), 'oficina-ias-cli');
  * como un único prompt. Se ejecuta en una carpeta temporal vacía para que no
  * toque tus proyectos.
  */
-function callCli(settings, provider, system, messages, onDelta) {
+function callCli(settings, provider, system, messages, onDelta, signal) {
   const convo = messages.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
   const prompt = `${system}\n\n---\n\n${convo}\n\nAsistente:`;
   const command = cliCommand(settings, provider);
@@ -272,6 +284,7 @@ function callCli(settings, provider, system, messages, onDelta) {
     let out = '';
     let err = '';
     const timer = setTimeout(() => child.kill(), 10 * 60 * 1000);
+    signal?.addEventListener('abort', () => child.kill(), { once: true });
     child.stdout.on('data', (d) => {
       const t = d.toString();
       out += t;

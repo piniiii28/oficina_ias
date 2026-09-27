@@ -394,3 +394,17 @@ test('al reiniciar, lo que quedó a medias se marca como interrumpido', () => {
   assert.equal(s2.data.tasks[0].steps[0].status, 'error');
   assert.equal(s2.data.cards[0].column, 'todo');
 });
+
+test('cancelar una tarea en curso la detiene', async () => {
+  const { running } = await import('../src/orchestrator.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const p = runTask(store, new Notes(store), { prompt: 'app web en react con pruebas y marketing' });
+  await new Promise((r) => setTimeout(r, 100));
+  running.get(store.data.tasks[0].id).abort();
+  const t = await p;
+  assert.equal(t.status, 'error');
+  assert.match(t.final, /Cancelada por ti/);
+  assert.equal(running.size, 0);
+});

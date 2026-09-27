@@ -61,6 +61,9 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       <header className="row between">
         <h2>{task.title}</h2>
         <div className="row">
+          {task.status !== 'done' && task.status !== 'error' && (
+            <button className="btn btn--danger small" onClick={() => api.cancelTask(task.id)}>✖ Cancelar</button>
+          )}
           {task.status === 'error' && (
             <button className="btn btn--primary small" onClick={async () => {
               const { id } = await api.runTask(task.prompt, task.steps.map((s) => s.agentId));
