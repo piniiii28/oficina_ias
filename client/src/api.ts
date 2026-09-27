@@ -56,6 +56,7 @@ export type Task = {
   final: string;
   noteId: string | null;
   parentId?: string | null;
+  contextNotes?: string[];
   createdAt: string;
   finishedAt: string | null;
 };

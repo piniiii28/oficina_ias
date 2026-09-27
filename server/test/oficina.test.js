@@ -198,3 +198,14 @@ test('la API rechaza peticiones de otros sitios', async () => {
     server.close();
   }
 });
+
+test('memoria compartida: una tarea usa y enlaza notas relacionadas del grafo', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  notes.create({ title: 'Receta de arepas', content: 'Las arepas de maíz con queso son el plato estrella de la cafetería' });
+  const t = await runTask(store, notes, { prompt: 'Diseña el menú de arepas de la cafetería' });
+  assert.ok(t.contextNotes.includes('Receta de arepas'));
+  assert.match(notes.get(t.noteId).content, /## Contexto usado\n- \[\[Receta de arepas\]\]/);
+});

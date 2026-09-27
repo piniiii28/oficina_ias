@@ -1,5 +1,5 @@
 // Historial de tareas: el plan del cerebro, cada aporte y la respuesta final.
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
@@ -67,6 +67,11 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       {parent && <p className="small">↩ Continúa <a href="#" onClick={(e) => { e.preventDefault(); onOpen(parent.id); }}>{parent.title}</a></p>}
       <blockquote>{task.prompt}</blockquote>
       {task.plan && <p className="muted">🧠 {task.plan.analysis}</p>}
+      {task.contextNotes?.length ? (
+        <p className="small">📚 Usó de tu grafo:{' '}
+          {task.contextNotes.map((t) => <a key={t} href="#" className="wikilink" onClick={(e) => { e.preventDefault(); openNote({ title: t }); }}>{t}</a>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' ', el] : [el]), [])}
+        </p>
+      ) : null}
 
       <section className="card final">
         <h3>Respuesta integrada</h3>

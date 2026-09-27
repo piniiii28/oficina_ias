@@ -33,7 +33,7 @@ export async function simulate({ agent, messages }) {
   await wait(600 + Math.random() * 1400);
   const raw = messages[messages.length - 1]?.content || '';
   // En tareas del cerebro, el texto útil va entre comillas o tras "Contexto completo".
-  const last = raw.match(/Contexto completo de la tarea: ([\s\S]*)$/)?.[1] || raw.match(/"([^"]+)"/)?.[1] || raw;
+  const last = raw.match(/Contexto completo de la tarea: ([\s\S]*?)(?:\n\nNotas relevantes|$)/)?.[1] || raw.match(/"([^"]+)"/)?.[1] || raw;
   const kw = keywords(last, 3);
   const topic = kw.length ? kw.join(', ') : 'la tarea';
   const angles = ANGLES[agent?.department] || ANGLES.direccion;

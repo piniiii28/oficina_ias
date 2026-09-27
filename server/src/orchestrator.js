@@ -6,6 +6,7 @@ import { Store } from './store.js';
 import { callModel, hasKey } from './providers.js';
 import { demoPlan } from './demo.js';
 import { extractKeyIdeas } from './notes.js';
+import { relatedNotes } from './librarian.js';
 
 export const bus = new EventEmitter();
 bus.setMaxListeners(100);
@@ -161,8 +162,14 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     ? `Esta es una continuación de la tarea "${parent.prompt}". Resultado anterior del equipo:\n\n${parent.final.slice(0, 6000)}\n\nNuevo pedido: `
     : '';
   if (parent && !agentIds?.length) agentIds = parent.steps.map((s) => s.agentId);
+  // Memoria compartida: notas del grafo relacionadas con la tarea.
+  const related = relatedNotes(store.data.notes, prompt + ' ' + (parent?.prompt || ''), 4);
+  const knowledge = related.length
+    ? `\n\nNotas relevantes de la base de conocimiento de la oficina:\n${related.map((n) => `### ${n.title}\n${n.content.slice(0, 900)}`).join('\n\n')}\n`
+    : '';
   const task = {
     parentId: parent?.id || null,
+    contextNotes: related.map((n) => n.title),
     id: Store.id('t_'),
     prompt,
     title: shortTitle(prompt),
@@ -211,7 +218,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
           system: buildSystem(agent),
           messages: [{
             role: 'user',
-            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}`,
+            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}${knowledge}`,
           }],
         });
         step.output = res.text;
@@ -243,7 +250,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       messages: [{
         role: 'user',
         content:
-          `Tarea original: ${background}${prompt}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
+          `Tarea original: ${background}${prompt}${knowledge}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
           'Integra todo en una respuesta final única, coherente y accionable. Menciona a quién se debe cada parte cuando aporte valor. ' +
           'Termina con "### Ideas clave" (3 a 6 viñetas cortas, cada una una idea reutilizable).',
       }],
@@ -298,6 +305,10 @@ function saveTaskNotes(store, notes, task, names) {
       .join('\n')}`,
   });
   task.noteId = main.id;
+  if (task.contextNotes?.length) {
+    main.content += `\n\n## Contexto usado\n${task.contextNotes.map((t) => `- [[${t}]]`).join('\n')}`;
+    store.save();
+  }
 
   for (const s of task.steps.filter((s) => s.status === 'done')) {
     const agent = store.data.agents.find((a) => a.id === s.agentId);

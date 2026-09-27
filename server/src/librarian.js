@@ -125,3 +125,27 @@ export function applyConnection(notesApi, { from, to, reason }) {
   add(b, a);
   return true;
 }
+
+/** Notas más relacionadas con un texto (TF-IDF), para usarlas como contexto. */
+export function relatedNotes(notes, text, k = 4, exclude = new Set()) {
+  const pool = notes.filter((n) => !exclude.has(n.id) && n.content.trim().length > 20);
+  if (!pool.length) return [];
+  const df = new Map();
+  const docs = pool.map((n) => {
+    const set = new Set(tokens(`${n.title} ${n.content}`));
+    for (const w of set) df.set(w, (df.get(w) || 0) + 1);
+    return { n, set };
+  });
+  const N = docs.length;
+  const q = new Set(tokens(text));
+  return docs
+    .map(({ n, set }) => {
+      let score = 0;
+      for (const w of q) if (set.has(w)) score += Math.log((N + 1) / df.get(w));
+      return { n, score: score / Math.sqrt(set.size + 5) };
+    })
+    .filter((x) => x.score > 0.15)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, k)
+    .map((x) => x.n);
+}
