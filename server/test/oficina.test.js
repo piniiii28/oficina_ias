@@ -546,3 +546,32 @@ test('tarjetas automáticas con los próximos pasos', async () => {
   assert.ok(store.data.cards.length >= 1);
   assert.equal(store.data.cards[0].column, 'todo');
 });
+
+test('Gemini: streaming por SSE', async () => {
+  const http = await import('node:http');
+  let seen;
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      seen = { url: req.url, key: req.headers['x-goog-api-key'], body: JSON.parse(body) };
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      for (const t of ['Hola ', 'desde Gemini']) res.write(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\r\n\r\n`);
+      res.end();
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  process.env.GEMINI_BASE_URL = `http://127.0.0.1:${fake.address().port}`;
+  const { callModel } = await import('../src/providers.js');
+  try {
+    const r = await callModel({ apiKeys: { google: 'clave-g' } }, { provider: 'google', model: 'gemini-2.5-pro', system: 'S', messages: [{ role: 'user', content: 'hola' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'sigue' }] });
+    assert.equal(r.text, 'Hola desde Gemini');
+    assert.match(seen.url, /gemini-2\.5-pro:streamGenerateContent\?alt=sse/);
+    assert.equal(seen.key, 'clave-g');
+    assert.deepEqual(seen.body.contents.map((c) => c.role), ['user', 'model', 'user']);
+  } finally {
+    delete process.env.GEMINI_BASE_URL;
+    fake.close();
+  }
+});

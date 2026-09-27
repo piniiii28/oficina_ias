@@ -225,7 +225,8 @@ async function callOpenAICompatible(provider, apiKey, model, system, messages, s
 }
 
 async function callGemini(apiKey, model, system, messages, onDelta, signal) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+  const base = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
+  const url = `${base}/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
   const res = await fetch(url, {
     method: 'POST',
     signal,
