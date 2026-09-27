@@ -9,7 +9,7 @@ import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
 import { Board } from './views/Board';
 import { Welcome } from './components/Welcome';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { play, setSounds, soundsOn } from './sounds';
 
 const NAV: { id: View; label: string; icon: string }[] = [
@@ -27,6 +27,22 @@ function Shell() {
   const { view, setView, connected, toasts, tasks, agents } = useOffice();
   const running = tasks.filter((t) => t.status !== 'done' && t.status !== 'error').length;
   const [sound, setSound] = useState(soundsOn);
+  const [theme, setThemeState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('oficina.tema') || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  useEffect(() => {
+    if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('oficina.tema', theme);
+    } catch {
+      /* sin almacenamiento local */
+    }
+  }, [theme]);
   return (
     <div className="app">
       <nav className="sidebar">
@@ -49,6 +65,9 @@ function Shell() {
         </button>
         <button className="nav-item search-hint" onClick={() => { setSounds(!sound); setSound(!sound); if (!sound) setTimeout(() => play('ding'), 50); }}>
           <span>{sound ? '🔊' : '🔈'}</span><span className="nav-label">{sound ? 'Sonido: sí' : 'Sonido: no'}</span>
+        </button>
+        <button className="nav-item search-hint" onClick={() => setThemeState(theme === 'auto' ? 'light' : theme === 'light' ? 'dark' : 'auto')} title="Cambiar tema">
+          <span>{theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</span><span className="nav-label">Tema: {theme === 'dark' ? 'oscuro' : theme === 'light' ? 'claro' : 'auto'}</span>
         </button>
         <div className="sidebar-foot">
           <span className={`dot ${connected ? 'dot--live' : 'dot--off'}`} /> {connected ? 'En vivo' : 'Reconectando…'}
