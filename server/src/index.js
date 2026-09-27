@@ -8,16 +8,21 @@ import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
-import { recordCall, accuracyOf, loadOf } from './metrics.js';
+import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.js';
+import { normalizeAutomation, runAutomation } from './automations.js';
+import { connectPrinter, getPrinter, printerInfo, cameraFrame, PRINTER_COMMANDS, isLanHost } from './bambu.js';
+import { requestAccess } from './access.js';
+import { COOKIE, cookieOf, createUser, hashPassword, hostAllowed, login, logout, needsAdmin, publicUser, tailscaleAddresses, userFromSession } from './auth.js';
 import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
 import { FREE_MODELS, freePlan } from './freeModels.js';
-import { CAD_TOOLS, detectCad, runCad, openInApp, sliceJob, extractCadBlocks, listFiles } from './cad.js';
+import { CAD_TOOLS, detectCad, runCad, openInApp, openInBambu, sliceJob, extractCadBlocks, listFiles } from './cad.js';
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
 import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
 import { listRequests, decide, addGrant } from './access.js';
 import { normalizeAssistants, SUGGESTED } from './assistants.js';
 import { addonSource, blenderCall, blenderStatus, installAddon, sceneText } from './blender.js';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
@@ -114,23 +119,59 @@ export function createApp(store) {
   vault.schedule(store.data.notes);
 
   const app = express();
-  // Evita que otras páginas web abiertas en tu navegador usen la API (DNS rebinding).
+  // Evita que otras páginas web abiertas en tu navegador usen la API (DNS rebinding):
+  // solo se aceptan los nombres de este computador (y los de Tailscale si activas el acceso remoto).
   app.use((req, res, next) => {
-    const host = (req.headers.host || '').replace(/:\d+$/, '');
+    const host = String(req.headers.host || '');
     const origin = req.headers.origin;
-    const localOrigin = !origin || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-    if (process.env.HOST || (['localhost', '127.0.0.1', '[::1]'].includes(host) && localOrigin)) return next();
-    res.status(403).json({ error: 'Acceso solo desde este computador' });
+    if (req.path.startsWith('/api/hooks/') && !origin) return next(); // n8n (en Docker llega con otro Host)
+    if (!process.env.HOST && !hostAllowed(store.data.settings, host)) return res.status(403).json({ error: 'Acceso solo desde este computador' });
+    if (origin) {
+      let oh = '';
+      try {
+        oh = new URL(origin).host;
+      } catch {
+        /* origen raro */
+      }
+      if (oh !== host && !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(oh)) return res.status(403).json({ error: 'Acceso solo desde este computador' });
+    }
+    next();
   });
   app.use(express.json({ limit: '25mb' }));
+  // Token de la API (lo usan la extensión de Claude Desktop y n8n).
+  const apiToken = () => {
+    if (!store.data.settings.apiToken) {
+      store.data.settings.apiToken = crypto.randomBytes(24).toString('hex');
+      store.save();
+    }
+    return store.data.settings.apiToken;
+  };
+  app.use((req, _res, next) => {
+    const auth = String(req.headers.authorization || '');
+    req.viaToken = auth.startsWith('Bearer ') && auth.slice(7) === apiToken();
+    next();
+  });
+  // Quién hace la petición: este computador, la API (Claude Desktop, n8n) o un usuario con sesión.
+  app.use((req, res, next) => {
+    const host = String(req.headers.host || '').replace(/:\d+$/, '');
+    if (req.viaToken) req.user = { id: 'api', name: 'API', role: 'admin' };
+    else if (isLocal(req) && ['localhost', '127.0.0.1', '[::1]'].includes(host)) req.user = { id: 'local', name: 'Este computador', role: 'admin', local: true };
+    else req.user = publicUser(userFromSession(store, cookieOf(req)));
+    if (!req.path.startsWith('/api/') || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/hooks/')) return next();
+    if (!req.user) return res.status(401).json({ error: 'Inicia sesión para usar la oficina', login: true });
+    if (req.user.role !== 'admin' && needsAdmin(req.method, req.path)) return res.status(403).json({ error: 'Solo un administrador puede hacer esto' });
+    next();
+  });
   // Núcleo activo (quién usa la oficina: Nicolás, Santiago, Miguel…): las notas nuevas quedan en su núcleo.
   app.use((req, _res, next) => {
-    const h = String(req.headers['x-nucleo'] || '');
+    const h = String(req.headers['x-nucleo'] || req.user?.hub || '');
     req.hub = hubsOf(store).some((x) => x.id === h) ? h : 'cerebro';
     next();
   });
 
   const agentById = (id) => store.data.agents.find((a) => a.id === id);
+  // ¿La petición viene de este mismo computador?
+  const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
   const publicSettings = () => {
     const { apiKeys, ...rest } = store.data.settings;
     const keys = {};
@@ -143,6 +184,10 @@ export function createApp(store) {
       if (def.cli) cli[p] = { enabled: Boolean(rest.cli?.[p]?.enabled), command: cliCommand(store.data.settings, p), defaultCommand: def.command };
     }
     delete rest.blenderToken; // la clave del complemento no sale del servidor
+    delete rest.apiToken;
+    delete rest.hookToken;
+    delete rest.printer; // el código de acceso de la impresora no sale del servidor
+    delete rest.users; // las contraseñas (cifradas) tampoco
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
     return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
@@ -180,6 +225,20 @@ export function createApp(store) {
     }
   });
   app.get('/api/usage', (_req, res) => res.json(store.data.usage || {}));
+  app.get('/api/jury', (_req, res) => res.json({ settings: store.data.settings.jury || { enabled: false, size: 2 }, ...juryReport(store) }));
+  // Pedir al jurado que califique un aporte ya hecho.
+  app.post('/api/tasks/:id/steps/:agentId/jury', async (req, res) => {
+    const t = store.data.tasks.find((x) => x.id === req.params.id);
+    const st = t?.steps.find((x) => x.agentId === req.params.agentId);
+    if (!st) return res.status(404).json({ error: 'No existe' });
+    if (st.simulated) return res.status(400).json({ error: 'Es una respuesta simulada (modo demo): el jurado solo califica respuestas reales' });
+    const j = await juryStep(store, t, st, Number(req.body?.size) || store.data.settings.jury?.size || 2);
+    if (!j) return res.status(400).json({ error: 'No hay IAs conectadas que puedan ser jurado (necesitan un proveedor conectado)' });
+    st.jury = j;
+    store.save();
+    bus.emit('event', { type: 'task', task: t });
+    res.json(j);
+  });
   app.get('/api/metrics', (_req, res) => {
     const busy = new Map();
     for (const t of store.data.tasks) {
@@ -200,6 +259,7 @@ export function createApp(store) {
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (req.body?.headsReview !== undefined) s.headsReview = Boolean(req.body.headsReview);
     if (req.body?.verifySteps !== undefined) s.verifySteps = Boolean(req.body.verifySteps);
+    if (req.body?.jury && typeof req.body.jury === 'object') s.jury = { enabled: Boolean(req.body.jury.enabled), size: Math.max(1, Math.min(3, Number(req.body.jury.size) || 2)) };
     if (req.body?.blenderControl !== undefined) s.blenderControl = Boolean(req.body.blenderControl);
     if (hubs !== undefined) s.hubs = normalizeHubs(hubs);
     if (cadPaths && typeof cadPaths === 'object') {
@@ -818,6 +878,288 @@ export function createApp(store) {
     res.sendFile(file);
   });
 
+  // --- Automatizaciones (n8n) ---
+  const hookToken = () => {
+    if (!store.data.settings.hookToken) {
+      store.data.settings.hookToken = crypto.randomBytes(16).toString('hex');
+      store.save();
+    }
+    return store.data.settings.hookToken;
+  };
+  app.get('/api/automations', (req, res) => {
+    res.json({
+      automations: store.data.settings.automations || [],
+      log: (store.data.automationLog || []).slice(0, 30),
+      // Solo este computador ve el token de los webhooks entrantes.
+      hookBase: isLocal(req) ? `http://localhost:${PORT}/api/hooks/${hookToken()}` : null,
+    });
+  });
+  app.post('/api/automations', (req, res) => {
+    try {
+      const a = normalizeAutomation(req.body || {});
+      (store.data.settings.automations ||= []).push(a);
+      store.save();
+      res.status(201).json(a);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.put('/api/automations/:id', (req, res) => {
+    const list = store.data.settings.automations || [];
+    const i = list.findIndex((a) => a.id === req.params.id);
+    if (i === -1) return res.status(404).json({ error: 'No existe' });
+    try {
+      list[i] = normalizeAutomation({ ...list[i], ...req.body, id: list[i].id });
+      store.save();
+      res.json(list[i]);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.delete('/api/automations/:id', (req, res) => {
+    store.data.settings.automations = (store.data.settings.automations || []).filter((a) => a.id !== req.params.id);
+    store.save();
+    res.json({ ok: true });
+  });
+  app.post('/api/automations/:id/run', async (req, res) => {
+    const a = (store.data.settings.automations || []).find((x) => x.id === req.params.id);
+    if (!a) return res.status(404).json({ error: 'No existe' });
+    res.json(await runAutomation(store, a, req.body?.datos || {}, 'manual'));
+  });
+  // Webhooks entrantes: n8n le pide cosas a la oficina.
+  const hook = (req, res, next) => (req.params.token === hookToken() ? next() : res.status(401).json({ error: 'Token incorrecto' }));
+  app.post('/api/hooks/:token/tarea', hook, async (req, res) => {
+    const prompt = String(req.body?.tarea || req.body?.prompt || '').trim();
+    if (!prompt) return res.status(400).json({ error: 'Falta «tarea»' });
+    const hub = hubsOf(store).some((h) => h.id === req.body?.nucleo) ? req.body.nucleo : 'cerebro';
+    const flow = req.body?.flujo ? flowPlan(req.body.flujo, store.data.agents) : null;
+    const promise = runTask(store, notes, { prompt, hub, agentIds: flow?.agentIds, template: flow?.template, tags: ['n8n'] });
+    if (req.body?.esperar) {
+      const t = await promise;
+      return res.json({ id: t.id, estado: t.status, resultado: t.final });
+    }
+    promise.catch((err) => console.error('[n8n]', err));
+    res.status(202).json({ id: store.data.tasks[0].id });
+  });
+  app.post('/api/hooks/:token/nota', hook, (req, res) => {
+    const title = String(req.body?.titulo || '').trim();
+    if (!title) return res.status(400).json({ error: 'Falta «titulo»' });
+    const n = notes.create({ title, content: String(req.body?.contenido || ''), tags: ['n8n'], hub: hubsOf(store).some((h) => h.id === req.body?.nucleo) ? req.body.nucleo : 'cerebro' });
+    bus.emit('event', { type: 'notes' });
+    res.status(201).json({ id: n.id, titulo: n.title });
+  });
+  app.post('/api/hooks/:token/tarjeta', hook, (req, res) => {
+    const title = String(req.body?.titulo || '').trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: 'Falta «titulo»' });
+    const card = { id: Store.id('c_'), title, details: String(req.body?.detalles || '').slice(0, 4000), column: 'todo', project: String(req.body?.proyecto || 'n8n').slice(0, 60), taskId: null, noteId: null, createdAt: new Date().toISOString() };
+    (store.data.cards ||= []).push(card);
+    store.save();
+    bus.emit('event', { type: 'cards' });
+    res.status(201).json({ id: card.id });
+  });
+  // Instalar y abrir n8n en este computador.
+  app.get('/api/n8n/status', async (_req, res) => {
+    const url = store.data.settings.n8nUrl || 'http://localhost:5678';
+    try {
+      const r = await fetch(`${url}/healthz`, { signal: AbortSignal.timeout(2500) });
+      res.json({ running: r.ok, url });
+    } catch {
+      res.json({ running: false, url });
+    }
+  });
+  app.post('/api/n8n/install', async (req, res) => {
+    if (!isLocal(req)) return res.status(403).json({ error: 'Solo desde este computador' });
+    const log = streamer('install:n8n');
+    log('$ npm install -g n8n\n');
+    const r = await runLogged('npm', ['install', '-g', 'n8n'], { onData: log, shell: process.platform === 'win32', timeoutMs: 20 * 60000 });
+    log.end();
+    res.json({ ok: r.ok, log: r.out.slice(-3000) });
+  });
+  app.post('/api/n8n/start', (req, res) => {
+    if (!isLocal(req)) return res.status(403).json({ error: 'Solo desde este computador' });
+    const opened = openTerminal('n8n start');
+    res.json({ opened, command: 'n8n start' });
+  });
+
+  // --- Inicio de sesión y acceso desde otros computadores (Tailscale) ---
+  app.get('/api/auth/me', (req, res) => {
+    res.json({ user: req.user || null, local: Boolean(req.user?.local), needsLogin: !req.user, users: (store.data.settings.users || []).length });
+  });
+  app.post('/api/auth/login', (req, res) => {
+    try {
+      const { token, user } = login(store, req.body || {}, req.socket.remoteAddress);
+      res.setHeader('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 86400}`);
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      res.status(401).json({ error: err.message });
+    }
+  });
+  app.post('/api/auth/logout', (req, res) => {
+    logout(store, cookieOf(req));
+    res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+    res.json({ ok: true });
+  });
+  app.get('/api/users', (_req, res) => res.json((store.data.settings.users || []).map(publicUser)));
+  app.post('/api/users', (req, res) => {
+    try {
+      res.status(201).json(publicUser(createUser(store, req.body || {})));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.put('/api/users/:id', (req, res) => {
+    const u = (store.data.settings.users || []).find((x) => x.id === req.params.id);
+    if (!u) return res.status(404).json({ error: 'No existe' });
+    if (req.body?.password !== undefined) {
+      if (String(req.body.password).length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+      Object.assign(u, hashPassword(req.body.password));
+      // Cambiar la contraseña cierra sus sesiones abiertas.
+      for (const [t, sess] of Object.entries(store.data.sessions || {})) if (sess.userId === u.id) delete store.data.sessions[t];
+    }
+    if (req.body?.role) u.role = req.body.role === 'admin' ? 'admin' : 'miembro';
+    if (req.body?.hub !== undefined) u.hub = req.body.hub || null;
+    store.save();
+    res.json(publicUser(u));
+  });
+  app.delete('/api/users/:id', (req, res) => {
+    store.data.settings.users = (store.data.settings.users || []).filter((u) => u.id !== req.params.id);
+    for (const [t, sess] of Object.entries(store.data.sessions || {})) if (sess.userId === req.params.id) delete store.data.sessions[t];
+    store.save();
+    res.json({ ok: true });
+  });
+  const remoteInfo = () => {
+    const ips = tailscaleAddresses();
+    return {
+      enabled: Boolean(store.data.settings.remote?.enabled),
+      ips,
+      hostname: os.hostname(),
+      port: PORT,
+      urls: ips.filter((ip) => !ip.includes(':')).map((ip) => `http://${ip}:${PORT}`),
+      listening: app.locals.remoteListening || [],
+      users: (store.data.settings.users || []).length,
+      extraHosts: store.data.settings.remote?.extraHosts || [],
+    };
+  };
+  app.get('/api/remote', (_req, res) => res.json(remoteInfo()));
+  app.put('/api/remote', (req, res) => {
+    if (!req.user?.local) return res.status(403).json({ error: 'El acceso remoto se activa desde este computador' });
+    const enabled = Boolean(req.body?.enabled);
+    if (enabled && !(store.data.settings.users || []).length) return res.status(400).json({ error: 'Primero crea al menos un usuario con contraseña' });
+    store.data.settings.remote = {
+      enabled,
+      extraHosts: Array.isArray(req.body?.extraHosts) ? req.body.extraHosts.map((h) => String(h).trim()).filter(Boolean).slice(0, 10) : store.data.settings.remote?.extraHosts || [],
+    };
+    store.save();
+    app.locals.applyRemote?.();
+    res.json(remoteInfo());
+  });
+
+  // --- Claude Desktop (servidor MCP de la oficina) ---
+  const MCP_FILE = path.join(ROOT, 'mcp', 'oficina-mcp.mjs');
+  const claudeConfigPath = () => (process.platform === 'win32'
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json')
+    : process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
+      : path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json'));
+  const mcpEntry = () => ({ command: process.execPath, args: [MCP_FILE], env: { OFICINA_URL: `http://localhost:${PORT}`, OFICINA_TOKEN: apiToken() } });
+  app.get('/api/claude-desktop', (req, res) => {
+    if (!isLocal(req)) return res.status(403).json({ error: 'Solo desde este computador' });
+    const file = claudeConfigPath();
+    let installed = false;
+    try {
+      installed = Boolean(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers?.['oficina-ias']);
+    } catch {
+      /* no existe o no se puede leer */
+    }
+    res.json({ configPath: file, installed, config: { mcpServers: { 'oficina-ias': mcpEntry() } } });
+  });
+  app.post('/api/claude-desktop/install', (req, res) => {
+    if (!isLocal(req)) return res.status(403).json({ error: 'Solo desde este computador' });
+    const file = claudeConfigPath();
+    let cfg = {};
+    try {
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, 'utf8');
+        cfg = raw.trim() ? JSON.parse(raw) : {};
+        fs.copyFileSync(file, `${file}.antes-de-oficina`);
+      }
+    } catch {
+      return res.status(400).json({ error: `No pude leer ${file}: arréglalo o bórralo y vuelve a intentar` });
+    }
+    cfg.mcpServers = { ...(cfg.mcpServers || {}), 'oficina-ias': mcpEntry() };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
+    res.json({ ok: true, configPath: file });
+  });
+
+  // --- Impresora Bambu Lab (red local) ---
+  connectPrinter(store.data.settings, (e) => bus.emit('event', e));
+  app.get('/api/printer/status', (_req, res) => res.json(printerInfo(store.data.settings)));
+  app.put('/api/printer', (req, res) => {
+    if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'La impresora se configura desde este computador' });
+    const b = req.body || {};
+    const prev = store.data.settings.printer || {};
+    const host = String(b.host ?? prev.host ?? '').trim();
+    if (host && !isLanHost(host)) return res.status(400).json({ error: 'Usa la IP local de la impresora (por ejemplo 192.168.1.50)' });
+    store.data.settings.printer = {
+      name: String(b.name ?? prev.name ?? 'Mi P1S').slice(0, 40),
+      model: String(b.model ?? prev.model ?? 'P1S').slice(0, 20),
+      host,
+      port: Number(b.port || prev.port || 8883),
+      serial: String(b.serial ?? prev.serial ?? '').trim().toUpperCase(),
+      // Vacío = conservar el código anterior.
+      accessCode: typeof b.accessCode === 'string' && b.accessCode.trim() ? b.accessCode.trim() : prev.accessCode || '',
+      cameraPort: Number(b.cameraPort || prev.cameraPort || 6000),
+    };
+    store.save();
+    connectPrinter(store.data.settings, (e) => bus.emit('event', e));
+    res.json(printerInfo(store.data.settings));
+  });
+  app.delete('/api/printer', (req, res) => {
+    if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'Solo desde este computador' });
+    delete store.data.settings.printer;
+    store.save();
+    connectPrinter(store.data.settings);
+    res.json(printerInfo(store.data.settings));
+  });
+  app.post('/api/printer/command', async (req, res) => {
+    const command = String(req.body?.command || '');
+    if (!PRINTER_COMMANDS.includes(command)) return res.status(400).json({ error: 'Orden desconocida' });
+    const p = getPrinter();
+    if (!p?.connected) return res.status(409).json({ error: printerInfo(store.data.settings).error || 'No estoy conectado a la impresora' });
+    // Si la orden no la da la persona frente al computador (Claude Desktop, otro equipo), se pide permiso.
+    if (!isLocal(req) || req.viaToken) {
+      const allowed = store.data.settings.printerControl && command !== 'detener';
+      if (!allowed) {
+        const r = await requestAccess(store, { agent: { id: 'externo', name: String(req.body?.via || 'Una conexión externa').slice(0, 40) }, path: 'Tu impresora Bambu Lab', mode: 'controlar', reason: `Quiere: ${command.replace('_', ' ')}`, action: command, special: true });
+        if (r.decision === 'deny') return res.status(403).json({ error: 'El usuario no dio permiso' });
+        if (r.decision === 'always' && command !== 'detener') {
+          store.data.settings.printerControl = true;
+          store.save();
+        }
+      }
+    }
+    try {
+      p.command(command);
+      res.json({ ok: true, message: { pausar: '⏸️ Impresión en pausa', reanudar: '▶️ Impresión reanudada', detener: '⏹️ Impresión detenida', luz_on: '💡 Luz encendida', luz_off: '🌑 Luz apagada' }[command] });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.get('/api/printer/camera.jpg', async (req, res) => {
+    if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'La cámara solo se ve desde este computador' });
+    const c = store.data.settings.printer;
+    if (!c?.host || !c.accessCode) return res.status(404).json({ error: 'Configura la impresora primero' });
+    try {
+      const img = await cameraFrame({ host: c.host, accessCode: c.accessCode, port: c.cameraPort || 6000 }, { plain: process.env.OFICINA_PRINTER_PLAIN === '1' });
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(img);
+    } catch (err) {
+      res.status(502).json({ error: err.message });
+    }
+  });
+
   // --- Taller de Impresión 3D ---
   app.get('/api/cad/detect', async (_req, res) => res.json(await detectCad(store.data.settings)));
   app.get('/api/cad/jobs', (_req, res) => res.json(store.data.cadJobs || []));
@@ -846,7 +1188,7 @@ export function createApp(store) {
   app.post('/api/cad/jobs/:id/open', async (req, res) => {
     const job = cadJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'No existe' });
-    const ok = req.body?.what === 'folder' ? openPath(job.dir) : await openInApp(store.data.settings, job);
+    const ok = req.body?.what === 'folder' ? openPath(job.dir) : req.body?.what === 'bambu' ? await openInBambu(store.data.settings, job) : await openInApp(store.data.settings, job);
     res.status(ok ? 200 : 400).json(ok ? { ok } : { error: 'No pude abrirlo: revisa que el programa esté instalado' });
   });
   app.post('/api/cad/jobs/:id/slice', async (req, res) => {
@@ -939,8 +1281,8 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
 
   // --- Copia de seguridad ---
   app.get('/api/export', (_req, res) => {
-    const { settings, ...rest } = store.data;
-    const { apiKeys: _omit, accounts: _acc, ...safeSettings } = settings;
+    const { settings, sessions: _s, metrics: _m, ...rest } = store.data;
+    const { users: _u, remote: _r, apiKeys: _omit, accounts: _acc, apiToken: _t, hookToken: _h, blenderToken: _b, printer: _pr, ...safeSettings } = settings;
     res.setHeader('Content-Disposition', 'attachment; filename="oficina-ias-respaldo.json"');
     res.json({ ...rest, settings: safeSettings, exportedAt: new Date().toISOString() });
   });
@@ -949,9 +1291,9 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
     if (!Array.isArray(b.agents) || !Array.isArray(b.notes)) return res.status(400).json({ error: 'Archivo de respaldo no válido' });
     // Las claves y los comandos de las CLIs son de este computador: un respaldo ajeno no debe poder cambiarlos.
     // Los permisos de carpetas también son de este computador.
-    const { apiKeys, cli, accounts, cadPaths, grants } = store.data.settings;
-    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, ...importedSettings } = b.settings || {};
-    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants } };
+    const { apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote } = store.data.settings;
+    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, grants: _g, apiToken: _t, hookToken: _h, blenderToken: _b, automations: _au, printer: _pr, users: _us, remote: _re, ...importedSettings } = b.settings || {};
+    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths, grants, apiToken, hookToken, blenderToken, automations, printer, users, remote }, sessions: store.data.sessions };
     store.flush();
     bus.emit('event', { type: 'notes' });
     res.json({ ok: true });
@@ -997,6 +1339,29 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  // Acceso desde otros computadores: además de 127.0.0.1, escucha en las IPs de Tailscale.
+  let remoteServers = [];
+  app.locals.applyRemote = () => {
+    for (const srv of remoteServers) srv.close();
+    remoteServers = [];
+    app.locals.remoteListening = [];
+    if (!store.data.settings.remote?.enabled || process.env.HOST) return;
+    for (const ip of tailscaleAddresses()) {
+      const srv = app.listen(PORT, ip, () => app.locals.remoteListening.push(ip));
+      srv.on('error', (e) => console.warn(`[remoto] No pude escuchar en ${ip}: ${e.message}`));
+      remoteServers.push(srv);
+    }
+  };
+  app.locals.applyRemote();
+  // Si Tailscale se conecta después de abrir la oficina, se detecta solo.
+  let lastIps = tailscaleAddresses().join();
+  setInterval(() => {
+    const now = tailscaleAddresses().join();
+    if (now !== lastIps) {
+      lastIps = now;
+      app.locals.applyRemote();
+    }
+  }, 60000).unref();
   app.listen(PORT, HOST, () => {
     console.log(`\n  🧠 Oficina de IAs lista en http://localhost:${PORT}`);
     console.log(`  📁 Datos guardados en ${DATA_DIR}\n`);

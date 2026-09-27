@@ -24,7 +24,7 @@ const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 /** Acierto (0–100) con de qué señales sale. */
 export function accuracyOf(store, agent) {
   const likes = agent.stats?.likes || 0, dislikes = agent.stats?.dislikes || 0;
-  let done = 0, failed = 0, vSum = 0, vN = 0;
+  let done = 0, failed = 0, vSum = 0, vN = 0, jSum = 0, jN = 0;
   for (const t of store.data.tasks) {
     for (const s of t.steps) {
       if (s.agentId !== agent.id) continue;
@@ -34,11 +34,16 @@ export function accuracyOf(store, agent) {
         vSum += s.verify.score;
         vN++;
       }
+      if (s.jury?.score) {
+        jSum += s.jury.score;
+        jN++;
+      }
     }
   }
   const parts = {
     valoraciones: likes + dislikes ? { value: Math.round((likes / (likes + dislikes)) * 100), n: likes + dislikes } : null,
     verificador: vN ? { value: Math.round(((vSum / vN - 1) / 4) * 100), n: vN } : null,
+    jurado: jN ? { value: Math.round(((jSum / jN - 1) / 4) * 100), n: jN } : null,
     fiabilidad: done + failed ? { value: Math.round((done / (done + failed)) * 100), n: done + failed } : null,
   };
   // Promedio ponderado: tus valoraciones pesan más; parte de un 70 neutral,
@@ -46,8 +51,9 @@ export function accuracyOf(store, agent) {
   let sum = 70 * 3, w = 3;
   if (parts.valoraciones) (sum += parts.valoraciones.value * parts.valoraciones.n * 2), (w += parts.valoraciones.n * 2);
   if (parts.verificador) (sum += parts.verificador.value * parts.verificador.n), (w += parts.verificador.n);
+  if (parts.jurado) (sum += parts.jurado.value * parts.jurado.n), (w += parts.jurado.n);
   if (parts.fiabilidad) (sum += parts.fiabilidad.value * Math.min(6, parts.fiabilidad.n) * 0.5), (w += Math.min(6, parts.fiabilidad.n) * 0.5);
-  const signals = (parts.valoraciones?.n || 0) + (parts.verificador?.n || 0);
+  const signals = (parts.valoraciones?.n || 0) + (parts.verificador?.n || 0) + (parts.jurado?.n || 0);
   return { score: Math.round(sum / w), signals, parts };
 }
 
@@ -122,4 +128,89 @@ export async function verifyStep(store, task, step) {
   } catch {
     return null;
   }
+}
+
+// --- Jurado: las IAs se califican entre sí ---
+// En vez de que todas califiquen a todas (demasiadas llamadas y mucho ruido),
+// un jurado pequeño (1 a 3 IAs) califica cada aporte:
+// - a ciegas (no sabe qué IA lo escribió),
+// - con una rúbrica fija (correcto, completo, claro y sin inventos),
+// - con jueces de otro proveedor distinto al del autor (evita que un modelo
+//   favorezca a los de su misma familia) y rotando para repartir el trabajo.
+// La nota final es la mediana, y tus 👍/👎 siguen pesando más en el medidor.
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+};
+
+/** Elige a los jueces para un aporte. */
+export function pickJudges(store, authorId, size = 2) {
+  const s = store.data.settings;
+  const author = store.data.agents.find((a) => a.id === authorId);
+  const live = store.data.agents.filter((a) => a.enabled && a.id !== authorId && s.demoMode !== 'always' && hasKey(s, a.provider));
+  const given = new Map();
+  for (const t of store.data.tasks.slice(0, 60)) for (const st of t.steps) for (const v of st.jury?.votes || []) given.set(v.judgeId, (given.get(v.judgeId) || 0) + 1);
+  return live
+    .sort((a, b) => Number(a.provider === author?.provider) - Number(b.provider === author?.provider) || (given.get(a.id) || 0) - (given.get(b.id) || 0))
+    .slice(0, Math.max(1, Math.min(3, size)));
+}
+
+/** El jurado califica un aporte. Devuelve { votes, score } o null. */
+export async function juryStep(store, task, step, size = 2) {
+  if (step.simulated || !step.output) return null;
+  const judges = pickJudges(store, step.agentId, size);
+  if (!judges.length) return null;
+  const votes = (await Promise.all(judges.map(async (j) => {
+    try {
+      const r = await callModel(store.data.settings, {
+        provider: j.provider, model: j.model, agent: j, effort: 'low',
+        system: 'Eres juez de un jurado que califica respuestas de otras IAs. Eres justo y estricto, no premias el largo ni el tono sino la calidad. Devuelves únicamente JSON válido.',
+        messages: [{
+          role: 'user',
+          content: `Tarea: ${task.prompt}\nLo que se le pidió: ${step.instruction}\n\nRespuesta a calificar (autor anónimo):\n${step.output.slice(0, 12000)}\n\n` +
+            'Rúbrica: 5 = correcta, completa, clara y sin datos inventados; 3 = útil pero con fallas o vacíos; 1 = incorrecta o inventada. ' +
+            'Responde SOLO con JSON: {"nota": 1-5, "motivo": "una frase concreta"}',
+        }],
+      });
+      const o = JSON.parse(r.text.match(/\{[\s\S]*\}/)[0]);
+      const score = Math.max(1, Math.min(5, Math.round(Number(o.nota))));
+      return score ? { judgeId: j.id, name: j.name, score, reason: String(o.motivo || '').slice(0, 200) } : null;
+    } catch {
+      return null;
+    }
+  }))).filter(Boolean);
+  return votes.length ? { votes, score: median(votes.map((v) => v.score)), at: new Date().toISOString() } : null;
+}
+
+/** Resumen del jurado: veredictos recientes, qué tan generoso es cada juez y si coincide contigo. */
+export function juryReport(store) {
+  const recent = [];
+  const judges = new Map();
+  const received = new Map();
+  for (const t of store.data.tasks) {
+    for (const st of t.steps) {
+      if (!st.jury?.votes?.length) continue;
+      recent.push({ taskId: t.id, task: t.title, agentId: st.agentId, score: st.jury.score, votes: st.jury.votes, rating: st.rating?.value ?? null, at: st.jury.at });
+      const r = received.get(st.agentId) || { sum: 0, n: 0 };
+      r.sum += st.jury.score;
+      r.n++;
+      received.set(st.agentId, r);
+      for (const v of st.jury.votes) {
+        const j = judges.get(v.judgeId) || { id: v.judgeId, name: v.name, n: 0, sum: 0, diff: 0, agree: 0, compared: 0 };
+        j.n++;
+        j.sum += v.score;
+        j.diff += v.score - st.jury.score; // positivo = más generoso que el resto del jurado
+        if (st.rating?.value) {
+          j.compared++;
+          if ((st.rating.value > 0 && v.score >= 4) || (st.rating.value < 0 && v.score <= 2)) j.agree++;
+        }
+        judges.set(v.judgeId, j);
+      }
+    }
+  }
+  return {
+    recent: recent.slice(0, 40),
+    judges: [...judges.values()].map((j) => ({ id: j.id, name: j.name, votes: j.n, average: Math.round((j.sum / j.n) * 10) / 10, generosity: Math.round((j.diff / j.n) * 10) / 10, agreement: j.compared ? Math.round((j.agree / j.compared) * 100) : null, compared: j.compared })).sort((a, b) => b.votes - a.votes),
+    received: Object.fromEntries([...received].map(([id, r]) => [id, { average: Math.round((r.sum / r.n) * 10) / 10, n: r.n }])),
+  };
 }

@@ -587,7 +587,7 @@ async function withApp(store, fn) {
     return { status: r.status, data: await r.json().catch(() => null) };
   };
   try {
-    await fn(call);
+    await fn(call, base);
   } finally {
     server.close();
   }
@@ -1096,6 +1096,315 @@ test('medidores: el acierto sube con 👍 y el verificador; la carga sube con te
       assert.ok(load.tips.some((t) => /cupo/.test(t)));
     });
   } finally {
+    fake.close();
+  }
+});
+
+test('Claude Desktop: el servidor MCP lista herramientas y usa la oficina', async () => {
+  const { spawn } = await import('node:child_process');
+  const store = new Store(tmp());
+  store.data.settings.demoMode = 'always';
+  const app = createApp(store);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const port = server.address().port;
+  const cfg = await (await fetch(`http://127.0.0.1:${port}/api/claude-desktop`)).json();
+  assert.ok(cfg.config.mcpServers['oficina-ias'].args[0].endsWith('oficina-mcp.mjs'));
+  const token = cfg.config.mcpServers['oficina-ias'].env.OFICINA_TOKEN;
+  assert.ok(token.length > 20);
+  assert.ok(!('apiToken' in (await (await fetch(`http://127.0.0.1:${port}/api/settings`)).json())), 'el token no sale en los ajustes');
+  const child = spawn(process.execPath, [path.resolve('../mcp/oficina-mcp.mjs')], { env: { ...process.env, OFICINA_URL: `http://127.0.0.1:${port}`, OFICINA_TOKEN: token } });
+  const pending = new Map();
+  let buf = '';
+  child.stdout.on('data', (d) => {
+    buf += d;
+    let i;
+    while ((i = buf.indexOf('\n')) !== -1) {
+      const msg = JSON.parse(buf.slice(0, i));
+      buf = buf.slice(i + 1);
+      pending.get(msg.id)?.(msg);
+    }
+  });
+  let n = 0;
+  const rpc = (method, params) => new Promise((resolve) => {
+    const id = ++n;
+    pending.set(id, resolve);
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+  });
+  try {
+    const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'prueba', version: '1' } });
+    assert.equal(init.result.serverInfo.name, 'oficina-ias');
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+    const tools = (await rpc('tools/list')).result.tools.map((t) => t.name);
+    for (const t of ['pedir_tarea', 'hablar_con_ia', 'crear_nota', 'buscar_notas', 'crear_modelo_3d', 'impresora']) assert.ok(tools.includes(t), t);
+    const list = await rpc('tools/call', { name: 'listar_ias', arguments: {} });
+    assert.match(list.result.content[0].text, /Blendi/);
+    await rpc('tools/call', { name: 'crear_nota', arguments: { titulo: 'Desde Claude Desktop', contenido: 'Hola #mcp', nucleo: 'nicolas' } });
+    assert.equal(store.data.notes.find((x) => x.title === 'Desde Claude Desktop').hub, 'nicolas');
+    const found = await rpc('tools/call', { name: 'buscar_notas', arguments: { texto: 'Claude Desktop' } });
+    assert.match(found.result.content[0].text, /Desde Claude Desktop/);
+    const chat = await rpc('tools/call', { name: 'hablar_con_ia', arguments: { ia: 'blendi', mensaje: 'hola' } });
+    assert.match(chat.result.content[0].text, /Blendi/);
+    const bad = await rpc('tools/call', { name: 'hablar_con_ia', arguments: { ia: 'nadie-existe', mensaje: 'x' } });
+    assert.equal(bad.result.isError, true);
+  } finally {
+    child.kill();
+    server.close();
+  }
+});
+
+test('n8n: la oficina llama a sus webhooks y n8n le pide tareas y notas', async () => {
+  const http = await import('node:http');
+  const got = [];
+  const n8n = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      got.push(JSON.parse(body));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+  });
+  n8n.listen(0, '127.0.0.1');
+  await new Promise((r) => n8n.once('listening', r));
+  const url = `http://127.0.0.1:${n8n.address().port}/webhook/abc`;
+  const store = new Store(tmp());
+  store.data.settings.demoMode = 'always';
+  try {
+    await withApp(store, async (call, base) => {
+      assert.equal((await call('POST', '/api/automations', { name: 'Mal', url: 'ftp://x' })).status, 400);
+      const manual = (await call('POST', '/api/automations', { name: 'Guardar en Sheets', url, description: 'Guarda una fila' })).data;
+      await call('POST', '/api/automations', { name: 'Avisar', url, trigger: 'tarea' });
+      const r = await call('POST', `/api/automations/${manual.id}/run`, { datos: { fila: 1 } });
+      assert.equal(r.data.ok, true);
+      assert.deepEqual(got[0].datos, { fila: 1 });
+      await runTask(store, new Notes(store), { prompt: 'Resumen semanal', agentIds: ['chatgpt'] });
+      await new Promise((res) => setTimeout(res, 300));
+      const done = got.find((g) => g.evento === 'tarea-terminada');
+      assert.ok(done, 'avisa al terminar la tarea');
+      assert.equal(done.datos.titulo, 'Resumen semanal');
+
+      // Entrantes: con el token correcto, y aunque n8n llegue con otro Host (Docker).
+      const info = (await call('GET', '/api/automations')).data;
+      const token = info.hookBase.split('/').pop();
+      const viaDocker = await new Promise((resolve) => {
+        const req = http.request({ host: '127.0.0.1', port: new URL(base).port, path: `/api/hooks/${token}/nota`, method: 'POST', headers: { Host: 'host.docker.internal:4747', 'Content-Type': 'application/json' } }, (res) => {
+          let b = '';
+          res.on('data', (d) => (b += d));
+          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(b) }));
+        });
+        req.end(JSON.stringify({ titulo: 'Pedido de WhatsApp', contenido: 'Cliente quiere 3 soportes', nucleo: 'miguel' }));
+      });
+      assert.equal(viaDocker.status, 201);
+      assert.equal(store.data.notes.find((n) => n.title === 'Pedido de WhatsApp').hub, 'miguel');
+      assert.equal((await call('POST', '/api/hooks/malo/nota', { titulo: 'x' })).status, 401);
+      const t = await call('POST', `/api/hooks/${token}/tarea`, { tarea: 'Responde al cliente', esperar: true });
+      assert.equal(t.data.estado, 'done');
+      assert.equal((await call('POST', `/api/hooks/${token}/tarjeta`, { titulo: 'Imprimir soportes' })).status, 201);
+      assert.ok(!('hookToken' in (await call('GET', '/api/settings')).data));
+      assert.ok((await call('GET', '/api/automations')).data.log.length >= 2);
+    });
+  } finally {
+    n8n.close();
+  }
+});
+
+test('Bambu Lab P1S: estado por MQTT, órdenes y cámara', async () => {
+  const net = await import('node:net');
+  const { mqtt } = await import('../src/bambu.js');
+  process.env.OFICINA_PRINTER_PLAIN = '1';
+  const received = [];
+  let auth = null;
+  // Una "P1S" falsa: broker MQTT mínimo.
+  const broker = net.createServer((sock) => {
+    let buf = Buffer.alloc(0);
+    sock.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+      const { packets, rest } = mqtt.parse(buf);
+      buf = Buffer.from(rest);
+      for (const p of packets) {
+        if (p.type === 1) {
+          auth = p.body.toString('latin1');
+          sock.write(Buffer.from([0x20, 2, 0, auth.includes('12345678') ? 0 : 5]));
+        } else if (p.type === 8) sock.write(Buffer.from([0x90, 3, 0, 1, 0]));
+        else if (p.type === 3) {
+          const msg = JSON.parse(p.payload.toString());
+          received.push({ topic: p.topic, msg });
+          if (msg.pushing) {
+            sock.write(mqtt.publish('device/01P00A123/report', JSON.stringify({ print: { gcode_state: 'RUNNING', mc_percent: 42, mc_remaining_time: 37, layer_num: 80, total_layer_num: 190, nozzle_temper: 219.6, nozzle_target_temper: 220, bed_temper: 55, bed_target_temper: 55, subtask_name: 'soporte', lights_report: [{ node: 'chamber_light', mode: 'on' }] } })));
+            // Luego llega solo un cambio parcial (como hace la P1S).
+            setTimeout(() => sock.write(mqtt.publish('device/01P00A123/report', JSON.stringify({ print: { mc_percent: 43 } }))), 50);
+          }
+        }
+      }
+    });
+  });
+  broker.listen(0, '127.0.0.1');
+  await new Promise((r) => broker.once('listening', r));
+  const jpeg = Buffer.from([0xff, 0xd8, 1, 2, 3, 0xff, 0xd9]);
+  let camAuth = null;
+  const camera = net.createServer((sock) => {
+    sock.once('data', (d) => {
+      camAuth = d;
+      const head = Buffer.alloc(16);
+      head.writeUInt32LE(jpeg.length, 0);
+      sock.write(Buffer.concat([head, jpeg]));
+    });
+  });
+  camera.listen(0, '127.0.0.1');
+  await new Promise((r) => camera.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      assert.equal((await call('PUT', '/api/printer', { host: '8.8.8.8', serial: 'x', accessCode: 'y' })).status, 400, 'solo IPs locales');
+      let st = (await call('PUT', '/api/printer', { host: '127.0.0.1', port: broker.address().port, cameraPort: camera.address().port, serial: '01p00a123', accessCode: '12345678' })).data;
+      assert.equal(st.configured, true);
+      assert.ok(!JSON.stringify(await call('GET', '/api/settings')).includes('12345678'), 'el código de acceso no sale en los ajustes');
+      for (let i = 0; i < 50 && !(st.connected && st.state?.progreso === 43); i++) {
+        await new Promise((r) => setTimeout(r, 40));
+        st = (await call('GET', '/api/printer/status')).data;
+      }
+      assert.match(auth, /bblp/);
+      assert.equal(st.state.estado, 'imprimiendo');
+      assert.equal(st.state.progreso, 43, 'une los cambios parciales');
+      assert.equal(st.state.capas, 190);
+      assert.equal(st.state.boquilla, 220);
+      assert.equal(st.state.luz, true);
+      const r = await call('POST', '/api/printer/command', { command: 'pausar' });
+      assert.equal(r.status, 200);
+      await new Promise((res) => setTimeout(res, 50));
+      assert.ok(received.some((x) => x.topic === 'device/01P00A123/request' && x.msg.print?.command === 'pause'));
+      assert.equal((await call('POST', '/api/printer/command', { command: 'formatear' })).status, 400);
+    });
+    // Cámara: autenticación de 80 bytes y una imagen JPEG.
+    const { cameraFrame } = await import('../src/bambu.js');
+    const frame = await cameraFrame({ host: '127.0.0.1', port: camera.address().port, accessCode: '12345678' }, { plain: true });
+    assert.deepEqual([...frame], [...jpeg]);
+    assert.equal(camAuth.length, 80);
+    assert.equal(camAuth.readUInt32LE(0), 0x40);
+    assert.match(camAuth.toString('latin1'), /bblp[\s\S]*12345678/);
+  } finally {
+    broker.close();
+    camera.close();
+    const { connectPrinter } = await import('../src/bambu.js');
+    connectPrinter({});
+    delete process.env.OFICINA_PRINTER_PLAIN;
+  }
+});
+
+test('acceso remoto: desde otro computador hay que iniciar sesión y los miembros no tocan este equipo', async () => {
+  const http = await import('node:http');
+  const store = new Store(tmp());
+  await withApp(store, async (call, base) => {
+    const port = new URL(base).port;
+    // Petición "desde otro computador" (con el nombre que da Tailscale).
+    const remote = (method, url, body, { cookie, origin, host = 'mi-pc.test' } = {}) => new Promise((resolve) => {
+      const req = http.request({ host: '127.0.0.1', port, path: url, method, headers: { Host: `${host}:${port}`, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(origin ? { Origin: origin } : {}) } }, (res) => {
+        let b = '';
+        res.on('data', (d) => (b += d));
+        res.on('end', () => resolve({ status: res.statusCode, data: b ? JSON.parse(b) : null, cookie: (res.headers['set-cookie'] || [])[0]?.split(';')[0] }));
+      });
+      req.end(body === undefined ? undefined : JSON.stringify(body));
+    });
+    assert.equal((await remote('GET', '/api/agents')).status, 403, 'sin acceso remoto activado, ni responde');
+    assert.equal((await call('PUT', '/api/remote', { enabled: true })).status, 400, 'primero hay que crear usuarios');
+    assert.equal((await call('POST', '/api/users', { name: 'Santiago', password: 'corta' })).status, 400);
+    const santi = (await call('POST', '/api/users', { name: 'Santiago', password: 'contraseña-larga', hub: 'santiago' })).data;
+    await call('POST', '/api/users', { name: 'Nicolas', password: 'otra-contraseña', role: 'admin' });
+    assert.ok(!JSON.stringify((await call('GET', '/api/users')).data).includes('hash'));
+    const on = await call('PUT', '/api/remote', { enabled: true, extraHosts: ['mi-pc.test'] });
+    assert.equal(on.data.enabled, true);
+
+    const r401 = await remote('GET', '/api/agents');
+    assert.equal(r401.status, 401);
+    assert.equal(r401.data.login, true);
+    assert.equal((await remote('POST', '/api/auth/login', { name: 'santiago', password: 'mala' })).status, 401);
+    const ok = await remote('POST', '/api/auth/login', { name: 'Santiago', password: 'contraseña-larga' });
+    assert.equal(ok.status, 200);
+    const cookie = ok.cookie;
+    assert.match(cookie, /^oficina_sesion=[a-f0-9]{64}$/);
+    assert.equal((await remote('GET', '/api/agents', undefined, { cookie })).status, 200);
+    const me = await remote('GET', '/api/auth/me', undefined, { cookie });
+    assert.equal(me.data.user.name, 'Santiago');
+    // Su núcleo se usa por defecto para las notas.
+    await remote('POST', '/api/notes', { title: 'Nota desde Bogotá', content: 'x' }, { cookie });
+    assert.equal(store.data.notes.find((n) => n.title === 'Nota desde Bogotá').hub, 'santiago');
+    // Un miembro no cambia ajustes, no ejecuta scripts en este computador ni aprueba permisos.
+    assert.equal((await remote('PUT', '/api/settings', { demoMode: 'always' }, { cookie })).status, 403);
+    assert.equal((await remote('POST', '/api/cad/run', { kind: 'openscad', code: 'cube(1);' }, { cookie })).status, 403);
+    assert.equal((await remote('POST', '/api/access/r_x', { decision: 'always' }, { cookie })).status, 403);
+    assert.equal((await remote('PUT', '/api/remote', { enabled: false }, { cookie })).status, 403);
+    // Otra página web no puede usar la sesión.
+    assert.equal((await remote('GET', '/api/agents', undefined, { cookie, origin: 'https://pagina-mala.com' })).status, 403);
+    assert.equal((await remote('GET', '/api/agents', undefined, { cookie, host: 'pagina-mala.com' })).status, 403);
+    // El admin sí puede.
+    const admin = await remote('POST', '/api/auth/login', { name: 'Nicolas', password: 'otra-contraseña' });
+    assert.equal((await remote('PUT', '/api/settings', { maxTeam: 4 }, { cookie: admin.cookie })).status, 200);
+    // Cambiar la contraseña cierra sus sesiones.
+    await call('PUT', `/api/users/${santi.id}`, { password: 'nueva-contraseña' });
+    assert.equal((await remote('GET', '/api/agents', undefined, { cookie })).status, 401);
+    // Demasiados intentos fallidos se frenan.
+    let last;
+    for (let i = 0; i < 7; i++) last = await remote('POST', '/api/auth/login', { name: 'Santiago', password: 'no' });
+    assert.match(last.data.error, /Demasiados intentos/);
+    // El respaldo no lleva usuarios ni sesiones.
+    const exp = (await call('GET', '/api/export')).data;
+    assert.ok(!exp.sessions && !exp.settings.users);
+  });
+});
+
+test('jurado: jueces de otro proveedor califican a ciegas y se usa la mediana', async () => {
+  const http = await import('node:http');
+  const { PROVIDERS } = await import('../src/providers.js');
+  const judged = [];
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const data = JSON.parse(body);
+      let reply = 'Mi aporte: un script de Python que hace el inventario.';
+      if (/juez de un jurado/.test(data.messages[0].content)) {
+        judged.push(data.messages.at(-1).content);
+        reply = JSON.stringify({ nota: data.model === 'estricto' ? 2 : data.model === 'generoso' ? 5 : 4, motivo: 'ok' });
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const original = PROVIDERS.groq.baseUrl;
+  PROVIDERS.groq.baseUrl = `http://127.0.0.1:${fake.address().port}/v1`;
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { groq: 'k', ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      // Solo estas IAs están conectadas: el autor en Ollama y tres posibles jueces.
+      for (const a of store.data.agents) if (!['opencode', 'codestral', 'guardian', 'llama-devops'].includes(a.id)) a.provider = 'anthropic';
+      await call('PUT', '/api/agents/opencode', { provider: 'ollama', model: 'autor' });
+      await call('PUT', '/api/agents/codestral', { provider: 'groq', model: 'estricto' });
+      await call('PUT', '/api/agents/guardian', { provider: 'groq', model: 'generoso' });
+      await call('PUT', '/api/agents/llama-devops', { provider: 'groq', model: 'normal' });
+      await call('PUT', '/api/settings', { jury: { enabled: true, size: 3 } });
+      const task = await runTask(store, new Notes(store), { prompt: 'Haz un inventario', agentIds: ['opencode'] });
+      const j = task.steps[0].jury;
+      assert.equal(j.votes.length, 3);
+      assert.ok(!j.votes.some((v) => v.judgeId === 'opencode'), 'nadie se califica a sí mismo');
+      assert.equal(j.score, 4, 'mediana de 2, 4 y 5');
+      assert.ok(judged.every((p) => !/OpenCode/.test(p) && /autor anónimo/.test(p)), 'califican a ciegas');
+      const rep = (await call('GET', '/api/jury')).data;
+      assert.equal(rep.recent.length, 1);
+      const generous = rep.judges.find((x) => x.id === 'guardian');
+      const strict = rep.judges.find((x) => x.id === 'codestral');
+      assert.ok(generous.generosity > 0 && strict.generosity < 0, 'detecta jueces generosos y estrictos');
+      await call('POST', `/api/tasks/${task.id}/steps/opencode/rate`, { value: 1 });
+      const after = (await call('GET', '/api/jury')).data.judges.find((x) => x.id === 'guardian');
+      assert.equal(after.agreement, 100, 'coincidió contigo');
+      const m = (await call('GET', '/api/metrics')).data.opencode.accuracy;
+      assert.equal(m.parts.jurado.value, 75);
+    });
+  } finally {
+    PROVIDERS.groq.baseUrl = original;
     fake.close();
   }
 });

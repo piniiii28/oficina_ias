@@ -24,6 +24,10 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 - `server/src/cad.js`: Taller 3D. Detecta Blender, OpenSCAD, FreeCAD y laminadores, y ejecuta los scripts en `data/taller3d/`. `system.js` abre terminales, instala CLIs y abre archivos.
 - `server/src/access.js`: accesos con permiso. Las IAs escriben acciones (`<<buscar ruta="…">>`, `<<abrir … programa="blender">>`…); `callWithAccess` las ejecuta si hay permiso o pide aprobación (evento `access`) y le devuelve los resultados a la IA.
 - `server/src/blender.js` y `server/addons/oficina_ias.py`: Blender en vivo. El complemento abre un socket en 127.0.0.1:9877 con una clave (`settings.blenderToken`); las IAs usan `<<blender-escena>>`, `<<blender-ejecutar>>…<</blender-ejecutar>>`, `<<blender-captura>>`, `<<blender-guardar>>` y `<<blender-stl>>`, con permiso.
+- `server/src/auth.js`: usuarios, sesiones y acceso por Tailscale. En este computador no hay que iniciar sesión; desde otro, sí. `needsAdmin` lista lo que un miembro no puede hacer.
+- `server/src/automations.js`: n8n (webhooks salientes y entrantes con token en `/api/hooks/<token>/…`).
+- `server/src/bambu.js`: impresora Bambu Lab por MQTT local (8883) y cámara (6000). `mcp/oficina-mcp.mjs`: servidor MCP para Claude Desktop (usa `settings.apiToken`).
+- `server/src/metrics.js`: medidores de acierto y carga, verificador y jurado.
 - `server/src/hubs.js`: núcleos del grafo (Cerebro, Nicolás, Santiago, Miguel…). El núcleo activo llega en el encabezado `X-Nucleo` y cada nota guarda su `hub`.
 - `server/src/agents.js` y `playbooks.js`: la plantilla de 28 IAs y sus manuales de fábrica.
 - `server/src/notes.js`: notas, `[[enlaces]]`, `#etiquetas` y el grafo. `vault.js` escribe la bóveda `.md` para Obsidian.

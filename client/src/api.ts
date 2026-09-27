@@ -43,6 +43,19 @@ export type Meter = {
   load: { score: number; level: 'tranquila' | 'ocupada' | 'cargada' | 'saturada'; parts: Record<string, number>; avgInChars: number; errorsLastHour: number; lastError: string | null; tips: string[] };
 };
 
+export type PrinterState = { estado: string; codigo: string | null; archivo: string | null; progreso: number | null; restante: number | null; capa: number | null; capas: number | null; boquilla: number | null; boquillaMeta: number | null; cama: number | null; camaMeta: number | null; luz: boolean | null; error: string | null };
+export type PrinterInfo = { configured: boolean; name: string; model: string; host: string; serial: string; accessPreview: string | null; connected: boolean; error: string | null; state: PrinterState | null; updatedAt: number | null };
+export type Automation = { id: string; name: string; url: string; description: string; trigger: 'manual' | 'tarea'; allowAI: boolean };
+export type AutomationLog = { id: string; automationId: string; name: string; origen: string; ok: boolean; status: number; respuesta: string; ms: number; at: string };
+export type User = { id: string; name: string; role: 'admin' | 'miembro'; hub: string | null };
+export type RemoteInfo = { enabled: boolean; ips: string[]; hostname: string; port: number; urls: string[]; listening: string[]; users: number; extraHosts: string[] };
+export type JuryReport = {
+  settings: { enabled: boolean; size: number };
+  recent: { taskId: string; task: string; agentId: string; score: number; votes: { judgeId: string; name: string; score: number; reason: string }[]; rating: number | null; at: string }[];
+  judges: { id: string; name: string; votes: number; average: number; generosity: number; agreement: number | null; compared: number }[];
+  received: Record<string, { average: number; n: number }>;
+};
+
 export type AssistantDef = { id: string; name: string; focus: string; provider: string; model: string };
 
 export type Flow = { id: string; name: string; agentIds: string[] };
@@ -74,6 +87,7 @@ export type Step = {
   rating?: { value: number; comment: string; at: string };
   review?: boolean;
   verify?: { score: number; reason: string; by: string };
+  jury?: { score: number; votes: { judgeId: string; name: string; score: number; reason: string }[]; at: string };
   assistants?: { name: string; focus: string; task: string; output: string; simulated?: boolean; error?: string }[];
   status: 'pending' | 'working' | 'done' | 'error';
   output: string;
@@ -153,6 +167,7 @@ export type Settings = {
   blenderControl?: boolean;
   headsReview?: boolean;
   verifySteps?: boolean;
+  jury?: { enabled: boolean; size: number };
   hubs: Hub[];
   cadPaths: Record<string, string>;
 };
@@ -178,6 +193,7 @@ export type OfficeEvent =
   | { type: 'cad' }
   | { type: 'access'; requests: AccessRequest[] }
   | { type: 'blender'; capture?: string }
+  | ({ type: 'printer' } & PrinterInfo)
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 
@@ -189,6 +205,9 @@ export function setActiveHub(id: string) {
   activeHub = id;
 }
 
+/** Si la sesión se cerró (acceso remoto), la app vuelve a la pantalla de inicio de sesión. */
+export const onLoginNeeded = new EventTarget();
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -199,6 +218,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && (data as { login?: boolean }).login) onLoginNeeded.dispatchEvent(new Event('login'));
   if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText);
   return data as T;
 }
@@ -293,10 +313,40 @@ export const api = {
   blenderCapture: () => req<{ file: string }>('POST', '/api/blender/captura'),
   blenderCaptures: () => req<string[]>('GET', '/api/blender/capturas'),
 
+  me: () => req<{ user: (User & { local?: boolean }) | null; local: boolean; needsLogin: boolean; users: number }>('GET', '/api/auth/me'),
+  login: (name: string, password: string) => req<{ user: User }>('POST', '/api/auth/login', { name, password }),
+  logout: () => req('POST', '/api/auth/logout'),
+  users: () => req<User[]>('GET', '/api/users'),
+  createUser: (u: { name: string; password: string; role: string; hub: string | null }) => req<User>('POST', '/api/users', u),
+  updateUser: (id: string, u: Partial<User> & { password?: string }) => req<User>('PUT', `/api/users/${id}`, u),
+  deleteUser: (id: string) => req('DELETE', `/api/users/${id}`),
+  remote: () => req<RemoteInfo>('GET', '/api/remote'),
+  setRemote: (enabled: boolean, extraHosts?: string[]) => req<RemoteInfo>('PUT', '/api/remote', { enabled, extraHosts }),
+
+  claudeDesktop: () => req<{ configPath: string; installed: boolean; config: unknown }>('GET', '/api/claude-desktop'),
+  installClaudeDesktop: () => req<{ ok: boolean; configPath: string }>('POST', '/api/claude-desktop/install'),
+
+  automations: () => req<{ automations: Automation[]; log: AutomationLog[]; hookBase: string | null }>('GET', '/api/automations'),
+  createAutomation: (a: Partial<Automation>) => req<Automation>('POST', '/api/automations', a),
+  updateAutomation: (id: string, a: Partial<Automation>) => req<Automation>('PUT', `/api/automations/${id}`, a),
+  deleteAutomation: (id: string) => req('DELETE', `/api/automations/${id}`),
+  runAutomation: (id: string, datos: unknown) => req<{ ok: boolean; status: number; respuesta: string }>('POST', `/api/automations/${id}/run`, { datos }),
+  n8nStatus: () => req<{ running: boolean; url: string }>('GET', '/api/n8n/status'),
+  n8nInstall: () => req<{ ok: boolean; log: string }>('POST', '/api/n8n/install'),
+  n8nStart: () => req<{ opened: boolean; command: string }>('POST', '/api/n8n/start'),
+
+  printer: () => req<PrinterInfo>('GET', '/api/printer/status'),
+  savePrinter: (p: { name?: string; host: string; serial: string; accessCode?: string }) => req<PrinterInfo>('PUT', '/api/printer', p),
+  deletePrinter: () => req<PrinterInfo>('DELETE', '/api/printer'),
+  printerCommand: (command: string) => req<{ ok: boolean; message: string }>('POST', '/api/printer/command', { command }),
+
+  jury: () => req<JuryReport>('GET', '/api/jury'),
+  askJury: (taskId: string, agentId: string) => req('POST', `/api/tasks/${taskId}/steps/${agentId}/jury`),
+
   cadDetect: () => req<Record<string, string | null>>('GET', '/api/cad/detect'),
   cadJobs: () => req<CadJob[]>('GET', '/api/cad/jobs'),
   cadRun: (b: { kind: CadKind; code: string; name?: string; gui?: boolean; taskId?: string }) => req<CadJob>('POST', '/api/cad/run', b),
-  cadOpen: (id: string, what: 'app' | 'folder') => req('POST', `/api/cad/jobs/${id}/open`, { what }),
+  cadOpen: (id: string, what: 'app' | 'folder' | 'bambu') => req('POST', `/api/cad/jobs/${id}/open`, { what }),
   cadSlice: (id: string) => req<{ ok: boolean; log: string }>('POST', `/api/cad/jobs/${id}/slice`),
   cadDelete: (id: string) => req('DELETE', `/api/cad/jobs/${id}`),
 };

@@ -10,6 +10,10 @@ import { Palette } from './components/Palette';
 import { Board } from './views/Board';
 import { Taller } from './views/Taller';
 import { AccessRequests } from './components/AccessRequests';
+import { Login } from './components/Login';
+import { Automations } from './views/Automations';
+import { Jury } from './views/Jury';
+import { api, onLoginNeeded, type User } from './api';
 import { Welcome } from './components/Welcome';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AchievementWatcher } from './components/Achievements';
@@ -24,11 +28,13 @@ const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'notas', label: 'Notas', icon: '📝' },
   { id: 'grafo', label: 'Grafo', icon: '🕸️' },
   { id: 'taller', label: 'Taller 3D', icon: '🖨️' },
+  { id: 'automatizar', label: 'Automatizar', icon: '⚡' },
+  { id: 'jurado', label: 'Jurado', icon: '⚖️' },
   { id: 'agentes', label: 'Equipo', icon: '👥' },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙️' },
 ];
 
-function Shell() {
+function Shell({ user }: { user: (User & { local?: boolean }) | null }) {
   const { view, setView, connected, toasts, tasks, agents, hubs, hub, setHub } = useOffice();
   const me = hubs.find((h) => h.id === hub);
   const running = tasks.filter((t) => t.status !== 'done' && t.status !== 'error').length;
@@ -83,6 +89,11 @@ function Shell() {
         <button className="nav-item search-hint" onClick={() => setThemeState(theme === 'auto' ? 'light' : theme === 'light' ? 'dark' : 'auto')} title="Cambiar tema">
           <span>{theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</span><span className="nav-label">Tema: {theme === 'dark' ? 'oscuro' : theme === 'light' ? 'claro' : 'auto'}</span>
         </button>
+        {user && !user.local && (
+          <button className="nav-item search-hint" onClick={async () => { await api.logout(); location.reload(); }} title="Cerrar sesión">
+            <span>🚪</span><span className="nav-label">{user.name} · Salir</span>
+          </button>
+        )}
         <div className="sidebar-foot">
           <span className={`dot ${connected ? 'dot--live' : 'dot--off'}`} /> {connected ? 'En vivo' : 'Reconectando…'}
         </div>
@@ -96,6 +107,8 @@ function Shell() {
         {view === 'notas' && <Notes />}
         {view === 'grafo' && <Graph />}
         {view === 'taller' && <Taller />}
+        {view === 'automatizar' && <Automations />}
+        {view === 'jurado' && <Jury />}
         {view === 'agentes' && <Agents />}
         {view === 'ajustes' && <Settings />}
         </ErrorBoundary>
@@ -112,9 +125,20 @@ function Shell() {
 }
 
 export default function App() {
+  // Desde otro computador (Tailscale) primero hay que iniciar sesión.
+  const [auth, setAuth] = useState<{ user: (User & { local?: boolean }) | null; needsLogin: boolean } | null>(null);
+  const check = () => api.me().then(setAuth).catch(() => setAuth({ user: null, needsLogin: false }));
+  useEffect(() => {
+    check();
+    const on = () => setAuth({ user: null, needsLogin: true });
+    onLoginNeeded.addEventListener('login', on);
+    return () => onLoginNeeded.removeEventListener('login', on);
+  }, []);
+  if (!auth) return <div className="empty">Cargando…</div>;
+  if (auth.needsLogin) return <Login onDone={() => location.reload()} />;
   return (
     <OfficeProvider>
-      <Shell />
+      <Shell user={auth.user} />
     </OfficeProvider>
   );
 }

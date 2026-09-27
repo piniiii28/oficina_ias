@@ -1,6 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { AvatarConfig, Settings as SettingsT } from '../api';
+import type { AvatarConfig, RemoteInfo, Settings as SettingsT, User } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
@@ -36,6 +36,7 @@ export function Settings() {
       <ConnectCenter s={s} setS={setS} />
       <CliSection s={s} save={save} />
       <AccessSection s={s} setS={setS} />
+      <RemoteSection />
       <HubsSection s={s} setS={setS} />
       <CadSection s={s} save={save} />
       <MeSection />
@@ -153,6 +154,87 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
         })}
       </div>
     </details>
+  );
+}
+
+/** Usar la oficina desde otros computadores con Tailscale (y los usuarios con contraseña). */
+function RemoteSection() {
+  const { toast, hubs } = useOffice();
+  const [info, setInfo] = useState<RemoteInfo | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [form, setForm] = useState({ name: '', password: '', role: 'miembro', hub: '' });
+  const [error, setError] = useState('');
+  const load = () => {
+    api.remote().then(setInfo).catch((e) => setError(e.message));
+    api.users().then(setUsers).catch(() => {});
+  };
+  useEffect(load, []);
+  if (error) return null; // un miembro remoto no ve esta sección
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>🌐 Otros computadores (Tailscale)</h2>
+        {info && <span className={`pill ${info.enabled ? 'pill--done' : ''}`}>{info.enabled ? '● Acceso remoto activo' : '○ Solo este computador'}</span>}
+      </div>
+      <p className="muted small">Tailscale es gratis y crea una red privada solo entre tus computadores (Mosquera, Bogotá, Canadá…). La oficina sigue corriendo aquí y los demás entran desde el navegador con su usuario y contraseña. Nadie fuera de tu red de Tailscale puede verla.</p>
+      <ol className="steps small">
+        <li>Instala <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale ↗</a> en este computador y en los otros, e inicia sesión con la <b>misma cuenta</b> (o invita a los demás a tu red).</li>
+        <li>Crea abajo un usuario para cada persona.</li>
+        <li>Activa el acceso remoto. {info?.ips.length ? <>Este computador en Tailscale: <code>{info.ips.join(', ')}</code></> : <span className="warn">Todavía no detecto Tailscale en este computador.</span>}</li>
+        <li>Los demás entran a {info?.urls.length ? info.urls.map((u) => <code key={u} className="copy">{u}</code>) : <code>http://IP-de-tailscale:{info?.port || 4747}</code>} (o <code>http://{info?.hostname}:{info?.port}</code> con MagicDNS). Este computador debe estar encendido.</li>
+      </ol>
+      <h4>Usuarios</h4>
+      <ul className="grant-list">
+        {users.map((u) => (
+          <li key={u.id}>
+            <b>{u.name}</b> <span className={`pill ${u.role === 'admin' ? 'pill--done' : ''}`}>{u.role === 'admin' ? 'administrador' : 'miembro'}</span>
+            {u.hub && <span className="muted small"> · núcleo {hubs.find((h) => h.id === u.hub)?.name || u.hub}</span>}
+            <button className="link" onClick={async () => { const p = prompt(`Nueva contraseña para ${u.name} (mínimo 8 caracteres):`); if (!p) return; try { await api.updateUser(u.id, { password: p }); toast('🔑 Contraseña cambiada'); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>cambiar contraseña</button>
+            <button className="link" onClick={async () => { if (confirm(`¿Quitar a ${u.name}?`)) { await api.deleteUser(u.id); load(); } }}>quitar</button>
+          </li>
+        ))}
+        {!users.length && <li className="muted small">Todavía no hay usuarios.</li>}
+      </ul>
+      <div className="grid2">
+        <label>Nombre<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Santiago" /></label>
+        <label>Contraseña<input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="mínimo 8 caracteres" /></label>
+        <label>Permisos
+          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <option value="miembro">Miembro: trabaja con las IAs, notas y tablero</option>
+            <option value="admin">Administrador: además cambia ajustes, claves y permisos</option>
+          </select>
+        </label>
+        <label>Su núcleo del grafo
+          <select value={form.hub} onChange={(e) => setForm({ ...form, hub: e.target.value })}>
+            <option value="">(ninguno)</option>
+            {hubs.map((h) => <option key={h.id} value={h.id}>{h.emoji} {h.name}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="row">
+        <button className="btn btn--primary small" disabled={!form.name || form.password.length < 8} onClick={async () => {
+          try {
+            await api.createUser({ ...form, hub: form.hub || null });
+            setForm({ name: '', password: '', role: 'miembro', hub: '' });
+            load();
+            toast('👤 Usuario creado');
+          } catch (err) {
+            toast(`❌ ${(err as Error).message}`);
+          }
+        }}>＋ Crear usuario</button>
+        {info && (
+          <button className={`btn small ${info.enabled ? 'btn--ghost' : 'btn--primary'}`} onClick={async () => {
+            try {
+              setInfo(await api.setRemote(!info.enabled));
+              toast(info.enabled ? '🔒 Solo este computador' : '🌐 Acceso remoto activo');
+            } catch (err) {
+              toast(`❌ ${(err as Error).message}`);
+            }
+          }}>{info.enabled ? 'Desactivar acceso remoto' : 'Activar acceso remoto'}</button>
+        )}
+      </div>
+      <p className="muted small">Los miembros no pueden cambiar tus claves, aprobar permisos, ejecutar scripts en este computador ni tocar la impresora: eso queda para ti o para un administrador.</p>
+    </section>
   );
 }
 

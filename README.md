@@ -170,9 +170,36 @@ Además, la oficina tiene una **memoria compartida**: antes de cada tarea, el ce
 
 Si pegas una URL en una tarea, la oficina descarga el texto de esa página (hasta 3 enlaces) y se lo pasa al equipo como adjunto. Por seguridad no lee direcciones locales ni privadas. Algunas redes sociales, como Instagram, exigen iniciar sesión y no dejan leer su contenido.
 
+## Automatizar con n8n
+
+En **⚡ Automatizar** conectas la oficina con [n8n](https://n8n.io) (gratis, corre en tu computador; se instala y se abre con un botón):
+
+- **De n8n a la oficina:** con un nodo *HTTP Request* puedes pedir tareas (`/tarea`), crear notas (`/nota`) o tarjetas del tablero (`/tarjeta`). Las direcciones llevan una clave secreta y se ven solo en este computador. Si n8n corre en Docker, usa `host.docker.internal` en lugar de `localhost`.
+- **De la oficina a n8n:** pega la URL de un nodo *Webhook* de n8n. Se activa a mano, al terminar cada tarea, o cuando una IA lo pide (te pregunta la primera vez y te muestra los datos que va a enviar).
+
+## Claude Desktop
+
+En **⚡ Automatizar → Claude Desktop** pulsa **Instalar en Claude Desktop** y reinícialo. Desde Claude Desktop podrás pedirle tareas a la oficina, hablar con una IA específica, buscar y crear notas, preguntarle a un núcleo, crear modelos 3D y ver o controlar tu impresora. Es un servidor MCP (`mcp/oficina-mcp.mjs`) que usa la oficina abierta en tu computador con una clave propia.
+
+## Impresora Bambu Lab (P1S)
+
+En **Taller 3D → Mi impresora** escribe la IP, el número de serie y el código de acceso LAN de la impresora (en su pantalla: Configuración → WLAN). En el firmware actual hay que activar el **modo solo LAN** y el **modo desarrollador**, y para la cámara **LAN Mode Liveview**. La oficina se conecta sin la nube de Bambu y muestra el progreso, la capa, las temperaturas y el tiempo restante, deja pausar, reanudar, detener y prender la luz, y ver la cámara. Las IAs y Claude Desktop pueden consultar el estado; para ver la cámara o dar órdenes te piden permiso, y **detener** siempre pregunta. Los modelos del Taller se abren en **Bambu Studio** con un clic para laminarlos y enviarlos.
+
+## Usarla desde otros computadores (Tailscale)
+
+1. Instala [Tailscale](https://tailscale.com/download) (gratis) en todos los computadores con la misma cuenta.
+2. En **Ajustes → Otros computadores**, crea un usuario con contraseña para cada persona (miembro o administrador) y elige su núcleo del grafo.
+3. Activa el acceso remoto: la oficina también escucha en la IP de Tailscale de este computador (`http://100.x.y.z:4747`). Los demás entran desde el navegador e inician sesión.
+
+En este computador no hace falta iniciar sesión. Los **miembros** trabajan con las IAs, las notas y el tablero, pero no pueden cambiar tus claves, aprobar permisos, ejecutar scripts en tu computador ni tocar la impresora. Nadie fuera de tu red de Tailscale puede ver la oficina.
+
+## Jurado
+
+En **⚖️ Jurado** activas que 1 a 3 IAs califiquen cada aporte de 1 a 5, **a ciegas** (sin saber quién lo escribió), con una rúbrica fija y prefiriendo jueces de otro proveedor. La nota (mediana) alimenta el medidor 🎯. Ahí ves qué jueces son generosos o estrictos y cuánto coinciden con tus 👍/👎, que siguen pesando más. No se usa en modo demo.
+
 ## Seguridad
 
-La oficina solo escucha en tu propio computador (`127.0.0.1`) y rechaza peticiones que vengan de otras páginas web, porque guarda tus claves y puede ejecutar herramientas de línea de comandos. Si de verdad quieres abrirla a tu red, inicia con la variable `HOST=0.0.0.0`, bajo tu responsabilidad.
+La oficina solo escucha en tu propio computador (`127.0.0.1`) y rechaza peticiones que vengan de otras páginas web, porque guarda tus claves y puede ejecutar herramientas de línea de comandos. Para usarla desde otros computadores, activa el acceso por Tailscale (con usuarios y contraseñas) en vez de abrirla a internet.
 
 ## ¿Dónde se guarda todo?
 

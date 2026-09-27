@@ -13,6 +13,8 @@ import { bus, agentStatus } from './orchestrator.js';
 import { detectCad, CAD_TOOLS } from './cad.js';
 import { launchApp, openPath } from './system.js';
 import { blenderCall, blenderStatus, sceneText } from './blender.js';
+import { runAutomation } from './automations.js';
+import { getPrinter, printerInfo, cameraFrame, PRINTER_COMMANDS } from './bambu.js';
 
 const win = process.platform === 'win32';
 export const MODES = ['leer', 'escribir'];
@@ -102,12 +104,16 @@ export function decide(id, decision, why = '') {
 
 // --- Acciones que las IAs pueden escribir en su respuesta ---
 // <<accion atributo="valor" …>>
-const ACTION_RE = /<<(listar|buscar|leer|abrir|copiar|pedir-acceso|buscar-programa)((?:\s+[a-z]+="[^"]*")*)\s*\/?>>/g;
+const ACTION_RE = /<<(listar|buscar|leer|abrir|copiar|pedir-acceso|buscar-programa|impresora-estado|impresora-camara|impresora-orden)((?:\s+[a-z]+="[^"]*")*)\s*\/?>>/g;
 
 const BLENDER_RE = /<<blender-(escena|captura|guardar|stl)((?:\s+[a-z]+="[^"]*")*)\s*\/?>>|<<blender-ejecutar((?:\s+[a-z]+="[^"]*")*)\s*>>([\s\S]*?)<<\/blender-ejecutar>>/g;
 
+const AUTOMATION_RE = /<<automatizar\s+nombre="([^"]+)"\s*>>([\s\S]*?)<<\/automatizar>>/g;
+
 export function parseActions(text) {
   const out = [];
+  // Automatizaciones de n8n: <<automatizar nombre="…">> {json} <</automatizar>>
+  for (const m of String(text).matchAll(AUTOMATION_RE)) out.push({ kind: 'automatizar', attrs: { nombre: m[1], datos: m[2].trim() }, raw: `<<automatizar nombre="${m[1]}">>` });
   // Blender en vivo: <<blender-ejecutar>> código <</blender-ejecutar>>, <<blender-escena>>…
   for (const m of String(text).matchAll(BLENDER_RE)) {
     const attrs = {};
@@ -140,7 +146,26 @@ import bpy
 <<blender-guardar ruta="C:\\...\\proyecto.blend">>   guarda el proyecto (si no das ruta, va al Taller 3D)
 <<blender-stl ruta="C:\\...\\pieza.stl">>   exporta las mallas visibles a STL en milímetros
 Trabaja en pasos cortos: ejecuta, mira el resultado y la escena, corrige y sigue. No borres objetos que ya existían sin que el usuario lo pida. Blender usa metros: 1 mm = 0.001.` : '';
-  return `${live}
+  const autos = settings.automations || [];
+  const n8n = autos.length ? `
+
+## Automatizaciones del usuario (n8n)
+Puedes activar una escribiendo (los datos en JSON):
+<<automatizar nombre="Nombre exacto">>
+{"campo": "valor"}
+<</automatizar>>
+Disponibles:
+${autos.map((a) => `- «${a.name}»${a.description ? `: ${a.description}` : ''}`).join('\n')}
+El usuario aprueba cada una la primera vez.` : '';
+  const pr = printerInfo(settings);
+  const printer = pr.configured ? `
+
+## Impresora 3D del usuario (${pr.name}, Bambu Lab ${pr.model}${pr.connected ? `, ahora: ${pr.state?.estado}${pr.state?.progreso != null ? ` ${pr.state.progreso} %` : ''}` : ', desconectada'})
+<<impresora-estado>>   progreso, capa, temperaturas y tiempo restante
+<<impresora-camara>>   toma una foto de la cámara (el usuario la ve en el Taller 3D)
+<<impresora-orden orden="pausar">>   órdenes: pausar, reanudar, detener, luz_on, luz_off (el usuario aprueba)
+Úsalas solo cuando el usuario lo pida o haya un problema claro (por ejemplo, una falla vista en la cámara).` : '';
+  return `${live}${n8n}${printer}
 
 ## Acceso a archivos del computador del usuario (con su permiso)
 Si necesitas ver carpetas o archivos del usuario, escribe una acción en una línea propia; la oficina la ejecuta y te devuelve el resultado. Si la ruta aún no está permitida, el usuario recibe una petición y decide. Usa rutas completas.
@@ -235,6 +260,67 @@ async function runAction(store, agent, act, onceGrants) {
       await needBlender(kind === 'blender-stl' ? `exportar un STL a ${target}` : `guardar el proyecto en ${target}`);
       const r = await blenderCall(store, kind === 'blender-stl' ? 'exportar_stl' : 'guardar', { ruta: target, copia: true });
       return r.ok ? `Guardado en ${target}.` : `No pude guardar: ${r.error}`;
+    }
+    if (kind.startsWith('impresora-')) {
+      const info = printerInfo(store.data.settings);
+      if (!info.configured) return 'La impresora no está configurada (Taller 3D → Mi impresora).';
+      if (kind === 'impresora-estado') {
+        if (!info.connected) return `No estoy conectado a la impresora: ${info.error || 'sin respuesta'}`;
+        const p = info.state;
+        return `Estado: ${p.estado}${p.archivo ? ` · ${p.archivo}` : ''}; progreso ${p.progreso ?? '—'} %, capa ${p.capa ?? '—'}/${p.capas ?? '—'}, faltan ${p.restante ?? '—'} min; boquilla ${p.boquilla ?? '—'}/${p.boquillaMeta ?? '—'} °C; cama ${p.cama ?? '—'}/${p.camaMeta ?? '—'} °C${p.error ? `; error ${p.error}` : ''}.`;
+      }
+      if (kind === 'impresora-camara') {
+        if (!store.data.settings.printerCamera && !onceGrants.some((g) => g.camera)) {
+          const r = await requestAccess(store, { agent, path: 'La cámara de tu impresora', mode: 'ver', reason: attrs.motivo, action: 'tomar una foto de la impresión', special: true });
+          if (r.decision === 'deny') throw new Error('El usuario no dio permiso');
+          if (r.decision === 'always') {
+            store.data.settings.printerCamera = true;
+            store.save();
+          } else onceGrants.push({ camera: true });
+        }
+        const c = store.data.settings.printer;
+        const img = await cameraFrame({ host: c.host, accessCode: c.accessCode, port: c.cameraPort || 6000 }, { plain: process.env.OFICINA_PRINTER_PLAIN === '1' });
+        const dir = path.join(dataDir, 'taller3d', 'capturas');
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, `impresora-${Date.now()}.jpg`), img);
+        bus.emit('event', { type: 'printer', ...info, capture: true });
+        return 'Foto tomada: el usuario la ve en el Taller 3D.';
+      }
+      const orden = String(attrs.orden || '');
+      if (!PRINTER_COMMANDS.includes(orden)) return `Orden desconocida. Usa: ${PRINTER_COMMANDS.join(', ')}.`;
+      const p = getPrinter();
+      if (!p?.connected) return `No estoy conectado a la impresora: ${info.error || 'sin respuesta'}`;
+      // Detener siempre se pregunta; lo demás, hasta que digas «permitir siempre».
+      if (orden === 'detener' || (!store.data.settings.printerControl && !onceGrants.some((g) => g.printer))) {
+        const r = await requestAccess(store, { agent, path: 'Tu impresora Bambu Lab', mode: 'controlar', reason: attrs.motivo, action: orden.replace('_', ' '), special: true });
+        if (r.decision === 'deny') throw new Error('El usuario no dio permiso');
+        if (r.decision === 'always' && orden !== 'detener') {
+          store.data.settings.printerControl = true;
+          store.save();
+        } else onceGrants.push({ printer: true });
+      }
+      p.command(orden);
+      return `Orden enviada a la impresora: ${orden}.`;
+    }
+    if (kind === 'automatizar') {
+      const auto = (store.data.settings.automations || []).find((a) => a.name.toLowerCase() === String(attrs.nombre).toLowerCase());
+      if (!auto) return `No existe la automatización «${attrs.nombre}».`;
+      let datos = {};
+      try {
+        datos = attrs.datos ? JSON.parse(attrs.datos.replace(/^```\w*\n?|```$/g, '')) : {};
+      } catch {
+        datos = { texto: attrs.datos };
+      }
+      if (!auto.allowAI && !onceGrants.some((g) => g.auto === auto.id)) {
+        const r = await requestAccess(store, { agent, path: `Automatización «${auto.name}» (n8n)`, mode: 'activar', reason: auto.description, action: `enviar datos a ${auto.name}`, code: JSON.stringify(datos, null, 2), special: true });
+        if (r.decision === 'deny') throw new Error('El usuario no dio permiso');
+        if (r.decision === 'always') {
+          auto.allowAI = true;
+          store.save();
+        } else onceGrants.push({ auto: auto.id });
+      }
+      const r = await runAutomation(store, auto, datos, `ia:${agent?.name || 'IA'}`);
+      return r.ok ? `Automatización «${auto.name}» activada. Respuesta: ${r.respuesta.slice(0, 500) || '(vacía)'}` : `La automatización falló (${r.status}): ${r.respuesta.slice(0, 300)}`;
     }
     if (kind === 'buscar-programa') {
       const tools = await detectCad(store.data.settings);

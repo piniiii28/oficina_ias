@@ -110,6 +110,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
                 <div className="small muted">{s.instruction}</div>
                 {s.dependsOn?.length ? <div className="small">↳ Trabajó sobre la entrega de {s.dependsOn.map((d) => agent(d)?.name || d).join(', ')}</div> : null}
               </div>
+              {s.jury && <span className={`pill ${s.jury.score >= 4 ? 'pill--done' : s.jury.score <= 2 ? 'pill--error' : ''}`} title={s.jury.votes.map((v) => `${v.name}: ${v.score} — ${v.reason}`).join('\n')}>⚖️ {s.jury.score}/5</span>}
               {s.verify && <span className={`pill ${s.verify.score >= 4 ? 'pill--done' : s.verify.score <= 2 ? 'pill--error' : ''}`} title={`${s.verify.by}: ${s.verify.reason}`}>✔ {s.verify.score}/5</span>}
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
@@ -134,6 +135,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
                   api.rateStep(task.id, s.agentId, -1, c);
                 }}>👎</button>
                 {s.rating?.comment && <small className="muted">«{s.rating.comment}»</small>}
+                {!s.simulated && !s.jury && <button className="btn btn--ghost small" title="Otras IAs lo califican a ciegas" onClick={() => api.askJury(task.id, s.agentId).catch((e) => alert(e.message))}>⚖️ Pedir al jurado</button>}
               </div>
             )}
           </details>

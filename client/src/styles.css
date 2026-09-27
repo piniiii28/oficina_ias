@@ -841,3 +841,29 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .meter-detail ul { margin: 0; padding-left: 18px; }
 .walker-card .meters { min-width: 140px; }
 .walker-card .meter span { color: #e5e7eb; }
+
+/* --- Inicio de sesión --- */
+.login-screen { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 25%, var(--bg)), var(--bg) 60%); }
+.login-card { width: min(380px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 28px; border-radius: 20px; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.login-card h1 { margin: 0; font-size: 22px; }
+.login-logo { font-size: 42px; }
+
+/* --- Automatizar, jurado e impresora --- */
+.automations, .jury { display: flex; flex-direction: column; gap: 14px; max-width: 1000px; }
+.automations h2, .jury h2 { margin: 0; }
+.automations h3, .jury h3, .printer-panel h3 { margin: 0; }
+.automations h4 { margin: 14px 0 4px; }
+.hook-table { width: 100%; border-collapse: collapse; }
+.hook-table td { padding: 6px 4px; border-top: 1px solid var(--border); vertical-align: top; word-break: break-all; }
+.auto-list, .auto-log, .verdicts { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.auto-list li { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.auto-list code { word-break: break-all; }
+.verdicts > li { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.verdicts ul { margin: 6px 0 0; padding-left: 18px; }
+.judge-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.judge { display: flex; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); }
+.judge div { display: flex; flex-direction: column; }
+.printer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 8px 0; }
+.progress { height: 10px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+.progress i { display: block; height: 100%; background: linear-gradient(90deg, #84cc16, #22c55e); transition: width 0.6s; }
+.printer-cam { width: 100%; border-radius: 10px; border: 1px solid var(--border); margin-top: 6px; }

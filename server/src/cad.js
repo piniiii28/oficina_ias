@@ -31,6 +31,10 @@ export const CAD_TOOLS = {
     label: 'PrusaSlicer', url: 'https://www.prusa3d.com/page/prusaslicer_424/', bins: ['prusa-slicer', 'prusa-slicer-console'],
     win: ['C:/Program Files/Prusa3D/PrusaSlicer/prusa-slicer-console.exe'], mac: ['/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer'],
   },
+  bambustudio: {
+    label: 'Bambu Studio', url: 'https://bambulab.com/es/download/studio', bins: ['bambu-studio'],
+    win: ['C:/Program Files/Bambu Studio/bambu-studio.exe'], mac: ['/Applications/BambuStudio.app/Contents/MacOS/BambuStudio'],
+  },
   orcaslicer: {
     label: 'OrcaSlicer', url: 'https://github.com/SoftFever/OrcaSlicer/releases', bins: ['orca-slicer'],
     win: ['C:/Program Files/OrcaSlicer/orca-slicer.exe'], mac: ['/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer'],
@@ -210,6 +214,14 @@ export async function openInApp(settings, job) {
   const exe = job.kind === 'freecad' ? tools.freecadGui : tools[job.kind];
   if (!exe || !fs.existsSync(target)) return false;
   return launchApp(exe, [target], job.dir);
+}
+
+/** Abre el STL de un trabajo en Bambu Studio (para mandarlo a tu Bambu Lab). */
+export async function openInBambu(settings, job) {
+  const tools = await detectCad(settings);
+  const stl = listFiles(job.dir).find((f) => f.name.toLowerCase().endsWith('.stl'));
+  if (!tools.bambustudio || !stl) return false;
+  return launchApp(tools.bambustudio, [path.join(job.dir, stl.name)], job.dir);
 }
 
 /** Lamina el STL con PrusaSlicer u OrcaSlicer (si están instalados) y guarda el G-code. */

@@ -1,7 +1,7 @@
 // Estado compartido de la app: agentes, estados animados, tareas y eventos.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { play } from './sounds';
-import { api, setActiveHub, type Agent, type AgentState, type CadTool, type Department, type FreeModel, type Flow, type Hub, type Meeting, type OfficeEvent, type Provider, type Task, type AccessRequest, type Meter } from './api';
+import { api, setActiveHub, type Agent, type AgentState, type CadTool, type Department, type FreeModel, type Flow, type Hub, type Meeting, type OfficeEvent, type Provider, type Task, type AccessRequest, type Meter, type PrinterInfo } from './api';
 
 export type Live = { status: AgentState; message: string; at: number };
 
@@ -22,6 +22,7 @@ type Ctx = {
   accessRequests: AccessRequest[];
   blenderVersion: number;
   metrics: Record<string, Meter>;
+  printer: PrinterInfo | null;
   live: Record<string, Live>;
   tasks: Task[];
   meetings: Meeting[];
@@ -42,7 +43,7 @@ type Ctx = {
   setView: (v: View) => void;
 };
 
-export type View = 'oficina' | 'tablero' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'taller' | 'agentes' | 'ajustes';
+export type View = 'oficina' | 'tablero' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'taller' | 'automatizar' | 'jurado' | 'agentes' | 'ajustes';
 
 const OfficeCtx = createContext<Ctx | null>(null);
 
@@ -63,6 +64,10 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [blenderVersion, setBlenderVersion] = useState(0);
   const [metrics, setMetrics] = useState<Record<string, Meter>>({});
+  const [printer, setPrinter] = useState<PrinterInfo | null>(null);
+  useEffect(() => {
+    api.printer().then(setPrinter).catch(() => {});
+  }, []);
   // Medidores de acierto y carga: se refrescan cada 10 s mientras la pestaña está visible.
   useEffect(() => {
     const load = () => !document.hidden && api.metrics().then(setMetrics).catch(() => {});
@@ -192,6 +197,9 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       } else if (e.type === 'access') {
         if (e.requests.length) play('ding');
         setAccessRequests(e.requests);
+      } else if (e.type === 'printer') {
+        const { type: _t, ...info } = e;
+        setPrinter(info);
       } else if (e.type === 'blender') {
         setBlenderVersion((v) => v + 1);
       } else if (e.type === 'cad') {
@@ -215,11 +223,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
+      agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, printer, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, printer, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

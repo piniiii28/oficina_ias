@@ -10,7 +10,8 @@ import { relatedNotes } from './librarian.js';
 import { readLinks } from './links.js';
 import { callWithAccess } from './access.js';
 import { callWithAssistants } from './assistants.js';
-import { verifyStep } from './metrics.js';
+import { verifyStep, juryStep } from './metrics.js';
+import { onTaskFinished } from './automations.js';
 
 export const bus = new EventEmitter();
 /** Controladores para cancelar tareas en curso (id de tarea → AbortController). */
@@ -288,7 +289,12 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         step.status = 'done';
         remember(store, agent, `Tarea "${task.title}": ${step.instruction}`);
         // Opcional: un verificador le pone nota al aporte (alimenta el medidor de acierto).
-        if (settings.verifySteps && !signal.aborted) {
+        if (settings.jury?.enabled && !signal.aborted) {
+          // Jurado: otras IAs califican el aporte a ciegas.
+          agentStatus(agent.id, 'thinking', 'El jurado está revisando mi aporte…');
+          const j = await juryStep(store, task, step, settings.jury.size || 2);
+          if (j) step.jury = j;
+        } else if (settings.verifySteps && !signal.aborted) {
           const v = await verifyStep(store, task, step);
           if (v) step.verify = v;
         }
@@ -388,6 +394,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   store.save();
   emitTask();
   bus.emit('event', { type: 'notes' });
+  onTaskFinished(store, task);
   return task;
 }
 

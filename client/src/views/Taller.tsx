@@ -6,6 +6,7 @@ import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { StlViewer } from '../components/StlViewer';
 import { BlenderLive } from '../components/BlenderLive';
+import { PrinterPanel } from '../components/PrinterPanel';
 import { useOffice } from '../state';
 
 const APPS: { kind: CadKind; label: string; flow: string; hint: string }[] = [
@@ -83,6 +84,7 @@ export function Taller() {
         {!team.length && <p className="muted small">No hay IAs del taller. Ve a Equipo → Restaurar plantilla para contratarlas.</p>}
       </section>
 
+      <PrinterPanel />
       <BlenderLive />
 
       <section className="card">
@@ -171,6 +173,7 @@ export function Taller() {
                 <div className="row">
                   <button className="btn btn--ghost small" onClick={() => api.cadOpen(j.id, 'app').catch((e) => toast(`❌ ${e.message}`))}>🪟 Abrir en {APPS.find((a) => a.kind === j.kind)?.label}</button>
                   <button className="btn btn--ghost small" onClick={() => api.cadOpen(j.id, 'folder').catch((e) => toast(`❌ ${e.message}`))}>📁 Carpeta</button>
+                  {stl && <button className="btn btn--ghost small" title="Para laminarlo y mandarlo a tu Bambu Lab" onClick={() => api.cadOpen(j.id, 'bambu').catch((e) => toast(`❌ ${e.message}. Instala Bambu Studio.`))}>🟩 Bambu Studio</button>}
                   {stl && (
                     <button className="btn btn--ghost small" disabled={busy === j.id} onClick={async () => {
                       setBusy(j.id);
