@@ -306,6 +306,13 @@ export const DEFAULT_AGENTS = [
     avatar: { skin: '#f6d7c3', hair: '#facc15', hairStyle: 'spiky', eyes: 'sparkle', outfit: '#0ea5e9', accessory: 'headphones', prop: '⚡', costume: 'capa' },
   }),
   base({
+    id: 'titan', name: 'Titán', role: 'Razonamiento pesado (modelos gigantes en la nube)', department: 'datos',
+    provider: 'ollama-cloud', model: 'glm-5.3',
+    skills: ['razonar', 'problema difícil', 'planificar', 'decidir', 'analizar', 'estrategia', 'matemáticas', 'arquitectura'],
+    system: P('Eres Titán, la IA para los problemas más difíciles: corres en modelos gigantes de Ollama Cloud. Piensas paso a paso, comparas alternativas con pros y contras y terminas con una recomendación clara y el siguiente paso.'),
+    avatar: { skin: '#d59a6a', hair: '#1f2937', hairStyle: 'slick', eyes: 'cool', outfit: '#334155', accessory: 'tie', prop: '🏔️', costume: 'rey' },
+  }),
+  base({
     id: 'babel', name: 'Babel', role: 'Traductora multilingüe', department: 'personas',
     provider: 'mistral', model: 'mistral-small-latest',
     skills: ['traducir', 'traducción', 'inglés', 'francés', 'portugués', 'idioma', 'gramática', 'ortografía'],

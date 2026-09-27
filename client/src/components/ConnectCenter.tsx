@@ -220,9 +220,38 @@ function ConnectPanel({ p, s, setS, refresh }: { p: Provider; s: Settings; setS:
         </ol>
       )}
 
-      {!p.cli && !p.keyless && (
+      {p.id === 'cloudflare' && (
+        <div className="small connect-extra">
+          {s.images?.cloudflareToken && s.cloudflareAccount
+            ? <p className="ok">✓ Usa tu cuenta de Cloudflare de «🎨 Imágenes»: no hace falta otra clave.</p>
+            : <p className="muted">Necesita tu <b>Account ID</b> (32 letras y números, en la dirección del navegador en dash.cloudflare.com) y un token con permiso «Workers AI». Si ya los pusiste en «🎨 Imágenes», se usan esos.</p>}
+          <label>Account ID
+            <input defaultValue={s.cloudflareAccount || ''} placeholder="3f9a1b2c…" onBlur={async (e) => {
+              const v = e.target.value.trim();
+              if (v === (s.cloudflareAccount || '')) return;
+              try {
+                setS(await api.saveSettings({ cloudflareAccount: v }));
+                await refresh();
+                toast('☁️ Account ID guardado');
+              } catch (err) {
+                toast(`❌ ${(err as Error).message}`);
+              }
+            }} />
+          </label>
+          {s.keys[p.id]?.configured && <button className="btn btn--ghost small" disabled={busy === 'test'} onClick={() => test()}>{busy === 'test' ? 'Probando…' : 'Probar'}</button>}
+        </div>
+      )}
+      {p.id === 'ovh' && (
+        <div className="small connect-extra">
+          <label className="check"><input type="checkbox" checked={Boolean(s.ovhAnon)} onChange={async (e) => { setS(await api.saveSettings({ ovhAnon: e.target.checked })); await refresh(); }} /> Usar gratis y sin clave (2 preguntas por minuto por modelo)</label>
+          {s.ovhAnon && <button className="btn btn--ghost small" disabled={busy === 'test'} onClick={() => test()}>{busy === 'test' ? 'Probando…' : 'Probar'}</button>}
+          <p className="muted">Abajo puedes poner una clave para ir más rápido, pero con clave OVHcloud cobra por uso.</p>
+        </div>
+      )}
+
+      {!p.cli && !p.keyless && !(p.id === 'cloudflare' && s.images?.cloudflareToken && s.cloudflareAccount) && (
         <ol className="steps">
-          <li><b>Crea tu clave</b> (con tu correo): <a className="btn btn--ghost small" href={p.keyUrl} target="_blank" rel="noreferrer">Abrir la página ↗</a></li>
+          <li><b>{p.id === 'ovh' ? 'Opcional: crea tu clave' : 'Crea tu clave'}</b> (con tu correo): <a className="btn btn--ghost small" href={p.keyUrl} target="_blank" rel="noreferrer">Abrir la página ↗</a></li>
           <li>
             <b>{mainOn ? 'Agrega otra cuenta' : 'Pégala aquí'}</b>
             <div className="row">

@@ -2145,3 +2145,60 @@ test('videos: gratis uniendo imágenes con FFmpeg, o Hailuo de MiniMax; la IA es
     for (const k of ['POLLINATIONS_BASE', 'MINIMAX_BASE', 'OFICINA_VIDEO_POLL_MS']) delete process.env[k];
   }
 });
+
+test('Cloudflare (texto, con la cuenta de Imágenes), Ollama Cloud y OVHcloud sin clave', async () => {
+  const http = await import('node:http');
+  const { callModel, PROVIDERS, hasKey } = await import('../src/providers.js');
+  const seen = [];
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      seen.push({ url: req.url, auth: req.headers.authorization, model: JSON.parse(b || '{}').model });
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'hola' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const base = `http://127.0.0.1:${fake.address().port}`;
+  process.env.CLOUDFLARE_AI_BASE = base;
+  const old = { oc: PROVIDERS['ollama-cloud'].baseUrl, ovh: PROVIDERS.ovh.baseUrl };
+  PROVIDERS['ollama-cloud'].baseUrl = `${base}/oc/v1`;
+  PROVIDERS.ovh.baseUrl = `${base}/ovh/v1`;
+  const ask = (settings, provider, model) => callModel(settings, { provider, model, system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+  try {
+    // Cloudflare usa el mismo Account ID y token de Ajustes → Imágenes.
+    const acct = 'a'.repeat(32);
+    const s1 = { images: { cloudflareAccount: acct, cloudflareToken: 'cf-tok' } };
+    assert.equal(hasKey(s1, 'cloudflare'), true);
+    assert.equal(hasKey({ images: { cloudflareToken: 'x' } }, 'cloudflare'), false, 'sin Account ID no está conectado');
+    assert.equal((await ask(s1, 'cloudflare', '@cf/openai/gpt-oss-120b')).text, 'hola');
+    assert.equal(seen.at(-1).url, `/client/v4/accounts/${acct}/ai/v1/chat/completions`);
+    assert.equal(seen.at(-1).auth, 'Bearer cf-tok');
+    // Ollama Cloud con tu clave de ollama.com.
+    await ask({ apiKeys: { 'ollama-cloud': 'oc-key' } }, 'ollama-cloud', 'glm-5.3');
+    assert.equal(seen.at(-1).url, '/oc/v1/chat/completions');
+    assert.equal(seen.at(-1).auth, 'Bearer oc-key');
+    // OVHcloud: gratis sin clave (si lo activas); no manda Authorization.
+    assert.equal(hasKey({}, 'ovh'), false);
+    await ask({ apiKeys: { ovhAnon: true } }, 'ovh', 'gpt-oss-120b');
+    assert.equal(seen.at(-1).url, '/ovh/v1/chat/completions');
+    assert.equal(seen.at(-1).auth, undefined);
+
+    const store = new Store(tmp());
+    await withApp(store, async (call) => {
+      assert.equal((await call('PUT', '/api/settings', { cloudflareAccount: 'no-es-valido' })).status, 400);
+      const st = (await call('PUT', '/api/settings', { cloudflareAccount: acct, ovhAnon: true })).data;
+      assert.equal(st.cloudflareAccount, acct);
+      assert.equal(st.ovhAnon, true);
+      assert.equal(st.keys.ovh.configured, true);
+    });
+    assert.ok(DEFAULT_AGENTS.some((a) => a.id === 'titan' && a.provider === 'ollama-cloud'));
+  } finally {
+    fake.close();
+    delete process.env.CLOUDFLARE_AI_BASE;
+    PROVIDERS['ollama-cloud'].baseUrl = old.oc;
+    PROVIDERS.ovh.baseUrl = old.ovh;
+  }
+});

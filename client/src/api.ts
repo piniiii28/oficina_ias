@@ -188,6 +188,8 @@ export type Settings = {
   grants: Grant[];
   accessEnabled: boolean;
   onlyLive: boolean;
+  cloudflareAccount?: string;
+  ovhAnon?: boolean;
   video?: { service: string | null; enabled: boolean; active: string };
   images?: { service: string | null; enabled: boolean; cloudflareAccount: string; cloudflareToken: boolean; pollinationsKey: boolean; active: string | null };
   blenderControl?: boolean;

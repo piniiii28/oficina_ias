@@ -77,6 +77,9 @@ Proveedores y las IAs de la plantilla que los usan:
 | **Cohere** (clave de prueba gratis) | Forma (diseño de producto) |
 | **Hugging Face** (créditos gratis) | Disponible para cualquier IA |
 | **Mistral** (gratis) | Codestral, Mistral, Babel |
+| **Cloudflare Workers AI** (gratis, la misma cuenta de las imágenes) | respaldo con GPT-OSS, Qwen 3.8, Kimi |
+| **Ollama Cloud** (gratis con cupo, modelos gigantes) | Titán |
+| **OVHcloud AI Endpoints** (gratis sin clave, 2 por minuto; Europa) | respaldo |
 | **MiniMax** (de pago, muy barato) | Maxi |
 | **Ollama** (local, gratis) | Gemma, Phi, Gemma 4 (12B), Coda (Qwen Coder), Deep (DeepSeek R1), Qwen (3.5), Brisa (Mistral), Granito (Granite 4), Llamita (Llama 3.2) |
 | **Anthropic** (de pago, o tu plan con Claude Code) | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |

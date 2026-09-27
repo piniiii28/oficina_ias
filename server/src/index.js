@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
-import { PROVIDERS, hasKey, isLive, usableFilter, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
+import { PROVIDERS, cloudflareAccount, hasKey, isLive, usableFilter, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep, healthOf } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
@@ -76,7 +76,7 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'], freeV3Seeded: ['zeta', 'samba', 'rayo'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'], freeV3Seeded: ['zeta', 'samba', 'rayo'], cloudV1Seeded: ['titan'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
@@ -219,7 +219,7 @@ export function createApp(store) {
     rest.video = { service: rest.video?.service || null, enabled: rest.video?.enabled !== false, active: videoService(store.data.settings) };
     rest.images = { service: img.service || null, enabled: img.enabled !== false, cloudflareAccount: img.cloudflareAccount || '', cloudflareToken: Boolean(img.cloudflareToken), pollinationsKey: Boolean(img.pollinationsKey), active: imageService(store.data.settings) || null };
     const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
-    return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, onlyLive: rest.onlyLive !== false, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
+    return { ...rest, keys, cli, accounts, grants: rest.grants || [], accessEnabled: rest.accessEnabled !== false, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, cloudflareAccount: cloudflareAccount(store.data.settings), ovhAnon: Boolean(apiKeys?.ovhAnon), onlyLive: rest.onlyLive !== false, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
 
   // --- Meta ---
@@ -350,6 +350,14 @@ export function createApp(store) {
       }
     }
     if (ollamaEnabled !== undefined) (s.apiKeys ||= {}).ollamaEnabled = Boolean(ollamaEnabled);
+    // Cloudflare necesita también el Account ID; OVHcloud se puede usar sin clave.
+    if (req.body?.cloudflareAccount !== undefined) {
+      const acct = String(req.body.cloudflareAccount || '').trim();
+      if (acct && !/^[a-f0-9]{32}$/i.test(acct)) return res.status(400).json({ error: 'El Account ID de Cloudflare son 32 letras y números' });
+      if (acct) (s.apiKeys ||= {}).cloudflareAccount = acct;
+      else delete s.apiKeys?.cloudflareAccount;
+    }
+    if (req.body?.ovhAnon !== undefined) (s.apiKeys ||= {}).ovhAnon = Boolean(req.body.ovhAnon);
     if (ollamaUrl !== undefined) (s.apiKeys ||= {}).ollamaUrl = String(ollamaUrl).trim();
     if (['auto', 'always'].includes(demoMode)) s.demoMode = demoMode;
     if (maxParallel) s.maxParallel = Math.max(1, Math.min(10, Number(maxParallel)));

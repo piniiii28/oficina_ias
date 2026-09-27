@@ -58,6 +58,28 @@ export const FREE_MODELS = {
     { id: 'command-a-03-2025', label: 'Command A', for: 'general' },
     { id: 'command-r7b-12-2024', label: 'Command R7B (rápido)', for: 'rápido' },
   ],
+  cloudflare: [
+    { id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
+    { id: '@cf/qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', for: 'código' },
+    { id: '@cf/moonshotai/kimi-k2.6', label: 'Kimi K2.6', for: 'documentos largos' },
+    { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B (rápido)', for: 'redacción' },
+    { id: '@cf/openai/gpt-oss-20b', label: 'GPT-OSS 20B (gasta menos)', for: 'rápido' },
+  ],
+  'ollama-cloud': [
+    { id: 'gpt-oss:120b', label: 'GPT-OSS 120B', for: 'general' },
+    { id: 'kimi-k3', label: 'Kimi K3', for: 'documentos largos' },
+    { id: 'glm-5.3', label: 'GLM 5.3', for: 'razonamiento' },
+    { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', for: 'código' },
+    { id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', for: 'rápido' },
+    { id: 'gemma4:31b', label: 'Gemma 4 31B', for: 'redacción' },
+  ],
+  ovh: [
+    { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
+    { id: 'Qwen3.8-27B', label: 'Qwen 3.8 27B', for: 'razonamiento' },
+    { id: 'Qwen3-Coder-30B-A3B-Instruct', label: 'Qwen3 Coder 30B', for: 'código' },
+    { id: 'Mistral-Small-3.2-24B-Instruct-2506', label: 'Mistral Small 3.2', for: 'redacción' },
+    { id: 'Meta-Llama-3_3-70B-Instruct', label: 'Llama 3.3 70B', for: 'general' },
+  ],
   mistral: [
     { id: 'mistral-small-latest', label: 'Mistral Small', for: 'general' },
     { id: 'codestral-latest', label: 'Codestral', for: 'código' },
@@ -126,10 +148,10 @@ export function healAgents(agents) {
 
 // Orden de preferencia de proveedores gratis para cada necesidad.
 const ORDER = {
-  código: [['openrouter', 'qwen/qwen3.8-27b:free'], ['groq', 'qwen/qwen3.8-27b'], ['cerebras', 'qwen-3.8-27b'], ['mistral', 'codestral-latest'], ['google', 'gemini-3.7-flash'], ['ollama', 'qwen2.5-coder']],
-  razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free'], ['google', 'gemini-3.8-flash'], ['ollama', 'deepseek-r1']],
+  código: [['openrouter', 'qwen/qwen3.8-27b:free'], ['groq', 'qwen/qwen3.8-27b'], ['cerebras', 'qwen-3.8-27b'], ['ollama-cloud', 'kimi-k2.7-code'], ['cloudflare', '@cf/qwen/qwen3.8-27b'], ['mistral', 'codestral-latest'], ['google', 'gemini-3.7-flash'], ['ollama', 'qwen2.5-coder']],
+  razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['ollama-cloud', 'glm-5.3'], ['openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free'], ['google', 'gemini-3.8-flash'], ['ollama', 'deepseek-r1']],
   redacción: [['google', 'gemini-3.7-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'google/gemma-4-31b-it:free'], ['groq', 'openai/gpt-oss-120b'], ['ollama', 'gemma3']],
-  general: [['groq', 'openai/gpt-oss-120b'], ['google', 'gemini-3.7-flash'], ['cerebras', 'gpt-oss-120b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'], ['nvidia', 'nvidia/nemotron-3-super-120b-a12b'], ['huggingface', 'Qwen/Qwen3.8-27B'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
+  general: [['groq', 'openai/gpt-oss-120b'], ['google', 'gemini-3.7-flash'], ['cerebras', 'gpt-oss-120b'], ['cloudflare', '@cf/openai/gpt-oss-120b'], ['ollama-cloud', 'gpt-oss:120b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'], ['nvidia', 'nvidia/nemotron-3-super-120b-a12b'], ['huggingface', 'Qwen/Qwen3.8-27B'], ['mistral', 'mistral-small-latest'], ['ovh', 'gpt-oss-120b'], ['ollama', 'gemma3']],
 };
 
 /**

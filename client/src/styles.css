@@ -889,3 +889,6 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .check-results { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; max-height: 360px; overflow: auto; }
 .check-results li { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .check-results li.bad { border-color: color-mix(in srgb, var(--danger, #ef4444) 50%, var(--border)); }
+.connect-extra { display: grid; gap: 6px; margin: 8px 0; }
+.connect-extra label:not(.check) { display: grid; gap: 4px; max-width: 420px; }
+.connect-extra > button { justify-self: start; }

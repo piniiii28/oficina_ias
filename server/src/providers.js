@@ -32,6 +32,9 @@ export const PROVIDERS = {
   huggingface: { label: 'Hugging Face', tier: 'gratis', hint: 'Créditos gratis cada mes para miles de modelos abiertos.', baseUrl: 'https://router.huggingface.co/v1', keyUrl: 'https://huggingface.co/settings/tokens' },
   nvidia: { label: 'NVIDIA NIM', tier: 'gratis', hint: 'Créditos gratis para probar Nemotron, Kimi K3, GLM 5.3, DeepSeek V4 y más.', baseUrl: 'https://integrate.api.nvidia.com/v1', keyUrl: 'https://build.nvidia.com' },
   cohere: { label: 'Cohere (Command)', tier: 'gratis', hint: 'Clave de prueba gratis: 1.000 llamadas al mes (modelos Command A).', baseUrl: 'https://api.cohere.ai/compatibility/v1', keyUrl: 'https://dashboard.cohere.com/api-keys' },
+  cloudflare: { label: 'Cloudflare Workers AI (gratis)', tier: 'gratis', hint: 'Gratis con tu cuenta de Cloudflare (la misma de las imágenes): GPT-OSS, Qwen 3.8, Llama, Kimi. Las 10.000 unidades diarias se comparten con las imágenes.', baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{cuenta}/ai/v1', keyUrl: 'https://dash.cloudflare.com/profile/api-tokens', needsAccount: true },
+  'ollama-cloud': { label: 'Ollama Cloud (modelos gigantes)', tier: 'gratis', hint: 'Modelos enormes en los servidores de Ollama (GPT-OSS 120B, Kimi K3, GLM 5.3, DeepSeek V4) sin tarjeta de video. Plan gratis con cupo por hora y por día. Lo que envías sale de tu casa.', baseUrl: 'https://ollama.com/v1', keyUrl: 'https://ollama.com/settings/keys' },
+  ovh: { label: 'OVHcloud AI Endpoints (Europa)', tier: 'gratis', hint: 'Nube europea (GDPR). Gratis y sin clave, pero solo 2 preguntas por minuto por modelo: úsalo de respaldo. Con clave va más rápido, pero cobra por uso (centavos).', baseUrl: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1', keyUrl: 'https://www.ovh.com/manager/#/public-cloud/pci/projects', anonymous: true },
   minimax: { label: 'MiniMax (M3, muy barato)', tier: 'pago', hint: 'De pago pero muy barato (unos US$0,30 por millón de tokens de entrada). Fuerte para programar y tareas largas. Modelos: MiniMax-M3, MiniMax-M2.7.', baseUrl: 'https://api.minimax.io/v1', keyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key' },
   ollama: { label: 'Ollama (local, gratis)', tier: 'gratis', hint: 'Modelos en tu propio computador, gratis y sin límite.', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
   // Herramientas de línea de comandos instaladas en tu computador: usan tu
@@ -64,6 +67,7 @@ export async function detectClis() {
 export function hasKey(settings, provider) {
   if (PROVIDERS[provider]?.cli) return Boolean(settings.cli?.[provider]?.enabled);
   if (PROVIDERS[provider]?.keyless) return Boolean(settings.apiKeys?.ollamaEnabled);
+  if (PROVIDERS[provider]?.needsAccount && !cloudflareAccount(settings)) return false;
   return credentials(settings, provider).length > 0;
 }
 
@@ -98,6 +102,8 @@ export function credentials(settings, provider, accountId = null) {
   // Ollama: cada «cuenta» es un computador (este o un nodo).
   if (def.keyless) return ollamaOrder(settings, accountId).map((server) => ({ id: server.id, label: server.label, key: null, server }));
   const mainKey = keyFor(settings, provider);
+  // OVHcloud funciona sin clave (gratis, con pocas peticiones por minuto).
+  if (def.anonymous && !mainKey && !extra.length) return settings.apiKeys?.[`${provider}Anon`] ? [{ id: 'default', label: 'Sin clave (gratis)', key: null }] : [];
   const main = def.cli
     ? [{ id: 'default', label: 'Principal', key: null, home: null }]
     : mainKey ? [{ id: 'default', label: 'Principal', key: mainKey }] : [];
@@ -196,13 +202,24 @@ function envKey(provider) {
     openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY', mistral: 'MISTRAL_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY', xai: 'XAI_API_KEY', perplexity: 'PERPLEXITY_API_KEY',
     together: 'TOGETHER_API_KEY', cerebras: 'CEREBRAS_API_KEY', github: 'GITHUB_MODELS_TOKEN',
-    sambanova: 'SAMBANOVA_API_KEY', huggingface: 'HF_TOKEN', nvidia: 'NVIDIA_API_KEY', cohere: 'COHERE_API_KEY', minimax: 'MINIMAX_API_KEY',
+    sambanova: 'SAMBANOVA_API_KEY', huggingface: 'HF_TOKEN', nvidia: 'NVIDIA_API_KEY', cohere: 'COHERE_API_KEY', minimax: 'MINIMAX_API_KEY', 'ollama-cloud': 'OLLAMA_API_KEY', ovh: 'OVH_AI_ENDPOINTS_ACCESS_TOKEN',
   };
   return names[provider] ? process.env[names[provider]] : undefined;
 }
 
 function keyFor(settings, provider) {
+  // Cloudflare: si no hay clave propia, usa el token de Ajustes → Imágenes.
+  if (provider === 'cloudflare') return settings.apiKeys?.cloudflare || settings.images?.cloudflareToken || process.env.CLOUDFLARE_API_TOKEN;
   return settings.apiKeys?.[provider] || envKey(provider);
+}
+
+/** Account ID de Cloudflare (el de «Conectar las IAs» o el de Imágenes). */
+export const cloudflareAccount = (settings) => settings.apiKeys?.cloudflareAccount || settings.images?.cloudflareAccount || process.env.CLOUDFLARE_ACCOUNT_ID || '';
+
+/** Dirección de la API de un proveedor compatible con OpenAI. */
+function baseUrlOf(settings, provider) {
+  if (provider === 'cloudflare') return `${process.env.CLOUDFLARE_AI_BASE || 'https://api.cloudflare.com'}/client/v4/accounts/${encodeURIComponent(cloudflareAccount(settings))}/ai/v1`;
+  return PROVIDERS[provider].baseUrl;
 }
 
 // Contador de uso (lo conecta el servidor para guardarlo en disco).
@@ -266,7 +283,7 @@ async function callModelInner(settings, { provider, model, system, messages, age
         if (PROVIDERS[provider]?.cli) return callCli(settings, provider, system, messages, tap, sig, cred.home, agent?.mcp ? [agent.mcp] : [], m);
         if (provider === 'anthropic') return callAnthropic(cred.key, m, system, messages, effort, tap, sig, Boolean(settings.webSearch));
         if (provider === 'google') return callGemini(cred.key, m, system, messages, tap, sig);
-        return callOpenAICompatible(provider, cred, m, system, messages, tap, sig);
+        return callOpenAICompatible(provider, cred, m, system, messages, tap, sig, settings);
       };
       // Si el modelo está saturado o lo retiraron, se recupera solo (ver withRecovery).
       text = await withRecovery(provider, cred, model, once, () => wrote, (next, keep) => {
@@ -381,9 +398,9 @@ async function readSSE(res, onEvent) {
   }
 }
 
-async function callOpenAICompatible(provider, cred, model, system, messages, onDelta, signal) {
+async function callOpenAICompatible(provider, cred, model, system, messages, onDelta, signal, settings = {}) {
   // Ollama puede ser el de este computador o el de un nodo (por Tailscale).
-  const base = cred.server ? `${cred.server.base}/v1` : PROVIDERS[provider].baseUrl;
+  const base = cred.server ? `${cred.server.base}/v1` : baseUrlOf(settings, provider);
   const headers = { 'Content-Type': 'application/json', ...(cred.server?.headers || {}) };
   if (cred.key) headers.Authorization = `Bearer ${cred.key}`;
   if (provider === 'openrouter') {
