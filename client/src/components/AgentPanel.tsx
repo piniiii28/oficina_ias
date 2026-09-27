@@ -1,7 +1,7 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
 import { api, type Agent, type ChatMessage } from '../api';
-import { Chibi, ACCESSORIES, EYE_STYLES, HAIR_STYLES } from './Chibi';
+import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { useOffice } from '../state';
 
@@ -227,6 +227,7 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
           <label>Peinado<select value={f.avatar.hairStyle} onChange={(e) => setAv('hairStyle', e.target.value)}>{HAIR_STYLES.map((s) => <option key={s}>{s}</option>)}</select></label>
           <label>Ojos<select value={f.avatar.eyes} onChange={(e) => setAv('eyes', e.target.value)}>{EYE_STYLES.map((s) => <option key={s}>{s}</option>)}</select></label>
           <label>Accesorio<select value={f.avatar.accessory} onChange={(e) => setAv('accessory', e.target.value)}>{ACCESSORIES.map((s) => <option key={s}>{s}</option>)}</select></label>
+          <label>Skin / disfraz<select value={f.avatar.costume || 'none'} onChange={(e) => setAv('costume', e.target.value)}>{Object.entries(COSTUMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label>Objeto (emoji) <input value={f.avatar.prop} maxLength={4} onChange={(e) => setAv('prop', e.target.value)} /></label>
         </div>
       </div>

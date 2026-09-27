@@ -4,6 +4,7 @@ import { api, type Agent, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
 import { Flights } from '../components/Flights';
+import { Building } from '../building/Building';
 import { useOffice, type Live } from '../state';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -89,6 +90,26 @@ export function Office() {
   const [pick, setPick] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
   const [filter, setFilter] = useState('');
+  const [layout, setLayoutState] = useState<'edificio' | 'escritorios'>(() => {
+    try {
+      return localStorage.getItem('oficina.layout') === 'escritorios' ? 'escritorios' : 'edificio';
+    } catch {
+      return 'edificio';
+    }
+  });
+  const setLayout = (v: 'edificio' | 'escritorios') => {
+    setLayoutState(v);
+    try {
+      localStorage.setItem('oficina.layout', v);
+    } catch {
+      /* sin almacenamiento local */
+    }
+  };
+  const choose = (a: Agent) => {
+    if (a.isBrain && picking) return;
+    if (picking) setPick((p) => (p.includes(a.id) ? p.filter((x) => x !== a.id) : [...p, a.id]));
+    else setSelected(a);
+  };
 
   const brain = agents.find((a) => a.isBrain);
   const staff = agents.filter((a) => !a.isBrain);
@@ -179,10 +200,23 @@ export function Office() {
 
       <div className="floor-toolbar">
         <h2>La oficina <span className="muted">· {staff.length} IAs</span></h2>
-        <input className="search" placeholder="Buscar IA por nombre, rol o habilidad…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <div className="row">
+          <div className="view-toggle">
+            <button className={layout === 'edificio' ? 'on' : ''} onClick={() => setLayout('edificio')}>🏢 Edificio</button>
+            <button className={layout === 'escritorios' ? 'on' : ''} onClick={() => setLayout('escritorios')}>▦ Escritorios</button>
+          </div>
+          {layout === 'escritorios' && <input className="search" placeholder="Buscar IA por nombre, rol o habilidad…" value={filter} onChange={(e) => setFilter(e.target.value)} />}
+        </div>
       </div>
 
-      <div className="floor">
+      {layout === 'edificio' && (
+        <>
+          {picking && <p className="hint">Haz clic en las IAs del edificio para elegir tu equipo ({pick.length} elegidas: {pick.map((id) => agents.find((a) => a.id === id)?.name).join(', ') || 'ninguna'}).</p>}
+          <Building onSelect={choose} />
+        </>
+      )}
+
+      {layout === 'escritorios' && <div className="floor">
         {departments.filter((d) => byDept.has(d.id)).map((d) => (
           <section key={d.id} className="room" style={{ ['--room' as string]: d.color }}>
             <header className="room-head">
@@ -200,10 +234,7 @@ export function Office() {
                       live={live[a.id]}
                       index={i}
                       dim={!matches(a)}
-                      onClick={() => {
-                        if (picking) setPick((p) => (chosen ? p.filter((x) => x !== a.id) : [...p, a.id]));
-                        else setSelected(a);
-                      }}
+                      onClick={() => choose(a)}
                     />
                   </div>
                 );
@@ -211,12 +242,13 @@ export function Office() {
             </div>
           </section>
         ))}
-      </div>
+      </div>}
 
       <div className="legend muted small">
         <span><i className="dot dot--live" /> Conectada a su API</span>
         <span><i className="dot dot--demo" /> Modo demo</span>
         <span>Haz clic en una IA para hablar con ella, entrenarla o editarla.</span>
+        {layout === 'edificio' && <span>En el edificio pasean, bajan por café y van a su escritorio cuando tienen trabajo.</span>}
       </div>
 
       <Flights live={live} brainId={brain?.id} task={active[0]} />

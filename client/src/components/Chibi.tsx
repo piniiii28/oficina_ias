@@ -8,6 +8,13 @@ type Props = {
   size?: number;
   legs?: boolean;
   seed?: number;
+  walking?: boolean;
+};
+
+/** Disfraces ("skins") que se ponen encima del avatar. */
+export const COSTUMES: Record<string, string> = {
+  none: 'Ninguno', capa: 'Superhéroe', mago: 'Mago', astronauta: 'Astronauta', ninja: 'Ninja',
+  chef: 'Chef', rey: 'Realeza', pirata: 'Pirata', gato: 'Orejas de gato', vaquero: 'Vaquero',
 };
 
 export const HAIR_STYLES = ['short', 'long', 'bob', 'twintails', 'ponytail', 'bun', 'spiky', 'messy', 'hoodie', 'cap', 'slick', 'beret'];
@@ -194,17 +201,94 @@ function Accessory({ kind, outfit }: { kind: string; outfit: string }) {
   }
 }
 
+const COSTUME_OUTFIT: Record<string, string> = {
+  capa: '#2563eb', mago: '#4c1d95', astronauta: '#e5e7eb', ninja: '#111827', chef: '#f8fafc', rey: '#7e22ce', pirata: '#7f1d1d', vaquero: '#92400e',
+};
+
+function Costume({ kind }: { kind: string }) {
+  switch (kind) {
+    case 'mago':
+      return (
+        <g>
+          <path d="M28,34 L60,-14 L92,34 Z" fill="#4c1d95" />
+          <ellipse cx="60" cy="34" rx="40" ry="7" fill="#5b21b6" />
+          <path d="M52,8 l2,5 5,0 -4,3 2,5 -5,-3 -5,3 2,-5 -4,-3 5,0 Z" fill="#fde047" />
+        </g>
+      );
+    case 'astronauta':
+      return (
+        <g>
+          <circle cx="60" cy="58" r="44" fill="rgba(186,230,253,0.28)" stroke="#e5e7eb" strokeWidth="5" />
+          <path d="M30,34 Q44,20 58,22" stroke="#fff" strokeWidth="4" fill="none" opacity="0.7" strokeLinecap="round" />
+        </g>
+      );
+    case 'ninja':
+      return (
+        <g>
+          <path d="M23,50 Q60,40 97,50 L97,58 Q60,48 23,58 Z" fill="#111827" />
+          <path d="M96,52 L112,44 L108,56 Z" fill="#111827" />
+          <path d="M26,72 Q60,98 94,72 L94,90 Q60,104 26,90 Z" fill="#111827" />
+        </g>
+      );
+    case 'chef':
+      return (
+        <g fill="#fff" stroke="#e5e7eb" strokeWidth="1.5">
+          <rect x="36" y="16" width="48" height="16" rx="3" />
+          <circle cx="42" cy="10" r="11" />
+          <circle cx="60" cy="4" r="13" />
+          <circle cx="78" cy="10" r="11" />
+        </g>
+      );
+    case 'rey':
+      return (
+        <g>
+          <path d="M34,26 L38,4 L50,18 L60,0 L70,18 L82,4 L86,26 Z" fill="#facc15" stroke="#ca8a04" strokeWidth="1.5" />
+          <circle cx="60" cy="18" r="3" fill="#dc2626" />
+        </g>
+      );
+    case 'pirata':
+      return (
+        <g>
+          <path d="M20,34 Q60,-4 100,34 Q60,24 20,34 Z" fill="#111827" />
+          <text x="60" y="24" fontSize="12" textAnchor="middle">☠️</text>
+          <ellipse cx="74" cy="65" rx="8" ry="7" fill="#111827" />
+          <path d="M66,62 L30,46 M82,62 L96,52" stroke="#111827" strokeWidth="2" />
+        </g>
+      );
+    case 'gato':
+      return (
+        <g>
+          <path d="M28,34 L30,4 L52,24 Z" fill="#f9a8d4" stroke="#1f2937" strokeWidth="2" />
+          <path d="M92,34 L90,4 L68,24 Z" fill="#f9a8d4" stroke="#1f2937" strokeWidth="2" />
+          <g stroke="#1f2937" strokeWidth="1.5"><path d="M30,78 L14,74 M30,82 L14,84 M90,78 L106,74 M90,82 L106,84" /></g>
+        </g>
+      );
+    case 'vaquero':
+      return (
+        <g>
+          <ellipse cx="60" cy="30" rx="52" ry="9" fill="#92400e" />
+          <path d="M36,30 Q38,4 60,6 Q82,4 84,30 Z" fill="#b45309" />
+          <rect x="37" y="22" width="46" height="5" fill="#451a03" />
+        </g>
+      );
+    default:
+      return null;
+  }
+}
+
 const HELD: Record<string, string> = {
   book: '📘', clipboard: '📋', megaphone: '📣', magnifier: '🔍', pencil: '✏️', whistle: '📯',
 };
 
-export function Chibi({ avatar, state = 'idle', size = 96, legs = false, seed = 0 }: Props) {
-  const { skin, hair, hairStyle, eyes, outfit, accessory } = avatar;
+export function Chibi({ avatar, state = 'idle', size = 96, legs = false, seed = 0, walking = false }: Props) {
+  const { skin, hair, hairStyle, eyes, accessory } = avatar;
+  const costume = avatar.costume || 'none';
+  const outfit = COSTUME_OUTFIT[costume] || avatar.outfit;
   const delay = `${(seed % 7) * -0.37}s`;
   const typing = state === 'working';
   return (
     <svg
-      className={`chibi chibi--${state}`}
+      className={`chibi chibi--${state}${walking ? ' chibi--walking' : ''}`}
       viewBox={legs ? '0 -6 120 166' : '0 -6 120 146'}
       width={size}
       height={size * (legs ? 166 : 146) / 120}
@@ -218,12 +302,17 @@ export function Chibi({ avatar, state = 'idle', size = 96, legs = false, seed = 
         </filter>
       </defs>
       <g className="chibi-body">
+        {costume === 'capa' && <path className="chibi-cape" d="M36,100 Q20,140 30,150 L90,150 Q100,140 84,100 Z" fill="#dc2626" />}
         {legs && (
           <g fill={shade(outfit, -0.3)}>
-            <rect x="44" y="130" width="12" height="22" rx="5" />
-            <rect x="64" y="130" width="12" height="22" rx="5" />
-            <ellipse cx="50" cy="153" rx="9" ry="5" fill="#3f3f46" />
-            <ellipse cx="70" cy="153" rx="9" ry="5" fill="#3f3f46" />
+            <g className="chibi-leg-l">
+              <rect x="44" y="130" width="12" height="22" rx="5" />
+              <ellipse cx="50" cy="153" rx="9" ry="5" fill="#3f3f46" />
+            </g>
+            <g className="chibi-leg-r">
+              <rect x="64" y="130" width="12" height="22" rx="5" />
+              <ellipse cx="70" cy="153" rx="9" ry="5" fill="#3f3f46" />
+            </g>
           </g>
         )}
         {/* Torso */}
@@ -267,6 +356,7 @@ export function Chibi({ avatar, state = 'idle', size = 96, legs = false, seed = 
           </g>
         )}
         <Accessory kind={accessory} outfit={outfit} />
+        <Costume kind={costume} />
       </g>
     </svg>
   );

@@ -449,3 +449,64 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 }
 
 .streaming > .markdown > :last-child::after { content: '▍'; color: var(--accent); animation: blinkText 0.8s steps(2) infinite; margin-left: 2px; }
+
+/* ===== Edificio (estilo Habbo) ===== */
+.building-wrap { display: grid; grid-template-columns: 1fr 56px; gap: 12px; align-items: start; }
+.building {
+  border-radius: 18px 18px 6px 6px; overflow: hidden; box-shadow: var(--shadow);
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 22px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 44px),
+    #c9b8a3;
+  padding: 0 14px;
+}
+.building--night { background-color: #4b4257; }
+.roof { position: relative; margin: 0 -14px; padding: 26px 0 12px; background: linear-gradient(#64748b, #475569); text-align: center; }
+.roof-sign { display: inline-block; font-weight: 900; letter-spacing: 0.12em; color: #fde68a; background: #1f2937; padding: 6px 18px; border-radius: 8px; border: 3px solid #f59e0b; text-shadow: 0 0 8px rgba(253, 230, 138, 0.8); animation: neon 3s infinite; }
+.antenna { position: absolute; right: 16%; top: -2px; width: 4px; height: 26px; background: #334155; }
+.antenna::after { content: ''; position: absolute; top: -6px; left: -4px; width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: blinkText 1.4s infinite; }
+.bfloor { margin: 12px 0; background: rgba(15, 10, 30, 0.55); border-radius: 12px; border-bottom: 6px solid rgba(0, 0, 0, 0.35); overflow: hidden; }
+.bfloor-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; color: #fff; background: linear-gradient(90deg, color-mix(in srgb, var(--wall) 55%, #111), transparent); }
+.bfloor-head .muted { color: rgba(255, 255, 255, 0.7); margin-left: auto; }
+.bfloor-num { display: grid; place-items: center; min-width: 30px; height: 24px; border-radius: 6px; background: #111827; color: #fbbf24; font: 800 12px ui-monospace, monospace; box-shadow: inset 0 0 0 1px #374151; }
+.bfloor-stage { position: relative; overflow: hidden; }
+.bfloor-room { position: absolute; left: 50%; top: 0; transform-origin: top center; }
+.iso-room, .iso-item { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.iso-item text.blink { animation: blinkText 1s steps(2) infinite; }
+.street { display: flex; justify-content: space-around; align-items: center; margin: 0 -14px; padding: 10px; background: linear-gradient(#57534e 0 60%, #3f3f46 60%); font-size: 22px; color: #fff; }
+.street-door { font-size: 13px; font-weight: 800; background: #78350f; padding: 6px 12px; border-radius: 8px 8px 0 0; }
+
+.walker {
+  position: absolute; left: 0; top: 0; width: 40px; height: 56px; padding: 0; border: 0; background: none; cursor: pointer;
+  transition-property: transform; transition-timing-function: linear;
+}
+.walker-body { display: block; transition: transform 0.15s; transform-origin: center; }
+.walker-shadow { position: absolute; left: 8px; bottom: -2px; width: 24px; height: 8px; border-radius: 50%; background: rgba(0, 0, 0, 0.3); }
+.walker-name { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); font: 700 10px/1 system-ui, sans-serif; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 2px 5px; border-radius: 5px; white-space: nowrap; opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.walker:hover .walker-name, .walker:focus-visible .walker-name { opacity: 1; }
+.walker:hover { filter: drop-shadow(0 0 4px #fde047); }
+.walker-emote { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); font-size: 14px; background: #fff; border-radius: 10px; padding: 0 4px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); animation: pop-in 0.25s ease-out; }
+.walker:hover .walker-emote { opacity: 0; }
+.walker--moving .walker-body { animation: walkbob 0.34s ease-in-out infinite; }
+.chibi--walking .chibi-leg-l { transform-box: fill-box; transform-origin: top center; animation: legswing 0.34s ease-in-out infinite; }
+.chibi--walking .chibi-leg-r { transform-box: fill-box; transform-origin: top center; animation: legswing 0.34s ease-in-out infinite reverse; }
+.chibi--walking .chibi-head { animation: none; }
+.chibi-cape { transform-box: fill-box; transform-origin: top center; animation: cape 1.2s ease-in-out infinite; }
+
+.elevator-panel { order: 2; position: sticky; top: 12px; display: flex; flex-direction: column; gap: 4px; align-items: center; background: #1f2937; border: 2px solid #4b5563; border-radius: 12px; padding: 8px 4px; }
+.elevator-panel button { width: 38px; height: 30px; border-radius: 50%; border: 2px solid #9ca3af; background: #374151; color: #fbbf24; font: 800 11px ui-monospace, monospace; cursor: pointer; }
+.elevator-panel button:hover { background: #fbbf24; color: #111; }
+.elevator-panel small { color: #d1d5db; font-size: 10px; text-align: center; }
+.view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.view-toggle button { border: 0; background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+.view-toggle button.on { background: var(--accent); color: #fff; }
+
+@keyframes walkbob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -2px; } }
+@keyframes legswing { 0%, 100% { transform: rotate(18deg); } 50% { transform: rotate(-18deg); } }
+@keyframes cape { 0%, 100% { transform: skewX(4deg); } 50% { transform: skewX(-4deg); } }
+@keyframes neon { 0%, 92%, 100% { opacity: 1; } 94% { opacity: 0.5; } 96% { opacity: 1; } 98% { opacity: 0.6; } }
+@media (max-width: 900px) {
+  .building-wrap { grid-template-columns: 1fr; }
+  .elevator-panel { display: none; }
+  .building { padding: 0 6px; }
+}

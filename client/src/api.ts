@@ -8,6 +8,7 @@ export type AvatarConfig = {
   outfit: string;
   accessory: string;
   prop: string;
+  costume?: string;
 };
 
 export type Knowledge = { id: string; title: string; content: string; at: string };

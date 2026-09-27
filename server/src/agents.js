@@ -76,14 +76,14 @@ export const DEFAULT_AGENTS = [
     provider: 'groq', model: 'llama-3.3-70b-versatile',
     skills: ['devops', 'docker', 'kubernetes', 'despliegue', 'deploy', 'servidor', 'nube', 'aws', 'ci', 'linux'],
     system: P('Eres Llama Ops, ingeniero DevOps. Das comandos, Dockerfiles y pipelines listos para copiar, con buenas prácticas de seguridad.'),
-    avatar: { skin: '#d8a47f', hair: '#78350f', hairStyle: 'cap', eyes: 'cool', outfit: '#f55036', accessory: 'none', prop: '🐳' },
+    avatar: { skin: '#d8a47f', hair: '#78350f', hairStyle: 'cap', eyes: 'cool', outfit: '#f55036', accessory: 'none', prop: '🐳', costume: 'astronauta' },
   }),
   base({
     id: 'guardian', name: 'Guardián', role: 'Ciberseguridad defensiva', department: 'codigo',
     provider: 'groq', model: 'llama-3.3-70b-versatile',
     skills: ['seguridad', 'ciberseguridad', 'vulnerabilidad', 'contraseña', 'cifrado', 'privacidad', 'owasp', 'auditoría'],
     system: P('Eres Guardián, experto en ciberseguridad defensiva. Identificas riesgos y propones mitigaciones y buenas prácticas. No ayudas a atacar sistemas ajenos.'),
-    avatar: { skin: '#c68642', hair: '#0f172a', hairStyle: 'short', eyes: 'cool', outfit: '#1e293b', accessory: 'shades', prop: '🛡️' },
+    avatar: { skin: '#c68642', hair: '#0f172a', hairStyle: 'short', eyes: 'cool', outfit: '#1e293b', accessory: 'shades', prop: '🛡️', costume: 'capa' },
   }),
 
   // Datos y razonamiento
@@ -99,14 +99,14 @@ export const DEFAULT_AGENTS = [
     provider: 'deepseek', model: 'deepseek-reasoner',
     skills: ['matemática', 'cálculo', 'lógica', 'demostración', 'ecuación', 'física', 'probabilidad', 'razonar'],
     system: P('Eres DeepSeek R, especialista en razonamiento matemático. Resuelves problemas con pasos verificables y compruebas el resultado.'),
-    avatar: { skin: '#f3c9a8', hair: '#312e81', hairStyle: 'messy', eyes: 'glasses', outfit: '#6366f1', accessory: 'none', prop: '🧮' },
+    avatar: { skin: '#f3c9a8', hair: '#312e81', hairStyle: 'messy', eyes: 'glasses', outfit: '#6366f1', accessory: 'none', prop: '🧮', costume: 'mago' },
   }),
   base({
     id: 'qwen-sql', name: 'Qwen', role: 'SQL y analítica', department: 'datos',
     provider: 'together', model: 'Qwen/Qwen2.5-72B-Instruct-Turbo',
     skills: ['sql', 'base de datos', 'consulta', 'excel', 'dashboard', 'kpi', 'métricas', 'postgres'],
     system: P('Eres Qwen, analista de datos. Escribes SQL correcto, diseñas esquemas de bases de datos y defines KPIs.'),
-    avatar: { skin: '#f9d5b5', hair: '#6d28d9', hairStyle: 'bun', eyes: 'happy', outfit: '#615ced', accessory: 'none', prop: '🗄️' },
+    avatar: { skin: '#f9d5b5', hair: '#6d28d9', hairStyle: 'bun', eyes: 'happy', outfit: '#615ced', accessory: 'none', prop: '🗄️', costume: 'vaquero' },
   }),
 
   // Estudio creativo
@@ -122,21 +122,21 @@ export const DEFAULT_AGENTS = [
     provider: 'xai', model: 'grok-4',
     skills: ['redes', 'twitter', 'instagram', 'tiktok', 'viral', 'humor', 'meme', 'tendencia', 'reel'],
     system: P('Eres Grok, experto en redes sociales. Propones ganchos, guiones cortos y publicaciones con chispa y humor.'),
-    avatar: { skin: '#e8b890', hair: '#000000', hairStyle: 'spiky', eyes: 'cool', outfit: '#111111', accessory: 'shades', prop: '📱' },
+    avatar: { skin: '#e8b890', hair: '#000000', hairStyle: 'spiky', eyes: 'cool', outfit: '#111111', accessory: 'shades', prop: '📱', costume: 'ninja' },
   }),
   base({
     id: 'mistral-story', name: 'Mistral', role: 'Guionista y storyteller', department: 'creatividad',
     provider: 'mistral', model: 'mistral-large-latest',
     skills: ['historia', 'cuento', 'guion', 'personaje', 'narrativa', 'novela', 'poema', 'canción', 'creativo'],
     system: P('Eres Mistral, guionista. Creas historias, personajes, guiones y poemas con estructura y emoción.'),
-    avatar: { skin: '#fcdcc4', hair: '#b45309', hairStyle: 'beret', eyes: 'dreamy', outfit: '#fa520f', accessory: 'none', prop: '🎬' },
+    avatar: { skin: '#fcdcc4', hair: '#b45309', hairStyle: 'beret', eyes: 'dreamy', outfit: '#fa520f', accessory: 'none', prop: '🎬', costume: 'pirata' },
   }),
   base({
     id: 'gemini-visual', name: 'Pixel', role: 'Diseño UI/UX y visual', department: 'creatividad',
     provider: 'google', model: 'gemini-2.5-flash',
     skills: ['diseño', 'ui', 'ux', 'interfaz', 'logo', 'color', 'imagen', 'prompt', 'marca', 'visual', 'figma'],
     system: P('Eres Pixel, diseñadora UI/UX. Propones paletas, tipografías, wireframes en texto y prompts detallados para generar imágenes.'),
-    avatar: { skin: '#f7d2bd', hair: '#ec4899', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#f472b6', accessory: 'bow', prop: '🎨' },
+    avatar: { skin: '#f7d2bd', hair: '#ec4899', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#f472b6', accessory: 'bow', prop: '🎨', costume: 'gato' },
   }),
 
   // Investigación
@@ -145,7 +145,7 @@ export const DEFAULT_AGENTS = [
     provider: 'perplexity', model: 'sonar-pro',
     skills: ['investigar', 'buscar', 'fuentes', 'noticias', 'actual', 'web', 'comparar', 'mercado', 'estado del arte'],
     system: P('Eres Perplexity, investigador. Buscas información actual, citas fuentes y comparas alternativas.'),
-    avatar: { skin: '#f2caa6', hair: '#0e7490', hairStyle: 'messy', eyes: 'glasses', outfit: '#20808d', accessory: 'magnifier', prop: '🌐' },
+    avatar: { skin: '#f2caa6', hair: '#0e7490', hairStyle: 'messy', eyes: 'glasses', outfit: '#20808d', accessory: 'magnifier', prop: '🌐', costume: 'astronauta' },
   }),
   base({
     id: 'sonar-check', name: 'Sonar', role: 'Verificador de datos', department: 'investigacion',
@@ -168,7 +168,7 @@ export const DEFAULT_AGENTS = [
     provider: 'openai', model: 'gpt-5',
     skills: ['negocio', 'estrategia', 'startup', 'emprender', 'plan de negocio', 'competencia', 'modelo de negocio', 'pitch', 'empresa'],
     system: P('Eres O-Estratega, consultor de negocios. Usas marcos (FODA, Lean Canvas, 5 fuerzas) y das recomendaciones accionables.'),
-    avatar: { skin: '#d9a066', hair: '#374151', hairStyle: 'slick', eyes: 'cool', outfit: '#1f2937', accessory: 'tie', prop: '♟️' },
+    avatar: { skin: '#d9a066', hair: '#374151', hairStyle: 'slick', eyes: 'cool', outfit: '#1f2937', accessory: 'tie', prop: '♟️', costume: 'rey' },
   }),
   base({
     id: 'command-mkt', name: 'Command', role: 'Marketing y SEO', department: 'negocios',
@@ -205,21 +205,21 @@ export const DEFAULT_AGENTS = [
     provider: 'ollama', model: 'gemma3',
     skills: ['salud', 'ejercicio', 'dieta', 'nutrición', 'sueño', 'estrés', 'bienestar', 'hábito'],
     system: P('Eres Gemma, orientadora de bienestar. Das consejos generales de hábitos saludables y siempre recomiendas consultar a profesionales de salud.'),
-    avatar: { skin: '#fcd9c0', hair: '#be185d', hairStyle: 'long', eyes: 'happy', outfit: '#fb7185', accessory: 'flower', prop: '🍎' },
+    avatar: { skin: '#fcd9c0', hair: '#be185d', hairStyle: 'long', eyes: 'happy', outfit: '#fb7185', accessory: 'flower', prop: '🍎', costume: 'chef' },
   }),
   base({
     id: 'phi-tutor', name: 'Phi', role: 'Profesor y tutor', department: 'personas',
     provider: 'ollama', model: 'phi4',
     skills: ['aprender', 'explicar', 'enseñar', 'clase', 'estudiar', 'examen', 'universidad', 'tarea', 'concepto'],
     system: P('Eres Phi, tutor paciente. Explicas desde lo básico con analogías, ejemplos y preguntas de práctica.'),
-    avatar: { skin: '#eab88f', hair: '#0369a1', hairStyle: 'messy', eyes: 'glasses', outfit: '#0078d4', accessory: 'gradcap', prop: '🎓' },
+    avatar: { skin: '#eab88f', hair: '#0369a1', hairStyle: 'messy', eyes: 'glasses', outfit: '#0078d4', accessory: 'gradcap', prop: '🎓', costume: 'mago' },
   }),
   base({
     id: 'babel', name: 'Babel', role: 'Traductora multilingüe', department: 'personas',
     provider: 'mistral', model: 'mistral-small-latest',
     skills: ['traducir', 'traducción', 'inglés', 'francés', 'portugués', 'idioma', 'gramática', 'ortografía'],
     system: P('Eres Babel, traductora. Traduces con naturalidad preservando el tono y explicas matices cuando importan.'),
-    avatar: { skin: '#f1c9a5', hair: '#a16207', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#eab308', accessory: 'none', prop: '🌍' },
+    avatar: { skin: '#f1c9a5', hair: '#a16207', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#eab308', accessory: 'none', prop: '🌍', costume: 'capa' },
   }),
   base({
     id: 'coach', name: 'Coach', role: 'Productividad y carrera', department: 'personas',
