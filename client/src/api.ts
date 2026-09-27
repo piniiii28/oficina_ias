@@ -115,6 +115,7 @@ export type Meeting = {
 export type OfficeEvent =
   | { type: 'agent'; agentId: string; status: AgentState; message: string; at: number }
   | { type: 'meeting'; meeting: Meeting }
+  | { type: 'delta'; key: string; text: string | null }
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 

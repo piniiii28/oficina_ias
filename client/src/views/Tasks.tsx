@@ -53,6 +53,8 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
   onDelete: () => void;
   openNote: ReturnType<typeof useOffice>['openNote'];
 }) {
+  const { streams } = useOffice();
+  const liveFinal = streams[`task:${task.id}:final`];
   return (
     <main className="task-detail">
       <header className="row between">
@@ -68,7 +70,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
 
       <section className="card final">
         <h3>Respuesta integrada</h3>
-        {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : <p className="muted">El equipo sigue trabajando…</p>}
+        {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : liveFinal ? <div className="streaming"><Markdown text={liveFinal} /></div> : <p className="muted">El equipo sigue trabajando…</p>}
       </section>
 
       {task.status === 'done' && <FollowUp task={task} onSent={onFollow} />}
@@ -77,7 +79,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       {task.steps.map((s) => {
         const a = agent(s.agentId);
         return (
-          <details key={s.agentId} className="card step" open={task.steps.length <= 2}>
+          <details key={s.agentId} className="card step" open={task.steps.length <= 2 || s.status === 'working'}>
             <summary>
               {a && <Chibi avatar={a.avatar} size={36} state={s.status === 'working' ? 'working' : s.status === 'error' ? 'error' : 'idle'} />}
               <div>
@@ -87,7 +89,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
               </div>
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
-            {s.error ? <p className="danger">{s.error}</p> : <Markdown text={s.output || '…'} onLink={(t) => openNote({ title: t })} />}
+            {s.error ? <p className="danger">{s.error}</p> : <div className={s.status === 'working' ? 'streaming' : ''}><Markdown text={s.output || streams[`task:${task.id}:${s.agentId}`] || '…'} onLink={(t) => openNote({ title: t })} /></div>}
           </details>
         );
       })}

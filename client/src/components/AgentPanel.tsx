@@ -53,13 +53,14 @@ function ChatTab({ agent }: { agent: Agent }) {
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const { toast, openNote } = useOffice();
+  const { toast, openNote, streams } = useOffice();
+  const liveReply = streams[`chat:${agent.id}`];
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.chat(agent.id).then(setMsgs);
   }, [agent.id]);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs, sending]);
+  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs, sending, liveReply]);
 
   async function send() {
     const m = text.trim();
@@ -100,7 +101,11 @@ function ChatTab({ agent }: { agent: Agent }) {
             )}
           </div>
         ))}
-        {sending && <div className="msg msg--assistant"><div className="bubble bubble--think inline"><span /><span /><span /></div></div>}
+        {sending && (
+          <div className="msg msg--assistant">
+            {liveReply ? <div className="streaming"><Markdown text={liveReply} /></div> : <div className="bubble bubble--think inline"><span /><span /><span /></div>}
+          </div>
+        )}
         <div ref={end} />
       </div>
       <div className="chat-input">

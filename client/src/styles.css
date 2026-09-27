@@ -447,3 +447,5 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
   .meetings { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow: auto; }
   .round-table { height: 300px; }
 }
+
+.streaming > .markdown > :last-child::after { content: '▍'; color: var(--accent); animation: blinkText 0.8s steps(2) infinite; margin-left: 2px; }
