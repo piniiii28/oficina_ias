@@ -10,6 +10,7 @@ import { Palette } from './components/Palette';
 import { Board } from './views/Board';
 import { Welcome } from './components/Welcome';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { AchievementWatcher } from './components/Achievements';
 import { useEffect, useState } from 'react';
 import { play, setSounds, soundsOn } from './sounds';
 
@@ -88,6 +89,7 @@ function Shell() {
       </main>
       <Palette />
       <Welcome />
+      <AchievementWatcher />
       <div className="toasts">
         {toasts.map((t) => <div key={t.id} className="toast">{t.msg}</div>)}
       </div>

@@ -627,3 +627,9 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .elevator-panel button.on { background: #ef4444; color: #fff; border-color: #fecaca; animation: pulse 1.4s infinite; }
 .rate { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .rate .on { border-color: var(--accent); background: var(--accent-soft); }
+.achievements { box-shadow: none; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.badge-item { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); opacity: 0.55; }
+.badge-item.on { opacity: 1; border-color: #f59e0b; background: color-mix(in srgb, #fde047 12%, var(--panel)); }
+.badge-item span { font-size: 28px; }
+.badge-item small { color: var(--muted); font-size: 11px; }

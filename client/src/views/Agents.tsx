@@ -5,6 +5,7 @@ import { Chibi, ACCESSORIES, HAIR_STYLES, EYE_STYLES } from '../components/Chibi
 import { AgentPanel } from '../components/AgentPanel';
 import { Stats } from '../components/Stats';
 import { CATALOG } from '../catalog';
+import { AchievementsPanel } from '../components/Achievements';
 import { useOffice } from '../state';
 
 const COLORS = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
@@ -88,6 +89,7 @@ export function Agents() {
       </header>
 
       <Stats />
+      <AchievementsPanel />
 
       {browsing && (
         <section className="card">
