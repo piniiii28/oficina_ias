@@ -209,3 +209,16 @@ test('memoria compartida: una tarea usa y enlaza notas relacionadas del grafo', 
   assert.ok(t.contextNotes.includes('Receta de arepas'));
   assert.match(notes.get(t.noteId).content, /## Contexto usado\n- \[\[Receta de arepas\]\]/);
 });
+
+test('rutinas: se ejecutan una sola vez en su hora y día', async () => {
+  const { isDue, normalizeRoutine } = await import('../src/routines.js');
+  const r = { ...normalizeRoutine({ prompt: 'Resumen', time: '07:30', days: [1] }), lastRun: null };
+  const lunes = new Date(2026, 8, 28, 7, 30); // lunes 28 sep 2026
+  const stamp = isDue(r, lunes);
+  assert.ok(stamp);
+  r.lastRun = stamp;
+  assert.equal(isDue(r, lunes), false, 'no se repite en el mismo minuto');
+  assert.equal(isDue(r, new Date(2026, 8, 29, 7, 30)), false, 'martes no');
+  assert.equal(isDue({ ...r, enabled: false, lastRun: null }, lunes), false);
+  assert.deepEqual(normalizeRoutine({ prompt: 'x', time: 'mal', days: [9] }).time, '08:00');
+});

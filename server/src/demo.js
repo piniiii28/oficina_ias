@@ -5,7 +5,7 @@
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const STOP = new Set(
-  'el la los las un una unos unas de del al a y o u en con por para que como mi tu su sus mis es son ser se me te lo le les hay quiero necesito hacer haz dame sobre esto esta este muy mas más pero sin ya también tambien conseguimos conseguir hacemos podemos queremos quiero necesito necesitamos mejor mejores primeros primeras tarea tareas desde aporta parte contexto completo tu rol crea crear cómo como plan the and of to for in on with'.split(' '),
+  'el la los las un una unos unas de del al a y o u en con por para que como mi tu su sus mis es son ser se me te lo le les hay quiero necesito hacer haz dame sobre esto esta este muy mas más pero sin ya también tambien resume resumen resumir explica explícame explicame diseña disena escribe genera ayúdame ayudame investiga analiza organiza conseguimos conseguir hacemos podemos queremos quiero necesito necesitamos mejor mejores primeros primeras tarea tareas desde aporta parte contexto completo tu rol crea crear cómo como plan the and of to for in on with'.split(' '),
 );
 
 /** Palabras clave de un texto (para títulos de ideas y enlaces). */

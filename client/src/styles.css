@@ -525,3 +525,12 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
   .nav-item .nav-label { font-size: 10px; white-space: nowrap; }
   .nav-item .badge { position: absolute; margin: -4px 0 0 18px; font-size: 9px; }
 }
+
+.routines { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; margin-bottom: 6px; background: var(--panel-2); }
+.routines-head { width: 100%; text-align: left; border: 0; background: none; color: var(--text); font: inherit; font-weight: 800; cursor: pointer; padding: 2px 0; display: flex; gap: 6px; align-items: center; }
+.routines-head .muted:last-child { margin-left: auto; }
+.routine { border-left: 3px solid var(--accent); padding: 2px 0 2px 8px; }
+.routine p { margin: 2px 0; }
+.days { display: flex; gap: 2px; }
+.days button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; font-weight: 700; }
+.days button.on { background: var(--accent); color: #fff; border-color: var(--accent); }

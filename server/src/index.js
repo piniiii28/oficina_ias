@@ -13,6 +13,7 @@ import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
 import { runMeeting } from './meetings.js';
+import { createRoutine, normalizeRoutine, startScheduler } from './routines.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
@@ -232,6 +233,32 @@ export function createApp(store) {
     res.json({ ok: true });
   });
 
+  // --- Rutinas programadas ---
+  app.get('/api/routines', (_req, res) => res.json(store.data.routines || []));
+  app.post('/api/routines', (req, res) => {
+    const r = normalizeRoutine(req.body || {});
+    if (!r.prompt) return res.status(400).json({ error: 'Escribe qué debe hacer la rutina' });
+    res.status(201).json(createRoutine(store, r));
+  });
+  app.put('/api/routines/:id', (req, res) => {
+    const r = (store.data.routines || []).find((x) => x.id === req.params.id);
+    if (!r) return res.status(404).json({ error: 'No existe' });
+    Object.assign(r, normalizeRoutine({ ...r, ...req.body }));
+    store.save();
+    res.json(r);
+  });
+  app.post('/api/routines/:id/run', (req, res) => {
+    const r = (store.data.routines || []).find((x) => x.id === req.params.id);
+    if (!r) return res.status(404).json({ error: 'No existe' });
+    runTask(store, notes, { prompt: r.prompt, agentIds: r.agentIds.length ? r.agentIds : undefined }).catch((err) => console.error('[rutina]', err));
+    res.status(202).json({ ok: true });
+  });
+  app.delete('/api/routines/:id', (req, res) => {
+    store.data.routines = (store.data.routines || []).filter((x) => x.id !== req.params.id);
+    store.save();
+    res.json({ ok: true });
+  });
+
   // --- Sala de reuniones ---
   app.get('/api/meetings', (_req, res) => res.json((store.data.meetings || []).slice(0, 50)));
   app.post('/api/meetings', (req, res) => {
@@ -365,6 +392,7 @@ export function createApp(store) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const store = new Store(DATA_DIR);
   const app = createApp(store);
+  startScheduler(store, new Notes(store));
   const shutdown = () => {
     store.flush();
     process.exit(0);

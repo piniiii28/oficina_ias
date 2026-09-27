@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { api, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
+import { Routines } from '../components/Routines';
 import { useOffice } from '../state';
 
 export const STATUS_ES: Record<string, string> = {
@@ -24,13 +25,11 @@ export function Tasks() {
   }, [tasks, followOf]);
   const agent = (id: string) => agents.find((a) => a.id === id);
 
-  if (!tasks.length) {
-    return <div className="empty">Todavía no hay tareas. Ve a la Oficina y pídele algo al Cerebro Central.</div>;
-  }
-
   return (
     <div className="tasks">
       <aside className="tasks-list">
+        <Routines />
+        {!tasks.length && <p className="muted small center">Todavía no hay tareas. Ve a la Oficina y pídele algo al Cerebro Central.</p>}
         {tasks.map((t) => (
           <button key={t.id} className={`task-item ${current?.id === t.id ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
             <strong>{t.title}</strong>
@@ -39,6 +38,7 @@ export function Tasks() {
           </button>
         ))}
       </aside>
+      {!current && <div className="empty">Aquí verás el plan del cerebro, el aporte de cada IA y la respuesta integrada.</div>}
       {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} onFollow={() => setFollowOf(current.id)} parent={tasks.find((t) => t.id === current.parentId)} onOpen={setOpenId} />}
     </div>
   );
