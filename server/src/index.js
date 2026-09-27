@@ -11,7 +11,8 @@ import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink, set
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
-import { addNode, nodeById, nodeCall, printerCamera, printerCommand, printerNow, publicNode, savePrinter, startNodePrinterPoll } from './devices.js';
+import { addNode, nodeById, nodeCall, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { busyNow, ollamaModelsUsed, ollamaPull, ollamaServer, ollamaServers, ollamaTags, hasModel, syncModels } from './ollama.js';
 import { requestAccess } from './access.js';
 import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
@@ -349,6 +350,7 @@ export function createApp(store) {
     }
     if (!a.account || a.account === 'default') delete a.account;
     store.save();
+    modelSync.changed();
     res.json(a);
   });
   app.delete('/api/agents/:id', (req, res) => {
@@ -753,41 +755,58 @@ export function createApp(store) {
     res.json({ ok: r.ok && Boolean(found), path: found, log: r.out.slice(-3000) });
   });
 
-  // --- Ollama: modelos instalados y descarga de modelos ---
-  const ollamaBase = () => (store.data.settings.apiKeys?.ollamaUrl || PROVIDERS.ollama.baseUrl).replace(/\/v1\/?$/, '');
-  const ollamaNode = () => store.data.settings.ollamaNode && nodeById(store.data.settings, store.data.settings.ollamaNode);
-  app.get('/api/ollama/models', async (_req, res) => {
+  // --- Ollama: este computador y los nodos (varios a la vez) ---
+  const serverOf = (req) => ollamaServer(store.data.settings, req.query.server || req.body?.server);
+  app.get('/api/ollama/servers', async (_req, res) => {
+    const used = ollamaModelsUsed(store.data.agents);
+    res.json(await Promise.all(ollamaServers(store.data.settings).map(async (sv) => {
+      const out = { id: sv.id, label: sv.label, nodeId: sv.nodeId || null, busy: busyNow(sv.id) };
+      try {
+        const models = await ollamaTags(sv);
+        const names = models.map((m) => m.name);
+        return { ...out, running: true, models, missing: used.filter((m) => !hasModel(names, m)) };
+      } catch {
+        return { ...out, running: false, models: [], missing: used };
+      }
+    })));
+  });
+  app.get('/api/ollama/models', async (req, res) => {
+    const sv = serverOf(req);
     try {
-      const n = ollamaNode();
-      const r = n ? await fetch(`${n.url}/nodo/ollama/api/tags`, { headers: { 'X-Nodo-Token': n.token }, signal: AbortSignal.timeout(4000) }) : await fetch(`${ollamaBase()}/api/tags`, { signal: AbortSignal.timeout(4000) });
-      const data = await r.json();
-      res.json({ running: true, models: (data.models || []).map((m) => ({ name: m.name, size: m.size })) });
+      res.json({ running: true, server: sv.id, models: await ollamaTags(sv) });
     } catch {
-      res.json({ running: false, models: [] });
+      res.json({ running: false, server: sv?.id, models: [] });
     }
   });
   app.post('/api/ollama/pull', async (req, res) => {
     const model = String(req.body?.model || '').trim();
     if (!/^[a-z0-9][a-z0-9._:/-]{0,80}$/i.test(model)) return res.status(400).json({ error: 'Nombre de modelo no válido' });
+    const sv = serverOf(req);
+    if (!sv) return res.status(404).json({ error: 'Ese Ollama no existe' });
     const log = streamer(`install:ollama:${model}`);
-    const n = ollamaNode();
-    if (n) {
-      // Descarga en el nodo (puede tardar varios minutos).
-      log(`Descargando ${model} en el nodo «${n.name}»…\n`);
-      try {
-        const r = await fetch(`${n.url}/nodo/ollama/api/pull`, { method: 'POST', headers: { 'X-Nodo-Token': n.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: model, stream: false }), signal: AbortSignal.timeout(60 * 60000) });
-        const out = await r.text();
-        log.end();
-        return res.json({ ok: r.ok, log: out.slice(-2000) });
-      } catch (err) {
-        log.end();
-        return res.json({ ok: false, log: err.message });
-      }
+    log(`Descargando ${model} en ${sv.label}…\n`);
+    try {
+      await ollamaPull(sv, model, log);
+      log.end();
+      res.json({ ok: true, server: sv.id, log: '' });
+    } catch (err) {
+      log.end();
+      res.json({ ok: false, server: sv.id, log: /fetch failed|ECONNREFUSED/i.test(err.message) ? `Ollama no está abierto en ${sv.label}` : err.message });
     }
-    log(`$ ollama pull ${model}\n`);
-    const r = await runLogged('ollama', ['pull', model], { onData: log, timeoutMs: 60 * 60000 });
-    log.end();
-    res.json({ ok: r.ok, log: r.out.slice(-2000) });
+  });
+  // Descarga en un Ollama todos los modelos que usan las IAs y le faltan.
+  app.post('/api/ollama/sync', async (req, res) => {
+    const sv = serverOf(req);
+    if (!sv) return res.status(404).json({ error: 'Ese Ollama no existe' });
+    const log = streamer(`install:ollama-sync:${sv.id}`);
+    try {
+      const r = await syncModels(sv, ollamaModelsUsed(store.data.agents), log);
+      log.end();
+      res.json({ ok: !r.failed.length, ...r });
+    } catch (err) {
+      log.end();
+      res.status(502).json({ error: `Ollama no responde en ${sv.label}` });
+    }
   });
 
   // --- Modo gratis: IAs de proveedores de pago pasan a modelos gratis ---
@@ -1104,6 +1123,8 @@ export function createApp(store) {
     const log = streamer('install:update');
     try {
       await applyUpdate(ROOT, log);
+      // Los nodos también se actualizan (cada uno trae la versión nueva y se reinicia).
+      await updateNodes(store.data.settings, log);
       log.end();
       const restart = process.env.OFICINA_LANZADOR === '1';
       res.json({ ok: true, restart });
@@ -1164,7 +1185,11 @@ export function createApp(store) {
   const emitEvent = (e) => bus.emit('event', e);
   connectPrinter(store.data.settings.printer?.node ? {} : store.data.settings, emitEvent);
   const nodePoll = startNodePrinterPoll(store, emitEvent);
-  app.locals.stop = () => clearInterval(nodePoll);
+  const modelSync = startNodeModelSync(store);
+  app.locals.stop = () => {
+    clearInterval(nodePoll);
+    modelSync.stop();
+  };
   app.get('/api/printer/status', (_req, res) => res.json(printerNow(store.data.settings)));
   app.put('/api/printer', async (req, res) => {
     if (!isLocal(req) || req.viaToken) return res.status(403).json({ error: 'La impresora se configura desde este computador' });
@@ -1220,11 +1245,16 @@ export function createApp(store) {
   });
 
   // --- Nodos: tus otros computadores (impresora y Ollama de otras zonas) ---
+  // Versión de la principal, para avisar si un nodo quedó atrás.
+  let mainHead;
+  const headNow = async () => (mainHead ??= (await updateStatus(ROOT, { fetch: false }).catch(() => null))?.head || null);
   app.get('/api/nodes', async (_req, res) => {
     const nodes = store.data.settings.nodes || [];
+    const head = await headNow();
     res.json(await Promise.all(nodes.map(async (n) => {
       try {
-        return { ...publicNode(n), online: true, info: await nodeCall(n, 'GET', '/nodo/info', undefined, { timeoutMs: 4000 }) };
+        const info = await nodeCall(n, 'GET', '/nodo/info', undefined, { timeoutMs: 4000 });
+        return { ...publicNode(n), online: true, info, outdated: Boolean(head && info.version?.head && info.version.head !== head) };
       } catch (err) {
         return { ...publicNode(n), online: false, error: err.message };
       }
@@ -1238,11 +1268,46 @@ export function createApp(store) {
       res.status(400).json({ error: err.message });
     }
   });
+  app.put('/api/nodes/:id', (req, res) => {
+    const n = nodeById(store.data.settings, req.params.id);
+    if (!n) return res.status(404).json({ error: 'Ese nodo no existe' });
+    const b = req.body || {};
+    if (b.name !== undefined) n.name = String(b.name).trim().slice(0, 40) || n.name;
+    for (const k of ['ollama', 'syncModels']) {
+      if (b[k] === undefined) continue;
+      if (b[k] === false) n[k] = false;
+      else delete n[k];
+    }
+    store.save();
+    pushNodeModels(store, n).catch(() => {});
+    res.json(publicNode(n));
+  });
+  // Descargar ya en el nodo los modelos que usan las IAs.
+  app.post('/api/nodes/:id/models', async (req, res) => {
+    const n = nodeById(store.data.settings, req.params.id);
+    if (!n) return res.status(404).json({ error: 'Ese nodo no existe' });
+    try {
+      res.json(await nodeCall(n, 'PUT', '/nodo/modelos', { models: ollamaModelsUsed(store.data.agents), now: true }));
+    } catch (err) {
+      res.status(502).json({ error: err.message });
+    }
+  });
+  app.post('/api/nodes/:id/update', async (req, res) => {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo un administrador' });
+    const n = nodeById(store.data.settings, req.params.id);
+    if (!n) return res.status(404).json({ error: 'Ese nodo no existe' });
+    try {
+      res.json(await nodeCall(n, 'POST', '/nodo/update', {}));
+    } catch (err) {
+      res.status(502).json({ error: err.message });
+    }
+  });
   app.delete('/api/nodes/:id', (req, res) => {
     const s = store.data.settings;
     s.nodes = (s.nodes || []).filter((n) => n.id !== req.params.id);
     if (s.printer?.node === req.params.id) delete s.printer;
     if (s.ollamaNode === req.params.id) delete s.ollamaNode;
+    for (const a of store.data.agents) if (a.provider === 'ollama' && a.account === `node:${req.params.id}`) delete a.account;
     store.save();
     res.json({ ok: true });
   });

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { simulate } from './demo.js';
+import { ollamaOrder, ensureUp, markDown, markUp, track, isDownError } from './ollama.js';
 
 // tier: 'gratis' (tiene plan gratis), 'mixto' (modelos gratis y de pago),
 // 'suscripcion' (usa un plan que ya pagas) o 'pago' (cobra por uso).
@@ -73,8 +74,10 @@ export function credentials(settings, provider, accountId = null) {
   const def = PROVIDERS[provider];
   if (!def) return [];
   const extra = (settings.accounts || []).filter((a) => a.provider === provider && (def.cli ? a.home : a.key));
+  // Ollama: cada «cuenta» es un computador (este o un nodo).
+  if (def.keyless) return ollamaOrder(settings, accountId).map((server) => ({ id: server.id, label: server.label, key: null, server }));
   const mainKey = keyFor(settings, provider);
-  const main = def.cli || def.keyless
+  const main = def.cli
     ? [{ id: 'default', label: 'Principal', key: null, home: null }]
     : mainKey ? [{ id: 'default', label: 'Principal', key: mainKey }] : [];
   const all = [...main, ...extra];
@@ -154,22 +157,34 @@ async function callModelInner(settings, { provider, model, system, messages, age
       wrote = true;
       emit(d);
     };
+    const ollama = cred.server;
+    const done = ollama ? track(ollama.id) : null;
     try {
+      if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar
       if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home);
       else if (provider === 'anthropic') text = await callAnthropic(cred.key, model, system, messages, effort, tap, sig, Boolean(settings.webSearch));
       else if (provider === 'google') text = await callGemini(cred.key, model, system, messages, tap, sig);
-      else text = await callOpenAICompatible(provider, cred.key, model, system, messages, settings, tap, sig);
+      else text = await callOpenAICompatible(provider, cred, model, system, messages, tap, sig);
+      if (ollama) markUp(ollama.id);
       used = cred;
       break;
     } catch (err) {
       if (signal?.aborted) throw new Error('Cancelada');
       if (sig.aborted) throw new Error(`${PROVIDERS[provider]?.label || provider}: no respondió en 10 minutos`);
+      // Ollama: si este computador está apagado o no tiene el modelo, se prueba con otro.
+      if (ollama && i < creds.length - 1 && !wrote) {
+        if (isDownError(err.message)) markDown(ollama.id);
+        console.warn(`[ollama] «${cred.label}» falló (${err.message.slice(0, 120)}), pruebo con «${creds[i + 1].label}»`);
+        continue;
+      }
       // Sin cupo en esta cuenta: se prueba con la siguiente (si aún no escribió nada).
       if (i < creds.length - 1 && !wrote && isQuotaError(err.message)) {
         console.warn(`[cuentas] ${PROVIDERS[provider]?.label}: «${cred.label}» sin cupo, pruebo con «${creds[i + 1].label}»`);
         continue;
       }
       throw err;
+    } finally {
+      done?.();
     }
   }
   const inChars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
@@ -258,13 +273,11 @@ async function readSSE(res, onEvent) {
   }
 }
 
-async function callOpenAICompatible(provider, apiKey, model, system, messages, settings, onDelta, signal) {
-  // Ollama puede ser el de un nodo (otro de tus computadores, por Tailscale).
-  const node = provider === 'ollama' && settings.ollamaNode ? (settings.nodes || []).find((n) => n.id === settings.ollamaNode) : null;
-  const base = node ? `${node.url}/nodo/ollama/v1` : provider === 'ollama' && settings.apiKeys?.ollamaUrl ? settings.apiKeys.ollamaUrl : PROVIDERS[provider].baseUrl;
-  const headers = { 'Content-Type': 'application/json' };
-  if (node) headers['X-Nodo-Token'] = node.token;
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+async function callOpenAICompatible(provider, cred, model, system, messages, onDelta, signal) {
+  // Ollama puede ser el de este computador o el de un nodo (por Tailscale).
+  const base = cred.server ? `${cred.server.base}/v1` : PROVIDERS[provider].baseUrl;
+  const headers = { 'Content-Type': 'application/json', ...(cred.server?.headers || {}) };
+  if (cred.key) headers.Authorization = `Bearer ${cred.key}`;
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = 'http://localhost:4747';
     headers['X-Title'] = 'Oficina de IAs';
@@ -281,7 +294,8 @@ async function callOpenAICompatible(provider, apiKey, model, system, messages, s
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(`${PROVIDERS[provider].label}: ${data.error?.message || res.statusText}`);
+    const where = cred.server ? ` (${cred.server.label})` : '';
+    throw new Error(`${PROVIDERS[provider].label}${where}: ${data.error?.message || data.error || res.statusText}`);
   }
   let text = '';
   await readSSE(res, (e) => {

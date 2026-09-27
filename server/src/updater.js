@@ -33,13 +33,17 @@ export async function updateStatus(root, { fetch = true } = {}) {
   };
 }
 
-/** Trae la versión nueva, instala dependencias y compila. onLog recibe la salida. */
-export async function applyUpdate(root, onLog = () => {}) {
+/**
+ * Trae la versión nueva, instala dependencias y compila. onLog recibe la salida.
+ * Un nodo solo necesita el servidor: { build: false, workspace: 'server' }.
+ */
+export async function applyUpdate(root, onLog = () => {}, { build: doBuild = true, workspace = null } = {}) {
   const pull = await git(root, ['pull', '--ff-only'], { onData: onLog });
   if (!pull.ok) throw new Error(/auth|could not read/i.test(pull.out) ? 'GitHub pidió iniciar sesión: abre el actualizador una vez.' : 'No pude traer la versión nueva (¿cambiaste archivos del programa?).');
   onLog('\n$ npm install\n');
-  const inst = await runLogged('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: root, onData: onLog, shell: win, timeoutMs: 15 * 60000 });
+  const inst = await runLogged('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', ...(workspace ? ['-w', workspace] : [])], { cwd: root, onData: onLog, shell: win, timeoutMs: 15 * 60000 });
   if (!inst.ok) throw new Error('Falló la instalación de dependencias');
+  if (!doBuild) return { ok: true };
   onLog('\n$ npm run build\n');
   const build = await runLogged('npm', ['run', 'build'], { cwd: root, onData: onLog, shell: win, timeoutMs: 10 * 60000 });
   if (!build.ok) throw new Error('Falló la compilación de la interfaz');

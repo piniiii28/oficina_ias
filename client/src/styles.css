@@ -867,3 +867,8 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .progress { height: 10px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
 .progress i { display: block; height: 100%; background: linear-gradient(90deg, #84cc16, #22c55e); transition: width 0.6s; }
 .printer-cam { width: 100%; border-radius: 10px; border: 1px solid var(--border); margin-top: 6px; }
+
+/* Varios Ollama */
+.ollama-servers { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.ollama-servers h3 { margin: 4px 0; }
+.grant-list li .row.small { margin-top: 4px; flex-wrap: wrap; gap: 4px 12px; }

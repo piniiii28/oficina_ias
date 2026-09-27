@@ -44,7 +44,17 @@ export type Meter = {
 };
 
 export type PrinterState = { estado: string; codigo: string | null; archivo: string | null; progreso: number | null; restante: number | null; capa: number | null; capas: number | null; boquilla: number | null; boquillaMeta: number | null; cama: number | null; camaMeta: number | null; luz: boolean | null; error: string | null };
-export type NodeInfo = { id: string; name: string; url: string; tokenPreview: string | null; online: boolean; error?: string; info?: { name: string; platform: string; cpus: number; memGB: number; tailscale: string[]; printer: PrinterInfo; ollama: { running: boolean; models: string[] }; cad: Record<string, string | null> } };
+export type ModelSync = { running: boolean; current: string | null; done: string[]; failed: { model: string; error: string }[]; at: string | null; error: string | null };
+export type NodeInfo = {
+  id: string; name: string; url: string; tokenPreview: string | null; online: boolean; error?: string; outdated?: boolean;
+  ollama?: false; syncModels?: false;
+  info?: {
+    name: string; platform: string; cpus: number; memGB: number; tailscale: string[]; printer: PrinterInfo;
+    ollama: { running: boolean; models: string[]; wanted?: string[]; sync?: ModelSync }; cad: Record<string, string | null>;
+    version?: { head: string | null }; updating?: { running: boolean; error: string | null };
+  };
+};
+export type OllamaServer = { id: string; label: string; nodeId: string | null; busy: number; running: boolean; models: { name: string; size: number }[]; missing: string[] };
 export type UpdateStatus = { git: boolean; head?: string; branch?: string; behind?: number; commits?: string[]; error?: string | null; canRestart: boolean };
 export type PrinterInfo = { node?: { id: string; name: string };
   configured: boolean; name: string; model: string; host: string; serial: string; accessPreview: string | null; connected: boolean; error: string | null; state: PrinterState | null; updatedAt: number | null };
@@ -291,8 +301,10 @@ export const api = {
   deleteAccount: (id: string) => req<Settings>('DELETE', `/api/accounts/${id}`),
   cliLogin: (provider: string, account?: string) => req<{ opened: boolean; command: string }>('POST', `/api/cli/${provider}/login`, { account }),
   cliInstall: (provider: string) => req<{ ok: boolean; path: string | null; log: string }>('POST', `/api/cli/${provider}/install`),
-  ollamaModels: () => req<{ running: boolean; models: { name: string; size: number }[] }>('GET', '/api/ollama/models'),
-  ollamaPull: (model: string) => req<{ ok: boolean; log: string }>('POST', '/api/ollama/pull', { model }),
+  ollamaModels: (server?: string) => req<{ running: boolean; models: { name: string; size: number }[] }>('GET', `/api/ollama/models${server ? `?server=${encodeURIComponent(server)}` : ''}`),
+  ollamaPull: (model: string, server?: string) => req<{ ok: boolean; log: string }>('POST', '/api/ollama/pull', { model, server }),
+  ollamaServers: () => req<OllamaServer[]>('GET', '/api/ollama/servers'),
+  ollamaSync: (server: string) => req<{ ok: boolean; missing: string[]; done: string[]; failed: { model: string; error: string }[] }>('POST', '/api/ollama/sync', { server }),
   freeMode: () => req<{ changed: number; changes: { id: string; from: { provider: string; model: string }; to: { provider: string; model: string } }[] }>('POST', '/api/agents/free-mode'),
   undoFreeMode: () => req<{ restored: number }>('POST', '/api/agents/free-mode/undo'),
 
@@ -344,6 +356,9 @@ export const api = {
   nodes: () => req<NodeInfo[]>('GET', '/api/nodes'),
   addNode: (n: { url: string; token: string; name?: string }) => req<NodeInfo>('POST', '/api/nodes', n),
   deleteNode: (id: string) => req('DELETE', `/api/nodes/${id}`),
+  updateNodeSettings: (id: string, b: { name?: string; ollama?: boolean; syncModels?: boolean }) => req<NodeInfo>('PUT', `/api/nodes/${id}`, b),
+  nodeModels: (id: string) => req<{ wanted: string[]; sync: ModelSync }>('POST', `/api/nodes/${id}/models`),
+  nodeUpdate: (id: string) => req<{ ok: boolean; restart: boolean }>('POST', `/api/nodes/${id}/update`),
   system: () => req<{ dataDir: string; appDir: string; canRestart: boolean }>('GET', '/api/system'),
   moveData: (dir: string) => req<{ ok: boolean; restart: boolean }>('POST', '/api/system/data-dir', { dir }),
   updateStatus: () => req<UpdateStatus>('GET', '/api/update'),

@@ -3,6 +3,7 @@
 // hablarle, para que el resto de la oficina no tenga que saberlo.
 import { Store } from './store.js';
 import { printerInfo, getPrinter, cameraFrame, isLanHost, connectPrinter } from './bambu.js';
+import { ollamaModelsUsed } from './ollama.js';
 
 // --- Nodos (tus otros computadores, por Tailscale) ---
 export function normalizeNodeUrl(url) {
@@ -42,7 +43,51 @@ export async function addNode(store, { url, token, name }) {
   node.name ||= info.name;
   (store.data.settings.nodes ||= []).push(node);
   store.save();
+  pushNodeModels(store, node).catch(() => {});
   return { node, info };
+}
+
+/**
+ * Le dice a un nodo qué modelos de Ollama usan las IAs; el nodo descarga los
+ * que le falten, en segundo plano. Se puede apagar por nodo (syncModels: false).
+ */
+export async function pushNodeModels(store, node, { now = false } = {}) {
+  if (node.syncModels === false || node.ollama === false) return null;
+  return nodeCall(node, 'PUT', '/nodo/modelos', { models: ollamaModelsUsed(store.data.agents), now }, { timeoutMs: 6000 });
+}
+
+/** Revisa los modelos de todos los nodos al abrir y cada 10 minutos. */
+export function startNodeModelSync(store) {
+  let last = '';
+  const tick = () => {
+    last = JSON.stringify(ollamaModelsUsed(store.data.agents));
+    for (const n of store.data.settings.nodes || []) pushNodeModels(store, n).catch(() => {});
+  };
+  tick();
+  const timer = setInterval(tick, 10 * 60000).unref();
+  return {
+    stop: () => clearInterval(timer),
+    /** Llamar cuando cambian los modelos de las IAs (solo avisa si cambió algo). */
+    changed: () => {
+      if (JSON.stringify(ollamaModelsUsed(store.data.agents)) !== last) tick();
+    },
+  };
+}
+
+/** Pide a los nodos que se actualicen (después de actualizar la principal). */
+export async function updateNodes(settings, onLog = () => {}) {
+  const out = [];
+  for (const n of settings.nodes || []) {
+    try {
+      await nodeCall(n, 'POST', '/nodo/update', {}, { timeoutMs: 6000 });
+      onLog(`🛰️ ${n.name}: actualizándose\n`);
+      out.push({ id: n.id, ok: true });
+    } catch (err) {
+      onLog(`🛰️ ${n.name}: ${err.message}\n`);
+      out.push({ id: n.id, ok: false, error: err.message });
+    }
+  }
+  return out;
 }
 
 // --- Impresora: aquí o en un nodo ---

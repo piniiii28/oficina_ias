@@ -1,6 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { AvatarConfig, NodeInfo, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
+import type { AvatarConfig, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
@@ -176,7 +176,7 @@ function NodesSection() {
       <p className="muted small">Un nodo le presta a esta oficina lo que ese computador tiene cerca: la <b>impresora</b> de esa casa y su <b>Ollama</b> (si tiene mejor tarjeta de video). Las IAs de la nube (Claude, Gemini, Groq…) trabajan igual desde cualquier computador.</p>
       <ol className="steps small">
         <li>En el otro computador instala la oficina (con <b>instalar.bat</b>) y Tailscale.</li>
-        <li>Abre <b>nodo.bat</b> (en lugar de iniciar.bat). Se abre una página con su dirección y su <b>código de enlace</b>.</li>
+        <li>Abre <b>nodo.bat</b> (en lugar de iniciar.bat). La primera vez instala <b>Ollama</b> si falta y descarga los modelos que usan tus IAs. Se abre una página con su dirección y su <b>código de enlace</b>.</li>
         <li>Pégalos aquí.</li>
       </ol>
       <div className="grid2">
@@ -200,21 +200,80 @@ function NodesSection() {
             <b>{n.name}</b> <span className={`pill ${n.online ? 'pill--done' : 'pill--error'}`}>{n.online ? 'en línea' : 'sin conexión'}</span> <code>{n.url}</code>
             {n.info && <span className="small muted"> · {n.info.cpus} núcleos, {n.info.memGB} GB · Ollama: {n.info.ollama.running ? `${n.info.ollama.models.length} modelos` : 'no'} · Impresora: {n.info.printer.configured ? (n.info.printer.connected ? 'conectada' : 'sin conexión') : 'no'}</span>}
             {n.error && <span className="small danger"> · {n.error}</span>}
-            <button className="link" onClick={async () => { if (confirm(`¿Quitar el nodo ${n.name}?`)) { await api.deleteNode(n.id); load(); } }}>quitar</button>
+            {n.info?.ollama.sync && <span className="small muted"> · {syncText(n.info.ollama.sync)}</span>}
+            {n.outdated && <span className="pill pill--error small">versión vieja</span>}
+            {n.info?.updating?.running && <span className="small muted"> · actualizándose…</span>}
+            <div className="row small">
+              <label className="check"><input type="checkbox" checked={n.ollama !== false} onChange={async (e) => { await api.updateNodeSettings(n.id, { ollama: e.target.checked }); load(); }} /> Prestar su Ollama</label>
+              {n.ollama !== false && <label className="check"><input type="checkbox" checked={n.syncModels !== false} onChange={async (e) => { await api.updateNodeSettings(n.id, { syncModels: e.target.checked }); load(); }} /> Descargar allí los modelos de las IAs</label>}
+              {n.online && n.ollama !== false && <button className="link" onClick={async () => { try { await api.nodeModels(n.id); toast(`🦙 ${n.name} está descargando los modelos que faltan`); setTimeout(load, 1500); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>descargar modelos ya</button>}
+              {n.online && <button className="link" onClick={async () => { try { const r = await api.nodeUpdate(n.id); toast(r.restart ? `⬆️ ${n.name} se está actualizando y se reinicia solo` : `⬆️ ${n.name} se está actualizando; reabre nodo.bat al terminar`); setTimeout(load, 8000); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>actualizar</button>}
+              <button className="link" onClick={async () => { if (confirm(`¿Quitar el nodo ${n.name}?`)) { await api.deleteNode(n.id); load(); } }}>quitar</button>
+            </div>
           </li>
         ))}
         {nodes && !nodes.length && <li className="muted small">Todavía no hay nodos.</li>}
       </ul>
       {nodes && nodes.length > 0 && (
-        <label className="check">Ollama que usa la oficina{' '}
+        <label className="check">Ollama preferido{' '}
           <select value={ollamaNode} onChange={async (e) => { try { await api.saveSettings({ ollamaNode: e.target.value }); setOllamaNode(e.target.value); toast('🦙 Listo'); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>
             <option value="">El de este computador</option>
-            {nodes.map((n) => <option key={n.id} value={n.id}>El del nodo «{n.name}»</option>)}
+            {nodes.filter((n) => n.ollama !== false).map((n) => <option key={n.id} value={n.id}>El del nodo «{n.name}»</option>)}
           </select>
         </label>
       )}
-      <p className="muted small">La impresora se elige en Taller 3D → Mi impresora → «¿Dónde está la impresora?».</p>
+      {nodes && nodes.length > 0 && <OllamaServers />}
+      <p className="muted small">Los nodos se actualizan solos: al abrir nodo.bat, cada 6 horas (si la impresora no está imprimiendo) y cuando actualizas esta oficina. La impresora se elige en Taller 3D → Mi impresora → «¿Dónde está la impresora?».</p>
     </section>
+  );
+}
+
+function syncText(st: ModelSync) {
+  if (st.running) return `🦙 descargando ${st.current || 'modelos'}…`;
+  if (st.error) return `🦙 ${st.error}`;
+  if (st.failed.length) return `🦙 no pudo descargar ${st.failed.map((f) => f.model).join(', ')}`;
+  return st.at ? '🦙 modelos al día' : '';
+}
+
+/** Varios Ollama a la vez: qué tiene cada computador y qué le falta. */
+function OllamaServers() {
+  const { toast, streams } = useOffice();
+  const [list, setList] = useState<OllamaServer[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = () => api.ollamaServers().then(setList).catch(() => setList([]));
+  useEffect(() => {
+    load();
+  }, []);
+  return (
+    <div className="ollama-servers">
+      <h3>🦙 Tus Ollama</h3>
+      <p className="muted small">Se usan <b>todos a la vez</b>: cada IA elige el suyo en su perfil (⚙️ → «¿Qué Ollama usa?»), o «automático» para mandar el trabajo al menos ocupado. Si uno está apagado o no tiene el modelo, se usa otro. Las IAs sin uno elegido usan el preferido.</p>
+      <ul className="grant-list">
+        {list?.map((o) => (
+          <li key={o.id}>
+            <b>{o.label}</b> <span className={`pill ${o.running ? 'pill--done' : 'pill--error'}`}>{o.running ? (o.busy ? `trabajando (${o.busy})` : 'listo') : 'apagado'}</span>
+            {o.running && <span className="small muted"> · {o.models.map((m) => m.name.replace(/:latest$/, '')).join(', ') || 'sin modelos'}</span>}
+            {o.running && o.missing.length > 0 && (
+              <>
+                <span className="small warn"> · le faltan: {o.missing.join(', ')}</span>{' '}
+                <button className="btn btn--ghost small" disabled={busy === o.id} onClick={async () => {
+                  setBusy(o.id);
+                  try {
+                    const r = await api.ollamaSync(o.id);
+                    toast(r.failed.length ? `⚠️ No pude descargar ${r.failed.map((f) => f.model).join(', ')}` : `🦙 ${o.label} ya tiene todos los modelos`);
+                  } catch (err) {
+                    toast(`❌ ${(err as Error).message}`);
+                  }
+                  setBusy(null);
+                  load();
+                }}>{busy === o.id ? 'Descargando…' : '⬇️ Descargar los que faltan'}</button>
+              </>
+            )}
+            {busy === o.id && streams[`install:ollama-sync:${o.id}`] && <pre className="log">{streams[`install:ollama-sync:${o.id}`].slice(-300)}</pre>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

@@ -1545,3 +1545,117 @@ test('datos en Documentos: se mudan una vez, hay respaldos diarios y se detectan
   assert.match(st.commits[0], /Mejora nueva/);
   assert.equal((await updateStatus(tmp())).git, false);
 });
+
+test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se usa el otro', async () => {
+  const http = await import('node:http');
+  const { ollamaOrder, markDown, markUp } = await import('../src/ollama.js');
+  // Ollama falso: responde con su nombre y solo tiene los modelos de su lista.
+  const fakeOllama = (who, models) => {
+    const srv = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (d) => (body += d));
+      req.on('end', () => {
+        if (req.url === '/api/version') return res.end('{"version":"0.9"}');
+        if (req.url === '/api/tags') return res.end(JSON.stringify({ models: models.map((name) => ({ name })) }));
+        if (req.url === '/api/pull') {
+          const { name } = JSON.parse(body);
+          if (name.startsWith('solo-')) return res.end(`${JSON.stringify({ error: 'file does not exist' })}\n`);
+          res.write(`${JSON.stringify({ status: 'pulling', total: 10, completed: 5 })}\n`);
+          models.push(name.includes(':') ? name : `${name}:latest`);
+          return res.end(`${JSON.stringify({ status: 'success' })}\n`);
+        }
+        const { model } = JSON.parse(body);
+        if (!models.some((m) => m === model || m === `${model}:latest`)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: { message: `model "${model}" not found` } }));
+        }
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `respondo desde ${who}` } }] })}\n\ndata: [DONE]\n\n`);
+      });
+    });
+    srv.listen(0, '127.0.0.1');
+    return srv;
+  };
+  const localModels = ['gemma3:latest', 'solo-local:latest'];
+  const nodeModels = ['phi4:latest'];
+  const local = fakeOllama('mosquera', localModels);
+  const remote = fakeOllama('bogota', nodeModels);
+  await Promise.all([local, remote].map((s) => new Promise((r) => (s.listening ? r() : s.once('listening', r)))));
+  process.env.OLLAMA_URL = `http://127.0.0.1:${remote.address().port}`;
+  const { NodeConfig, createNodeApp, modelSyncer } = await import(`../src/node.js?dos-${Date.now()}`);
+  const cfg = new NodeConfig(tmp());
+  const syncer = modelSyncer(cfg, { log: () => {} });
+  let updates = 0;
+  const nodeServer = createNodeApp(cfg, { syncer, update: () => updates++ }).listen(0, '127.0.0.1');
+  await new Promise((r) => nodeServer.once('listening', r));
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${local.address().port}/v1` };
+      const nodeId = (await call('POST', '/api/nodes', { url: `http://127.0.0.1:${nodeServer.address().port}`, token: cfg.data.token, name: 'Bogotá' })).data.id;
+      // Al agregarlo, el nodo recibe la lista de modelos de las IAs y descarga los que le faltan.
+      for (let i = 0; i < 60 && !nodeModels.includes('gemma3:latest'); i++) await new Promise((res) => setTimeout(res, 50));
+      assert.ok(nodeModels.includes('gemma3:latest'), 'el nodo descargó gemma3 solo');
+      assert.deepEqual(cfg.data.ollamaModels, ['gemma3', 'phi4']);
+      while (syncer.state.running) await new Promise((res) => setTimeout(res, 20));
+      const servers = (await call('GET', '/api/ollama/servers')).data;
+      assert.deepEqual(servers.map((s) => s.id), ['local', `node:${nodeId}`]);
+      assert.ok(servers.every((s) => s.running));
+
+      // Cada IA usa su Ollama: Gemma el de este computador, Phi el del nodo.
+      await call('PUT', '/api/agents/gemma-salud', { provider: 'ollama', model: 'gemma3', account: 'local' });
+      await call('PUT', '/api/agents/phi-tutor', { provider: 'ollama', model: 'phi4', account: `node:${nodeId}` });
+      const [g, p] = await Promise.all([
+        call('POST', '/api/agents/gemma-salud/chat', { message: 'hola' }),
+        call('POST', '/api/agents/phi-tutor/chat', { message: 'hola' }),
+      ]);
+      assert.match(g.data.reply, /desde mosquera/);
+      assert.match(p.data.reply, /desde bogota/);
+
+      // Si el modelo no está en el Ollama elegido, se usa el otro que sí lo tiene.
+      await call('PUT', '/api/agents/gemma-salud', { model: 'solo-local', account: `node:${nodeId}` });
+      assert.match((await call('POST', '/api/agents/gemma-salud/chat', { message: 'hola' })).data.reply, /desde mosquera/);
+
+      // Un Ollama que falló hace poco pasa al final de la fila (incluso en «automático»).
+      markDown(`node:${nodeId}`);
+      assert.equal(ollamaOrder(store.data.settings, `node:${nodeId}`)[0].id, 'local');
+      markUp(`node:${nodeId}`);
+      assert.equal(ollamaOrder(store.data.settings, 'auto')[0].id, 'local');
+
+      // Faltan modelos: la principal los descarga en el Ollama que elijas…
+      const sv = (await call('GET', '/api/ollama/servers')).data;
+      assert.deepEqual(sv[0].missing, ['phi4']);
+      assert.deepEqual(sv[1].missing, ['solo-local']);
+      const sync = await call('POST', '/api/ollama/sync', { server: 'local' });
+      assert.deepEqual(sync.data.done, ['phi4']);
+      assert.ok(localModels.includes('phi4:latest'));
+      // …y el nodo recibe la lista nueva (si uno no se puede descargar, lo cuenta).
+      const r = await call('POST', `/api/nodes/${nodeId}/models`);
+      assert.deepEqual(r.data.wanted, ['phi4', 'solo-local']);
+      await new Promise((res) => setTimeout(res, 30));
+      while (syncer.state.running) await new Promise((res) => setTimeout(res, 20));
+      assert.deepEqual(syncer.state.failed.map((f) => f.model), ['solo-local']);
+
+      // Un nodo sin Ollama se puede sacar de la fila.
+      await call('PUT', `/api/nodes/${nodeId}`, { ollama: false });
+      assert.deepEqual((await call('GET', '/api/ollama/servers')).data.map((s) => s.id), ['local']);
+      await call('PUT', `/api/nodes/${nodeId}`, { ollama: true });
+
+      // Actualizaciones del nodo: la principal se las pide.
+      assert.equal((await call('POST', `/api/nodes/${nodeId}/update`)).status, 200);
+      assert.equal(updates, 1);
+      const info = (await call('GET', '/api/nodes')).data[0];
+      assert.ok(info.info.version.head, 'el nodo dice su versión');
+      assert.equal(info.outdated, false);
+
+      // Al quitar el nodo, las IAs que lo usaban vuelven al Ollama preferido.
+      await call('DELETE', `/api/nodes/${nodeId}`);
+      assert.equal(store.data.agents.find((a) => a.id === 'phi-tutor').account, undefined);
+    });
+  } finally {
+    nodeServer.close();
+    local.close();
+    remote.close();
+    delete process.env.OLLAMA_URL;
+  }
+});

@@ -203,12 +203,23 @@ En este computador no hace falta iniciar sesión. Los **miembros** trabajan con 
 
 Las IAs de la nube (Claude, Gemini, Groq…) trabajan igual desde cualquier computador, así que no hace falta repartirles trabajo. Lo que sí aporta otro computador es lo que tiene **cerca**: la impresora de esa casa o su Ollama (si tiene mejor tarjeta de video).
 
-1. En el otro computador instala la oficina y Tailscale, y abre **`nodo.bat`** (o `./nodo.sh`). Se abre una página con su dirección de Tailscale y su **código de enlace**.
+1. En el otro computador instala la oficina y Tailscale, y abre **`nodo.bat`** (o `./nodo.sh`). La primera vez instala lo que falte (Node.js, Git y **Ollama**), enciende Ollama y descarga los modelos que usan tus IAs. Se abre una página con su dirección de Tailscale y su **código de enlace**.
 2. En la oficina principal: **Ajustes → Nodos → Agregar nodo**.
 3. Para la impresora de esa casa: **Taller 3D → Mi impresora → ¿Dónde está la impresora? → En la casa del nodo…**. El código de acceso se guarda en el nodo.
-4. Para su Ollama: **Ajustes → Nodos → Ollama que usa la oficina**.
 
-El nodo solo responde por Tailscale y con su código de enlace, y se actualiza solo al abrirlo.
+### Varios Ollama a la vez
+
+Se usan **todos a la vez**: el de este computador y el de cada nodo.
+
+- **Cada IA elige el suyo** en su perfil (⚙️ → «¿Qué Ollama usa?»): el preferido de la oficina, uno en concreto, o **automático** (el menos ocupado). Así, en una tarea con varias IAs, cada computador trabaja en paralelo.
+- **Respaldo:** si ese computador está apagado o no tiene el modelo, se usa otro. Uno que falló se deja de últimas durante un minuto.
+- **Modelos:** la oficina le avisa a cada nodo qué modelos usan las IAs (al agregarlo, al cambiar una IA y cada 10 minutos) y el nodo descarga los que le falten. En **Ajustes → Nodos → Tus Ollama** ves qué tiene cada uno y descargas lo que falta. Se puede apagar por nodo.
+
+### Actualizaciones de los nodos
+
+El nodo se actualiza solo: al abrir `nodo.bat`, cada 6 horas (si la impresora no está imprimiendo) y cuando actualizas la oficina principal, que les pide a los nodos que se actualicen. Si un nodo quedó con una versión vieja, en **Ajustes → Nodos** sale el aviso y el botón «actualizar».
+
+El nodo solo responde por Tailscale y con su código de enlace.
 
 ## Jurado
 

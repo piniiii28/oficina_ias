@@ -34,7 +34,8 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 - `librarian.js` (sugerencias y notas relacionadas), `meetings.js`, `routines.js`.
 - `server/src/store.js`: persistencia en `oficina.json` (escritura atómica, copia `.bak` y respaldos diarios). La carpeta la decide `datadir.js` (por defecto Documentos/Oficina de IAs; en pruebas, `OFICINA_DATA` o `new Store(dir)`).
 - `server/src/updater.js`: actualizaciones con git; `iniciar.bat` reinicia la oficina cuando sale con el código 75.
-- `server/src/node.js` y `devices.js`: nodos (otros computadores por Tailscale) que prestan su impresora y su Ollama.
+- `server/src/node.js` y `devices.js`: nodos (otros computadores por Tailscale) que prestan su impresora y su Ollama. El nodo enciende Ollama, descarga los modelos que le pide la principal (`/nodo/modelos`) y se actualiza (`/nodo/update`, código 75).
+- `server/src/ollama.js`: varios Ollama a la vez. Cada IA elige el suyo en `agent.account` (`local`, `node:<id>`, `auto` o nada = el preferido `settings.ollamaNode`); `credentials()` los devuelve en orden y, si uno falla, se usa el siguiente.
 - `client/src/state.tsx`: contexto global; recibe los eventos SSE (`agent`, `task`, `meeting`, `delta`, `notes`, `cards`).
 - `client/src/views/*`: una vista por sección (`Taller.tsx` es el Taller 3D).
 - `client/src/components/ConnectCenter.tsx`: conectar IAs paso a paso, cuentas, modo gratis y el asistente de conexión.

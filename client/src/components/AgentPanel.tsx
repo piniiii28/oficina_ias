@@ -1,7 +1,7 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
 import { Meters } from './Meters';
-import { api, levelOf, TIER_LABEL, type Account, type Agent, type AssistantDef, type ChatMessage } from '../api';
+import { api, levelOf, TIER_LABEL, type Account, type Agent, type AssistantDef, type ChatMessage, type OllamaServer } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { MicButton, SpeakButton } from './Voice';
@@ -238,7 +238,13 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
   useEffect(() => {
     api.settings().then((s) => setAccounts(s.accounts || []));
   }, []);
+  // Ollama: el de este computador o el de un nodo (se pueden usar varios a la vez).
+  const [ollamas, setOllamas] = useState<OllamaServer[] | null>(null);
+  useEffect(() => {
+    if (f.provider === 'ollama' && !ollamas) api.ollamaServers().then(setOllamas).catch(() => setOllamas([]));
+  }, [f.provider, ollamas]);
   const mine = accounts.filter((a) => a.provider === f.provider);
+  const ollamaIds = ['auto', ...(ollamas || []).map((o) => o.id)];
   const set = <K extends keyof Agent>(k: K, v: Agent[K]) => setF((x) => ({ ...x, [k]: v }));
   const setAv = (k: keyof Agent['avatar'], v: string) => setF((x) => ({ ...x, avatar: { ...x.avatar, [k]: v } }));
 
@@ -246,7 +252,7 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
     await api.updateAgent(agent.id, {
       name: f.name, role: f.role, department: f.department, provider: f.provider, model: f.model,
       skills: f.skills, system: f.system, avatar: f.avatar, enabled: f.enabled,
-      account: mine.some((a) => a.id === f.account) ? f.account : 'default',
+      account: f.provider === 'ollama' ? (f.account && ollamaIds.includes(f.account) ? f.account : 'default') : mine.some((a) => a.id === f.account) ? f.account : 'default',
     });
     await reloadAgents();
     toast('✅ Perfil guardado');
@@ -283,7 +289,21 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
           <input list={`perfil-modelos-${f.provider}`} value={f.model} onChange={(e) => set('model', e.target.value)} placeholder={providers.find((p) => p.id === f.provider)?.cli ? 'lo elige la herramienta' : 'id del modelo'} />
           <datalist id={`perfil-modelos-${f.provider}`}>{(freeModels[f.provider] || []).map((m) => <option key={m.id} value={m.id}>{m.label} (gratis · {m.for})</option>)}</datalist>
         </label>
-        {mine.length > 0 && (
+        {f.provider === 'ollama' && ollamas && ollamas.length > 1 && (
+          <label>¿Qué Ollama usa?
+            <select value={f.account && ollamaIds.includes(f.account) ? f.account : 'default'} onChange={(e) => set('account', e.target.value)}>
+              <option value="default">El preferido de la oficina</option>
+              <option value="auto">Automático (el menos ocupado)</option>
+              {ollamas.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}{o.running ? '' : ' (apagado)'}{f.model && o.running && !o.models.some((m) => m.name === f.model || m.name === `${f.model}:latest`) ? ' · sin este modelo' : ''}
+                </option>
+              ))}
+            </select>
+            <small className="muted">Si ese computador está apagado o no tiene el modelo, usa otro.</small>
+          </label>
+        )}
+        {mine.length > 0 && f.provider !== 'ollama' && (
           <label>Cuenta que usa primero
             <select value={f.account || 'default'} onChange={(e) => set('account', e.target.value)}>
               <option value="default">Principal</option>
