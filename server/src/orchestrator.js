@@ -16,6 +16,28 @@ export function agentStatus(agentId, status, message = '') {
   bus.emit('event', { type: 'agent', agentId, status, message, at: Date.now() });
 }
 
+/**
+ * Emisor de texto en vivo: acumula fragmentos y los envía como máximo cada
+ * 120 ms para no saturar la conexión.
+ */
+export function streamer(key) {
+  let text = '';
+  let timer = null;
+  const flush = () => {
+    timer = null;
+    bus.emit('event', { type: 'delta', key, text });
+  };
+  const onDelta = (d) => {
+    text += d;
+    if (!timer) timer = setTimeout(flush, 120);
+  };
+  onDelta.end = () => {
+    clearTimeout(timer);
+    bus.emit('event', { type: 'delta', key, text: null });
+  };
+  return onDelta;
+}
+
 /** Instrucciones completas de un agente: rol + entrenamiento + memoria. */
 export function buildSystem(agent) {
   let sys = agent.system;
@@ -182,9 +204,10 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         .filter((x) => x?.status === 'done')
         .map((x) => `### Entrega de ${nameOf(x.agentId)}\n${x.output}`)
         .join('\n\n');
+      const onDelta = streamer(`task:${task.id}:${agent.id}`);
       try {
         const res = await callModel(settings, {
-          provider: agent.provider, model: agent.model, agent,
+          provider: agent.provider, model: agent.model, agent, onDelta,
           system: buildSystem(agent),
           messages: [{
             role: 'user',
@@ -201,6 +224,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
         step.error = err.message;
         agentStatus(agent.id, 'error', err.message);
       }
+      onDelta.end();
       emitTask();
     });
 
@@ -211,8 +235,10 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     const ok = task.steps.filter((s) => s.status === 'done');
     const names = (id) => store.data.agents.find((a) => a.id === id)?.name || id;
     const contributions = ok.map((s) => `## Aporte de ${names(s.agentId)}\n${s.output}`).join('\n\n');
+    const synthDelta = streamer(`task:${task.id}:final`);
     const synth = await callModel(settings, {
       provider: brain.provider, model: brain.model, agent: brain, effort: 'medium',
+      onDelta: synthDelta,
       system: buildSystem(brain),
       messages: [{
         role: 'user',
@@ -222,6 +248,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
           'Termina con "### Ideas clave" (3 a 6 viñetas cortas, cada una una idea reutilizable).',
       }],
     });
+    synthDelta.end();
     task.final = synth.simulated ? demoSynthesis(prompt, ok, names) : synth.text;
     task.status = 'done';
     task.finishedAt = new Date().toISOString();
@@ -301,18 +328,21 @@ export async function chatWithAgent(store, agentId, message) {
   const history = (store.data.chats[agentId] ||= []);
   history.push({ role: 'user', content: message, at: new Date().toISOString() });
   agentStatus(agentId, 'thinking', 'Pensando…');
+  const onDelta = streamer(`chat:${agentId}`);
   try {
     const res = await callModel(store.data.settings, {
-      provider: agent.provider, model: agent.model, agent,
+      provider: agent.provider, model: agent.model, agent, onDelta,
       system: buildSystem(agent),
       messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
     });
+    onDelta.end();
     history.push({ role: 'assistant', content: res.text, simulated: res.simulated, at: new Date().toISOString() });
     agent.stats = { tasks: agent.stats?.tasks || 0, lastActive: new Date().toISOString() };
     agentStatus(agentId, 'done', res.text.replace(/[#*>`]/g, '').slice(0, 140));
     store.save();
     return { reply: res.text, simulated: res.simulated, history };
   } catch (err) {
+    onDelta.end();
     history.pop();
     agentStatus(agentId, 'error', err.message);
     throw err;
