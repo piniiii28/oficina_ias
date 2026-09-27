@@ -101,6 +101,21 @@ function Box({ f, m }: { f: FloorDef; m: Furniture }) {
   );
 }
 
+/** Silla de oficina detrás de cada escritorio (decorativa, no bloquea el paso). */
+function Chair({ f, i, j, color }: { f: FloorDef; i: number; j: number; color: string }) {
+  const { w: W, h: H } = roomSize(f);
+  const c = tileCenter(f, i, j);
+  const seat = [{ x: c.x - 11, y: c.y - 2 }, { x: c.x, y: c.y - 8 }, { x: c.x + 11, y: c.y - 2 }, { x: c.x, y: c.y + 4 }];
+  const lift = (p: { x: number; y: number }, z: number) => ({ x: p.x, y: p.y - z });
+  return (
+    <svg className="iso-item" width={W} height={H} style={{ zIndex: (i + j) * 10 + 1 }} aria-hidden>
+      <line x1={c.x} y1={c.y + 4} x2={c.x} y2={c.y - 4} stroke="#27272a" strokeWidth="3" />
+      <polygon points={pts(seat.map((p) => lift(p, 10)))} fill={color} stroke={shade(color, -0.3)} strokeWidth="1" />
+      <polygon points={pts([lift(seat[0], 10), lift(seat[1], 10), lift(seat[1], 32), lift(seat[0], 32)])} fill={shade(color, -0.15)} />
+    </svg>
+  );
+}
+
 function Room({ f, night, doorOpen, weather }: { f: FloorDef; night: boolean; doorOpen: boolean; weather: string }) {
   const { w: W, h: H } = roomSize(f);
   const top = P(f, 0, 0), right = P(f, f.cols, 0), left = P(f, 0, f.rows);
@@ -272,6 +287,7 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
           <Room f={f} night={night} doorOpen={doorOpen} weather={weatherNow()} />
           {f.open && weatherNow() === 'lluvia' && <div className="rain" />}
           {f.furniture.map((m, k) => <Box key={k} f={f} m={m} />)}
+          {f.desks.map((d) => <Chair key={`${d.i},${d.j}`} f={f} i={d.i} j={d.j - 1} color={shade(f.wall, -0.1)} />)}
           {here.map((a) => <Person key={a.id} f={f} a={a} w={walkers[a.id]} onClick={() => onSelect(a)} idx={agents.indexOf(a)} />)}
           {meeting && (() => {
             const c = tileCenter(f, 10, 3);
