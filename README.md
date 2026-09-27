@@ -8,7 +8,7 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 |---|---|
 | 🏢 **Oficina** | Un **edificio estilo Habbo** con 8 pisos isométricos (penthouse, departamentos y lobby con cafetería y sala de reuniones) donde las IAs caminan, toman el ascensor, van a su escritorio cuando trabajan y se sientan en la mesa del lobby durante las reuniones. Cada una tiene su disfraz (mago, ninja, astronauta…). Le escribes una tarea a Claude. Él la divide, elige a los especialistas, los pone a trabajar **en paralelo** (los ves pensar, teclear y celebrar) e integra todo en una respuesta final. |
 | 🗣️ **Reuniones** | Eliges varias IAs y un tema: conversan por turnos respondiéndose entre ellas y Claude resume acuerdos y próximos pasos. |
-| 🎯 **Tareas** | Historial con el plan del cerebro, el aporte de cada IA y la respuesta integrada. |
+| 🎯 **Tareas** | Historial con el plan del cerebro, el aporte de cada IA (escrito en vivo) y la respuesta integrada. Puedes pedir ajustes para que el mismo equipo continúe, y crear **rutinas automáticas** (por ejemplo, un resumen cada mañana a las 7:00). |
 | 📝 **Notas** | Editor Markdown con `[[enlaces]]`, `#etiquetas`, backlinks, notas fijadas, ideas y diario. Cada tarea genera notas enlazadas automáticamente. |
 | 🕸️ **Grafo** | Mapa interactivo de tus ideas: zoom, arrastre, búsqueda, grafo local (1–2 saltos), nodos de IAs, etiquetas y notas por crear. |
 | 👥 **Equipo** | Todas las IAs. Habla con cada una, **entrénala** con tus lecciones y archivos, revisa su memoria, cambia su modelo o su avatar, o contrata IAs nuevas. |
@@ -50,6 +50,15 @@ Puedes cambiar el proveedor y el modelo de cualquier IA desde su perfil. Los mod
 
 También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `TOGETHER_API_KEY`.
 
+## El edificio
+
+- **Azotea**: jardín, gimnasio y piscina para los descansos.
+- **Penthouse**: la oficina de Claude, el cerebro central.
+- **Pisos 6 a 1**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, y Personas y Conocimiento.
+- **Planta baja**: lobby, cafetería y la mesa de reuniones.
+
+Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar y personalízalo en **Ajustes**. Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
+
 ## Entrenamiento y memoria
 
 Los modelos de las empresas no se pueden reentrenar desde aquí. Lo que hace la oficina es **especializar** a cada IA en tres capas:
@@ -57,6 +66,8 @@ Los modelos de las empresas no se pueden reentrenar desde aquí. Lo que hace la 
 1. **Rol e instrucciones:** su personalidad y especialidad, editables en su perfil.
 2. **Entrenamiento:** lecciones que tú le enseñas (texto o archivos `.txt`, `.md`, `.csv`, `.json`) y que se incluyen en cada petición.
 3. **Memoria:** se llena sola con cada trabajo que hace, para que mantenga el contexto de tus proyectos.
+
+Además, la oficina tiene una **memoria compartida**: antes de cada tarea, el cerebro busca en tu grafo las notas relacionadas y se las pasa al equipo. La nota del resultado las enlaza en «Contexto usado».
 
 ## Seguridad
 

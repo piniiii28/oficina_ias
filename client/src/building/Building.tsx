@@ -75,7 +75,7 @@ function Box({ f, m }: { f: FloorDef; m: Furniture }) {
   );
 }
 
-function Room({ f, night }: { f: FloorDef; night: boolean }) {
+function Room({ f, night, doorOpen }: { f: FloorDef; night: boolean; doorOpen: boolean }) {
   const { w: W, h: H } = roomSize(f);
   const top = P(f, 0, 0), right = P(f, f.cols, 0), left = P(f, 0, f.rows);
   const tiles = [];
@@ -108,8 +108,15 @@ function Room({ f, night }: { f: FloorDef; night: boolean }) {
       <polygon points={pts([up(top, wallH), up(right, wallH), up(right, wallH + 6), up(top, wallH + 6)])} fill={shade(f.wall, 0.2)} />
       {!f.open && windows}
       {/* Ascensor */}
-      <polygon points={pts([d1, d2, up(d2, 62), up(d1, 62)])} fill="#9ca3af" stroke="#4b5563" strokeWidth="2" />
-      <line x1={(d1.x + d2.x) / 2} y1={(d1.y + d2.y) / 2} x2={(d1.x + d2.x) / 2} y2={(d1.y + d2.y) / 2 - 62} stroke="#4b5563" strokeWidth="2" />
+      <polygon points={pts([d1, d2, up(d2, 62), up(d1, 62)])} fill={doorOpen ? '#fef3c7' : '#9ca3af'} stroke="#4b5563" strokeWidth="2" />
+      {doorOpen ? (
+        <>
+          <polygon points={pts([d1, { x: d1.x - 4, y: d1.y + 2 }, up({ x: d1.x - 4, y: d1.y + 2 }, 62), up(d1, 62)])} fill="#9ca3af" />
+          <polygon points={pts([d2, { x: d2.x + 4, y: d2.y - 2 }, up({ x: d2.x + 4, y: d2.y - 2 }, 62), up(d2, 62)])} fill="#9ca3af" />
+        </>
+      ) : (
+        <line x1={(d1.x + d2.x) / 2} y1={(d1.y + d2.y) / 2} x2={(d1.x + d2.x) / 2} y2={(d1.y + d2.y) / 2 - 62} stroke="#4b5563" strokeWidth="2" />
+      )}
       <text x={(d1.x + d2.x) / 2} y={(d1.y + d2.y) / 2 - 68} fontSize="11" textAnchor="middle">🛗</text>
       {tiles}
       <polygon points={pts([top, right, P(f, f.cols, f.rows), left])} fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
@@ -158,9 +165,12 @@ function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: 
   f: FloorDef; number: string; walkers: Record<string, Walker>; agents: Agent[]; onSelect: (a: Agent) => void; night: boolean;
   me: Agent; onTile: (floor: string, i: number, j: number) => void;
 }) {
-  const { live } = useOffice();
+  const { live, tasks } = useOffice();
   const { w: W, h: H } = roomSize(f);
   const { ref, scale } = useFit(W);
+  const all = [...agents.map((a) => walkers[a.id]), walkers[ME]].filter(Boolean);
+  const doorOpen = all.some((w) => (w.floor === f.id && w.i === f.elevator.i && w.j === f.elevator.j && (w.moving || w.inElevator > 0)) || (w.inElevator > 0 && w.inElevator <= 2 && w.goal?.floor === f.id));
+  const current = tasks.find((t) => t.status !== 'done' && t.status !== 'error');
   const here = agents.filter((a) => walkers[a.id]?.floor === f.id && !walkers[a.id]?.inElevator);
   const working = here.filter((a) => ['working', 'thinking'].includes(live[a.id]?.status || '')).length;
   return (
@@ -168,6 +178,7 @@ function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: 
       <header className="bfloor-head">
         <span className="bfloor-num">{number}</span>
         <strong>{f.emoji} {f.name}</strong>
+        {(f.id === 'lobby' || f.id === 'penthouse') && current && <span className="bfloor-tv" title={current.prompt}>📺 {current.title}</span>}
         <small className="muted">{here.length} aquí{working ? ` · ${working} trabajando` : ''}</small>
       </header>
       <div className="bfloor-stage" ref={ref} style={{ height: H * scale }}>
@@ -185,7 +196,7 @@ function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: 
             if (walkable(f, i, j)) onTile(f.id, i, j);
           }}
         >
-          <Room f={f} night={night} />
+          <Room f={f} night={night} doorOpen={doorOpen} />
           {f.furniture.map((m, k) => <Box key={k} f={f} m={m} />)}
           {here.map((a) => <Person key={a.id} f={f} a={a} w={walkers[a.id]} onClick={() => onSelect(a)} idx={agents.indexOf(a)} />)}
           {walkers[ME]?.floor === f.id && !walkers[ME].inElevator && <Person f={f} a={me} w={walkers[ME]} onClick={() => {}} idx={99} me />}

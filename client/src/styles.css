@@ -534,3 +534,4 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .days { display: flex; gap: 2px; }
 .days button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; font-weight: 700; }
 .days button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.bfloor-tv { font: 700 11px ui-monospace, monospace; color: #86efac; background: #052e16; border: 2px solid #14532d; border-radius: 6px; padding: 2px 8px; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: pulse 2s infinite; }
