@@ -9,6 +9,7 @@ import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
 import { Board } from './views/Board';
 import { Welcome } from './components/Welcome';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useEffect, useState } from 'react';
 import { play, setSounds, soundsOn } from './sounds';
 
@@ -74,6 +75,7 @@ function Shell() {
         </div>
       </nav>
       <main className={`content content--${view}`}>
+        <ErrorBoundary resetKey={view}>
         {view === 'oficina' && <Office />}
         {view === 'tablero' && <Board />}
         {view === 'tareas' && <Tasks />}
@@ -82,6 +84,7 @@ function Shell() {
         {view === 'grafo' && <Graph />}
         {view === 'agentes' && <Agents />}
         {view === 'ajustes' && <Settings />}
+        </ErrorBoundary>
       </main>
       <Palette />
       <Welcome />
