@@ -283,7 +283,8 @@ export function createApp(store) {
   app.post('/api/cards/:id/run', (req, res) => {
     const c = (store.data.cards || []).find((x) => x.id === req.params.id);
     if (!c) return res.status(404).json({ error: 'No existe' });
-    const promise = runTask(store, notes, { prompt: `${c.title}${c.details ? `\n\n${c.details}` : ''}` });
+    const slug = c.project.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^\p{L}\d]+/gu, '-').replace(/^-|-$/g, '');
+    const promise = runTask(store, notes, { prompt: `${c.title}${c.details ? `\n\n${c.details}` : ''}`, tags: slug ? [slug] : [] });
     c.taskId = store.data.tasks[0].id;
     c.column = 'doing';
     store.save();
