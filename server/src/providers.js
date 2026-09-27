@@ -116,7 +116,9 @@ export function credentials(settings, provider, accountId = null) {
 /** ¿El error dice que el modelo ya no existe o dejó de ser gratis? */
 export const isRetiredModel = (msg) => /no longer available|does not exist|model_not_found|is not found|not found for API|not supported for generateContent|unavailable for free|decommissioned|has been (deprecated|retired|shut ?down)|not a valid model|invalid model/i.test(String(msg));
 /** ¿El modelo está saturado en este momento (se arregla solo en un rato)? */
-export const isOverloaded = (msg) => /high demand|overloaded|temporarily unavailable|try again later|\b503\b|\bUNAVAILABLE\b|server is busy/i.test(String(msg));
+export const isOverloaded = (msg) => /high demand|overloaded|temporarily unavailable|try again later|\b503\b|\bUNAVAILABLE\b|server is busy|unexpected server error/i.test(String(msg));
+/** ¿Una CLI rechazó el modelo que se le pidió (p. ej. Codex con cuenta de ChatGPT)? */
+export const isCliModelError = (msg) => /model.{0,80}(not supported|not available|not found|unknown|invalid|does not exist)|(unknown|invalid|unsupported) model/i.test(String(msg));
 
 const modelLists = new Map();
 /** Modelos que ofrece hoy un proveedor compatible con OpenAI (se guarda 10 minutos). */
@@ -162,11 +164,27 @@ const retryWait = () => Number(process.env.OFICINA_RETRY_MS ?? 2500);
  * No cambia nunca a un modelo de pago.
  */
 async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
-  const heals = !PROVIDERS[provider]?.cli && !PROVIDERS[provider]?.keyless && provider !== 'anthropic';
+  const cli = PROVIDERS[provider]?.cli;
+  const heals = !cli && !PROVIDERS[provider]?.keyless && provider !== 'anthropic';
   try {
     return await run(model);
   } catch (err) {
-    if (!heals || wrote()) throw err;
+    if (wrote()) throw err;
+    // CLIs: si rechaza el modelo, se deja que la herramienta elija el suyo (y la IA queda así);
+    // si su servidor falló, se reintenta una vez.
+    if (cli) {
+      if (model && isCliModelError(err.message)) {
+        console.warn(`[modelos] ${PROVIDERS[provider].label} no acepta «${model}»: uso el modelo que elija la herramienta`);
+        onSwitch('', true);
+        return run('');
+      }
+      if (isOverloaded(err.message)) {
+        await new Promise((r) => setTimeout(r, retryWait()));
+        return run(model);
+      }
+      throw err;
+    }
+    if (!heals) throw err;
     if (isOverloaded(err.message)) {
       await new Promise((r) => setTimeout(r, retryWait()));
       let last = err;

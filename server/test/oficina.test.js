@@ -2202,3 +2202,39 @@ test('Cloudflare (texto, con la cuenta de Imágenes), Ollama Cloud y OVHcloud si
     PROVIDERS.ovh.baseUrl = old.ovh;
   }
 });
+
+test('CLIs: si Codex no acepta el modelo con tu cuenta de ChatGPT, usa el suyo; si el servidor falla, reintenta', async () => {
+  const { callModel } = await import('../src/providers.js');
+  process.env.OFICINA_RETRY_MS = '10';
+  const bin = tmp();
+  const count = path.join(bin, 'veces.txt');
+  // Codex falso: rechaza -m como con una cuenta de ChatGPT. OpenCode falso: falla la primera vez.
+  fs.writeFileSync(path.join(bin, 'codex'), `#!/usr/bin/env node
+const a = process.argv.slice(2);
+process.stdin.resume(); process.stdin.on('end', () => {
+  if (a.includes('-m')) { console.error('ERROR: {"type":"invalid_request_error","message":"The \\'gpt-5-mini\\' model is not supported when using Codex with a ChatGPT account."}'); process.exit(1); }
+  console.log('hola desde codex');
+});
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'opencode'), `#!/usr/bin/env node
+const fs = require('fs'); const f = ${JSON.stringify(count)};
+const n = fs.existsSync(f) ? +fs.readFileSync(f, 'utf8') : 0; fs.writeFileSync(f, String(n + 1));
+if (n === 0) { console.error('Error: { "name": "UnknownError", "data": { "message": "Unexpected server error. Check server logs for details." } }'); process.exit(1); }
+console.log('hola desde opencode');
+`, { mode: 0o755 });
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${oldPath}`;
+  try {
+    const settings = { cli: { 'cli-codex': { enabled: true }, 'cli-opencode': { enabled: true } } };
+    const agent = { id: 'chatgpt', provider: 'cli-codex', model: 'gpt-5-mini' };
+    const r = await callModel(settings, { provider: 'cli-codex', model: agent.model, agent, system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+    assert.equal(r.text, 'hola desde codex');
+    assert.equal(agent.model, '', 'la IA queda con el modelo que elija Codex');
+    const o = await callModel(settings, { provider: 'cli-opencode', model: '', system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+    assert.equal(o.text, 'hola desde opencode');
+    assert.equal(fs.readFileSync(count, 'utf8'), '2');
+  } finally {
+    process.env.PATH = oldPath;
+    delete process.env.OFICINA_RETRY_MS;
+  }
+});
