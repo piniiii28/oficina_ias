@@ -375,7 +375,12 @@ function demoSynthesis(prompt, steps, names) {
     `Coordiné a ${steps.map((s) => `**${names(s.agentId)}**`).join(', ')} para resolver: *${prompt}*.`,
     '',
     'Plan integrado:',
-    ...steps.map((s, i) => `${i + 1}. ${names(s.agentId)} se encarga de su especialidad y entrega un primer borrador.`),
+    ...steps.map((s, i) => {
+      // Toma el primer punto numerado de su aporte como resumen.
+      const first = s.output.match(/^\s*1\.\s*\*\*([^*]+)\*\*:?\s*(.+)$/m);
+      const dep = s.dependsOn?.length ? ` (a partir de lo de ${s.dependsOn.map(names).join(' y ')})` : '';
+      return `${i + 1}. **${names(s.agentId)}**${dep}: ${first ? `${first[1].replace(/:$/, '').trim()} — ${first[2].trim()}` : 'aporta su especialidad.'}`;
+    }),
     '',
     'Conecta tus claves en **Ajustes** para que cada IA responda de verdad.',
     '',

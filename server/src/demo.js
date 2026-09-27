@@ -57,7 +57,7 @@ export async function simulate({ agent, messages }) {
     '',
     `Analicé la petición sobre **${topic}** desde mi especialidad. Esta es mi propuesta:`,
     '',
-    ...angles.map((a, i) => `${i + 1}. **${cap(a)}:** ${sentence(a, kw, i)}`),
+    ...angles.map((a, i) => `${i + 1}. **${cap(a)}:** ${sentence(a, kw, i + seedOf(agent?.id || ''))}`),
     '',
     agent?.knowledge?.length ? `> Apliqué ${agent.knowledge.length} elemento(s) de mi entrenamiento personalizado.` : '',
     teammates(raw),
@@ -68,6 +68,8 @@ export async function simulate({ agent, messages }) {
   return lines.filter((l, i, arr) => !(l === '' && arr[i - 1] === '')).join('\n');
 }
 
+const seedOf = (id) => [...id].reduce((n, c) => n + c.charCodeAt(0), 0);
+
 function teammates(raw) {
   const names = [...raw.matchAll(/### Entrega de ([^\n]+)/g)].map((m) => m[1]);
   return names.length ? `> Partí del trabajo de ${names.join(', ')} y lo complementé desde mi especialidad.` : '';
@@ -75,11 +77,15 @@ function teammates(raw) {
 
 function sentence(angle, kw, i) {
   const k = kw[i % Math.max(kw.length, 1)] || 'el objetivo';
+  i = Math.abs(i);
   const templates = [
     `definir con claridad cómo "${k}" encaja en el resultado final y qué se entrega primero.`,
     `priorizar lo que más impacto tiene sobre "${k}" y dejar lo accesorio para una segunda iteración.`,
     `conectar "${k}" con las notas existentes en el grafo para no repetir trabajo.`,
     `medir el avance con un indicador simple y revisarlo con el Cerebro Central.`,
+    `empezar con una versión mínima de "${k}" que se pueda probar esta semana.`,
+    `listar los supuestos sobre "${k}" y validar primero el más riesgoso.`,
+    `documentar las decisiones sobre "${k}" para que el resto del equipo las reutilice.`,
   ];
   return templates[i % templates.length];
 }
