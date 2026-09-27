@@ -12,6 +12,7 @@ export const DEPARTMENTS = [
   { id: 'investigacion', name: 'Investigación', emoji: '🔎', color: '#fbbf24' },
   { id: 'negocios', name: 'Negocios', emoji: '📈', color: '#fb923c' },
   { id: 'personas', name: 'Personas y Conocimiento', emoji: '📚', color: '#2dd4bf' },
+  { id: 'impresion3d', name: 'Taller de Impresión 3D', emoji: '🖨️', color: '#a3e635' },
 ];
 
 import { playbookFor } from './playbooks.js';
@@ -24,6 +25,9 @@ const base = (a) => ({
   enabled: true,
   ...a,
 });
+
+// Reglas para que la oficina pueda ejecutar el script en tu computador.
+const CAD_RULES = 'Entrega UN solo script completo (sin "..."), con las medidas en milímetros. La oficina lo ejecuta en tu computador: guarda todos los archivos que exportes dentro de la carpeta OUT_DIR (variable ya definida; no la redefinas), por ejemplo os.path.join(OUT_DIR, "modelo.stl"). Después del script explica en 3 viñetas cómo imprimirlo.';
 
 const P = (style) =>
   `${style}\nResponde siempre en el idioma del usuario (por defecto español). ` +
@@ -48,7 +52,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'opencode', name: 'OpenCode', role: 'Programador full-stack', department: 'codigo',
-    provider: 'openrouter', model: 'qwen/qwen3-coder',
+    provider: 'openrouter', model: 'qwen/qwen3-coder:free',
     skills: ['código', 'programar', 'python', 'javascript', 'typescript', 'react', 'html', 'css', 'función', 'script', 'web', 'frontend', 'implementar'],
     system: P('Eres OpenCode, programador full-stack. Escribes código completo, funcional y comentado, con instrucciones para ejecutarlo.'),
     avatar: { skin: '#e0ac69', hair: '#111827', hairStyle: 'hoodie', eyes: 'happy', outfit: '#374151', accessory: 'none', prop: '⌨️' },
@@ -62,7 +66,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'deepseek-coder', name: 'DeepSeek', role: 'Algoritmos y depuración', department: 'codigo',
-    provider: 'deepseek', model: 'deepseek-chat',
+    provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free',
     skills: ['algoritmo', 'depurar', 'debug', 'complejidad', 'estructura de datos', 'leetcode', 'optimización'],
     system: P('Eres DeepSeek, experto en algoritmos. Explicas la solución paso a paso, su complejidad y casos límite.'),
     avatar: { skin: '#f5d0b0', hair: '#1e3a8a', hairStyle: 'bob', eyes: 'focused', outfit: '#4d6bfe', accessory: 'antenna', prop: '🐋' },
@@ -99,14 +103,14 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'deepseek-r', name: 'DeepSeek R', role: 'Matemático / razonamiento', department: 'datos',
-    provider: 'deepseek', model: 'deepseek-reasoner',
+    provider: 'openrouter', model: 'deepseek/deepseek-r1:free',
     skills: ['matemática', 'cálculo', 'lógica', 'demostración', 'ecuación', 'física', 'probabilidad', 'razonar'],
     system: P('Eres DeepSeek R, especialista en razonamiento matemático. Resuelves problemas con pasos verificables y compruebas el resultado.'),
     avatar: { skin: '#f3c9a8', hair: '#312e81', hairStyle: 'messy', eyes: 'glasses', outfit: '#6366f1', accessory: 'none', prop: '🧮', costume: 'mago' },
   }),
   base({
     id: 'qwen-sql', name: 'Qwen', role: 'SQL y analítica', department: 'datos',
-    provider: 'together', model: 'Qwen/Qwen2.5-72B-Instruct-Turbo',
+    provider: 'groq', model: 'qwen/qwen3-32b',
     skills: ['sql', 'base de datos', 'consulta', 'excel', 'dashboard', 'kpi', 'métricas', 'postgres'],
     system: P('Eres Qwen, analista de datos. Escribes SQL correcto, diseñas esquemas de bases de datos y defines KPIs.'),
     avatar: { skin: '#f9d5b5', hair: '#6d28d9', hairStyle: 'bun', eyes: 'happy', outfit: '#615ced', accessory: 'none', prop: '🗄️', costume: 'vaquero' },
@@ -129,7 +133,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'mistral-story', name: 'Mistral', role: 'Guionista y storyteller', department: 'creatividad',
-    provider: 'mistral', model: 'mistral-large-latest',
+    provider: 'mistral', model: 'mistral-small-latest',
     skills: ['historia', 'cuento', 'guion', 'personaje', 'narrativa', 'novela', 'poema', 'canción', 'creativo'],
     system: P('Eres Mistral, guionista. Creas historias, personajes, guiones y poemas con estructura y emoción.'),
     avatar: { skin: '#fcdcc4', hair: '#b45309', hairStyle: 'beret', eyes: 'dreamy', outfit: '#fa520f', accessory: 'none', prop: '🎬', costume: 'pirata' },
@@ -159,7 +163,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'kimi', name: 'Kimi', role: 'Lectora de documentos largos', department: 'investigacion',
-    provider: 'openrouter', model: 'moonshotai/kimi-k2',
+    provider: 'groq', model: 'moonshotai/kimi-k2-instruct',
     skills: ['documento', 'pdf', 'leer', 'resumen largo', 'paper', 'libro', 'contrato largo', 'extraer'],
     system: P('Eres Kimi, lectora experta. Extraes lo esencial de textos largos: estructura, argumentos, datos y citas.'),
     avatar: { skin: '#fde7d6', hair: '#1f2937', hairStyle: 'long', eyes: 'dreamy', outfit: '#0ea5e9', accessory: 'book', prop: '📖' },
@@ -168,28 +172,28 @@ export const DEFAULT_AGENTS = [
   // Negocios
   base({
     id: 'estratega', name: 'O-Estratega', role: 'Estratega de negocios', department: 'negocios',
-    provider: 'openai', model: 'gpt-5',
+    provider: 'groq', model: 'openai/gpt-oss-120b',
     skills: ['negocio', 'estrategia', 'startup', 'emprender', 'plan de negocio', 'competencia', 'modelo de negocio', 'pitch', 'empresa'],
     system: P('Eres O-Estratega, consultor de negocios. Usas marcos (FODA, Lean Canvas, 5 fuerzas) y das recomendaciones accionables.'),
     avatar: { skin: '#d9a066', hair: '#374151', hairStyle: 'slick', eyes: 'cool', outfit: '#1f2937', accessory: 'tie', prop: '♟️', costume: 'rey' },
   }),
   base({
     id: 'command-mkt', name: 'Command', role: 'Marketing y SEO', department: 'negocios',
-    provider: 'openrouter', model: 'cohere/command-r-plus',
+    provider: 'google', model: 'gemini-2.5-flash',
     skills: ['marketing', 'seo', 'publicidad', 'campaña', 'ventas', 'cliente', 'embudo', 'anuncio', 'branding'],
     system: P('Eres Command, especialista en marketing y SEO. Diseñas campañas, palabras clave, embudos y mensajes por segmento.'),
     avatar: { skin: '#f4c7a1', hair: '#9d174d', hairStyle: 'ponytail', eyes: 'happy', outfit: '#d946ef', accessory: 'megaphone', prop: '📣' },
   }),
   base({
     id: 'llama-fin', name: 'Llama Finanzas', role: 'Finanzas y números', department: 'negocios',
-    provider: 'together', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    provider: 'cerebras', model: 'llama-3.3-70b',
     skills: ['finanzas', 'dinero', 'presupuesto', 'inversión', 'costos', 'precio', 'flujo de caja', 'ahorro', 'impuestos'],
     system: P('Eres Llama Finanzas, analista financiero. Haces presupuestos, proyecciones y cálculos claros. Aclaras que no es asesoría financiera profesional.'),
     avatar: { skin: '#e9b98f', hair: '#166534', hairStyle: 'short', eyes: 'glasses', outfit: '#16a34a', accessory: 'none', prop: '💰' },
   }),
   base({
     id: 'nemotron-pm', name: 'Nemo PM', role: 'Project manager', department: 'negocios',
-    provider: 'openrouter', model: 'nvidia/llama-3.1-nemotron-70b-instruct',
+    provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free',
     skills: ['proyecto', 'plan', 'cronograma', 'tareas', 'scrum', 'sprint', 'organizar', 'prioridad', 'roadmap'],
     system: P('Eres Nemo PM, gestor de proyectos. Conviertes objetivos en planes con fases, tareas, responsables y fechas.'),
     avatar: { skin: '#f6cfa9', hair: '#65a30d', hairStyle: 'bun', eyes: 'happy', outfit: '#76b900', accessory: 'clipboard', prop: '📋' },
@@ -198,7 +202,7 @@ export const DEFAULT_AGENTS = [
   // Personas y conocimiento
   base({
     id: 'lexi', name: 'Lexi', role: 'Asesora legal', department: 'personas',
-    provider: 'openrouter', model: 'mistralai/mistral-large',
+    provider: 'openrouter', model: 'mistralai/mistral-small-3.2-24b-instruct:free',
     skills: ['legal', 'ley', 'contrato', 'términos', 'derechos', 'licencia', 'jurídico', 'normativa'],
     system: P('Eres Lexi, orientadora legal. Explicas conceptos legales en lenguaje sencillo y redactas borradores. Siempre aclaras que no sustituyes a un abogado.'),
     avatar: { skin: '#f5cdb0', hair: '#44403c', hairStyle: 'bun', eyes: 'glasses', outfit: '#78350f', accessory: 'none', prop: '⚖️' },
@@ -226,7 +230,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'coach', name: 'Coach', role: 'Productividad y carrera', department: 'personas',
-    provider: 'openai', model: 'gpt-5-mini',
+    provider: 'google', model: 'gemini-2.5-flash',
     skills: ['productividad', 'carrera', 'cv', 'hoja de vida', 'entrevista', 'motivación', 'metas', 'rutina', 'tiempo'],
     system: P('Eres Coach, mentor de productividad y carrera. Das planes concretos, rutinas y preparación para entrevistas.'),
     avatar: { skin: '#d59a6a', hair: '#7f1d1d', hairStyle: 'cap', eyes: 'happy', outfit: '#dc2626', accessory: 'whistle', prop: '🏆' },
@@ -237,5 +241,36 @@ export const DEFAULT_AGENTS = [
     skills: ['notas', 'resumen', 'resumir', 'ideas', 'conectar', 'organizar conocimiento', 'mapa mental', 'obsidian', 'grafo'],
     system: P('Eres Haiku, bibliotecaria de la oficina. Resumes, extraes ideas clave y propones conexiones entre notas del grafo de conocimiento.'),
     avatar: { skin: '#fbe3d3', hair: '#9333ea', hairStyle: 'bob', eyes: 'dreamy', outfit: '#a78bfa', accessory: 'book', prop: '🕸️' },
+  }),
+
+  // Taller de Impresión 3D: modelan con scripts que la oficina ejecuta en
+  // Blender, OpenSCAD o FreeCAD instalados en tu computador.
+  base({
+    id: 'blender-3d', name: 'Blendi', role: 'Modeladora en Blender', department: 'impresion3d',
+    provider: 'openrouter', model: 'qwen/qwen3-coder:free',
+    skills: ['blender', '3d', 'modelo 3d', 'modelar', 'figura', 'escultura', 'personaje', 'malla', 'render', 'stl', 'impresión 3d', 'imprimir'],
+    system: P(`Eres Blendi, modeladora 3D experta en Blender y su API de Python (bpy). ${CAD_RULES}\nEscribe el script en un bloque \`\`\`python que empiece con "import bpy". Borra la escena inicial, construye el modelo con primitivas y modificadores (booleanos, bevel, solidify, array) y deja cada pieza lista para imprimir (malla cerrada, sin caras sueltas).`),
+    avatar: { skin: '#f6d7c3', hair: '#ea7600', hairStyle: 'bun', eyes: 'sparkle', outfit: '#f59e0b', accessory: 'headphones', prop: '🧊' },
+  }),
+  base({
+    id: 'openscad-3d', name: 'Scad', role: 'Diseño paramétrico (OpenSCAD)', department: 'impresion3d',
+    provider: 'google', model: 'gemini-2.5-flash',
+    skills: ['openscad', 'paramétrico', 'pieza', 'soporte', 'caja', 'engranaje', 'repuesto', 'medidas', 'mm', 'impresión 3d', 'stl'],
+    system: P(`Eres Scad, diseñador paramétrico experto en OpenSCAD. Entrega UN solo modelo completo (sin "..."), en milímetros; la oficina lo abre en OpenSCAD y lo exporta a STL en tu computador. Después del código explica en 3 viñetas cómo imprimirlo.\nEscribe el modelo en un bloque \`\`\`openscad con las medidas como variables al inicio (en milímetros), módulos claros y $fn suficiente para curvas suaves.`),
+    avatar: { skin: '#e0ac69', hair: '#1f2937', hairStyle: 'short', eyes: 'glasses', outfit: '#65a30d', accessory: 'pencil', prop: '📐' },
+  }),
+  base({
+    id: 'freecad-3d', name: 'Fredi', role: 'Ingeniero CAD (FreeCAD)', department: 'impresion3d',
+    provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free',
+    skills: ['freecad', 'cad', 'ingeniería', 'mecánica', 'tolerancias', 'ensamble', 'bisagra', 'rosca', 'pieza técnica', 'step'],
+    system: P(`Eres Fredi, ingeniero mecánico experto en FreeCAD y su API de Python (FreeCAD, Part, Mesh). ${CAD_RULES}\nEscribe el script en un bloque \`\`\`python que empiece con "import FreeCAD". Crea un documento, construye las piezas con Part y expórtalas a STL con Mesh.export. Cuida tolerancias de encaje (0,2–0,4 mm).`),
+    avatar: { skin: '#f1c7a5', hair: '#57534e', hairStyle: 'cap', eyes: 'focused', outfit: '#4d7c0f', accessory: 'clipboard', prop: '⚙️' },
+  }),
+  base({
+    id: 'slicer-3d', name: 'Capa', role: 'Laminado e impresión', department: 'impresion3d',
+    provider: 'groq', model: 'llama-3.3-70b-versatile',
+    skills: ['cura', 'prusaslicer', 'orcaslicer', 'laminar', 'slicer', 'gcode', 'filamento', 'pla', 'petg', 'soportes', 'relleno', 'impresora', 'bambu', 'ender'],
+    system: P('Eres Capa, experta en impresión 3D FDM y resina. Revisas si un modelo se puede imprimir (voladizos, grosor de pared, orientación, soportes) y das la configuración del laminador: material, temperaturas, altura de capa, relleno, velocidad y tiempo estimado.'),
+    avatar: { skin: '#fde2cf', hair: '#84cc16', hairStyle: 'ponytail', eyes: 'happy', outfit: '#a3e635', accessory: 'glasses', prop: '🖨️' },
   }),
 ];

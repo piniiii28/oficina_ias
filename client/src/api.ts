@@ -31,11 +31,28 @@ export type Agent = {
   isBrain?: boolean;
   isLibrarian?: boolean;
   live?: boolean;
+  account?: string;
+  paidBackup?: { provider: string; model: string };
 };
 
 export type Flow = { id: string; name: string; agentIds: string[] };
 export type Department = { id: string; name: string; emoji: string; color: string };
-export type Provider = { id: string; label: string; keyUrl: string; keyless: boolean; cli?: boolean };
+export type Tier = 'gratis' | 'mixto' | 'suscripcion' | 'pago';
+export type Provider = { id: string; label: string; keyUrl: string; keyless: boolean; cli?: boolean; tier: Tier; hint: string; npm: string | null };
+export type FreeModel = { id: string; label: string; for: string };
+export type CadTool = { id: string; label: string; url: string };
+export type Account = { id: string; provider: string; label: string; preview?: string | null; home?: string };
+export type Hub = { id: string; name: string; emoji: string; color: string };
+export type HubInfo = Hub & {
+  notes: number;
+  types: Record<string, number>;
+  tags: { tag: string; count: number }[];
+  topics: { word: string; count: number }[];
+  recent: { id: string; title: string; type: NoteType }[];
+};
+export type Bridge = { a: string; b: string; score: number; links: number; shared: string[] };
+export type CadKind = 'blender' | 'openscad' | 'freecad';
+export type CadJob = { id: string; kind: CadKind; name: string; dir: string; ok: boolean; log: string; files: { name: string; size: number }[]; opened: boolean; code: string; taskId: string | null; createdAt: string };
 
 export type Step = {
   agentId: string;
@@ -74,6 +91,7 @@ export type NoteSummary = {
   pinned: boolean;
   excerpt: string;
   source: { taskId?: string; agentId?: string } | null;
+  hub?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -86,12 +104,15 @@ export type Note = Omit<NoteSummary, 'excerpt'> & {
 export type GraphNode = {
   id: string;
   label: string;
-  kind: 'note' | 'ghost' | 'tag' | 'agent';
+  kind: 'note' | 'ghost' | 'tag' | 'agent' | 'hub';
   type?: NoteType;
+  hub?: string;
+  color?: string;
+  emoji?: string;
   agentId?: string;
   createdAt?: string;
 };
-export type GraphLink = { source: string; target: string; kind: 'link' | 'tag' | 'author' };
+export type GraphLink = { source: string; target: string; kind: 'link' | 'tag' | 'author' | 'hub' };
 
 export type Suggestion = { from: string; to: string; fromTitle: string; toTitle: string; reason: string; score: number };
 
@@ -110,6 +131,9 @@ export type Settings = {
   ollamaEnabled: boolean;
   ollamaUrl: string;
   cli: Record<string, { enabled: boolean; command: string; defaultCommand: string }>;
+  accounts: Account[];
+  hubs: Hub[];
+  cadPaths: Record<string, string>;
 };
 
 export type Meeting = {
@@ -130,15 +154,25 @@ export type OfficeEvent =
   | { type: 'meeting'; meeting: Meeting }
   | { type: 'delta'; key: string; text: string | null }
   | { type: 'cards' }
+  | { type: 'cad' }
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 
 export type AgentState = 'idle' | 'thinking' | 'working' | 'talking' | 'done' | 'error';
 
+// Núcleo activo (quién usa la oficina): se envía en cada petición.
+let activeHub = '';
+export function setActiveHub(id: string) {
+  activeHub = id;
+}
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (activeHub) headers['X-Nucleo'] = activeHub;
   const res = await fetch(url, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -147,7 +181,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
-  meta: () => req<{ departments: Department[]; providers: Provider[]; vaultPath: string; flows: Flow[] }>('GET', '/api/meta'),
+  meta: () => req<{ departments: Department[]; providers: Provider[]; vaultPath: string; flows: Flow[]; freeModels: Record<string, FreeModel[]>; cadTools: CadTool[] }>('GET', '/api/meta'),
 
   agents: () => req<Agent[]>('GET', '/api/agents'),
   createAgent: (a: Partial<Agent>) => req<Agent>('POST', '/api/agents', a),
@@ -191,8 +225,8 @@ export const api = {
   linkMention: (id: string, fromId: string) => req('POST', `/api/notes/${id}/mentions/${fromId}/link`),
   dailySummary: () => req<Note>('POST', '/api/notes/daily'),
   importNotes: (files: { name: string; content: string }[]) => req<{ created: number; updated: number }>('POST', '/api/notes/import', { files }),
-  graph: (opts: { tags: boolean; agents: boolean }) =>
-    req<{ nodes: GraphNode[]; links: GraphLink[] }>('GET', `/api/graph?tags=${opts.tags ? 1 : 0}&agents=${opts.agents ? 1 : 0}`),
+  graph: (opts: { tags: boolean; agents: boolean; hubs?: boolean }) =>
+    req<{ nodes: GraphNode[]; links: GraphLink[] }>('GET', `/api/graph?tags=${opts.tags ? 1 : 0}&agents=${opts.agents ? 1 : 0}&hubs=${opts.hubs === false ? 0 : 1}`),
 
   suggestLinks: () => req<{ suggestions: Suggestion[]; by: string; simulated: boolean }>('POST', '/api/graph/suggest'),
   connect: (connections: Suggestion[]) => req<{ applied: number }>('POST', '/api/graph/connect', { connections }),
@@ -204,7 +238,45 @@ export const api = {
   settings: () => req<Settings>('GET', '/api/settings'),
   saveSettings: (s: Record<string, unknown>) => req<Settings>('PUT', '/api/settings', s),
   importBackup: (data: unknown) => req('POST', '/api/import', data),
+
+  addAccount: (a: { provider: string; label: string; key?: string }) => req<Settings>('POST', '/api/accounts', a),
+  deleteAccount: (id: string) => req<Settings>('DELETE', `/api/accounts/${id}`),
+  cliLogin: (provider: string, account?: string) => req<{ opened: boolean; command: string }>('POST', `/api/cli/${provider}/login`, { account }),
+  cliInstall: (provider: string) => req<{ ok: boolean; path: string | null; log: string }>('POST', `/api/cli/${provider}/install`),
+  ollamaModels: () => req<{ running: boolean; models: { name: string; size: number }[] }>('GET', '/api/ollama/models'),
+  ollamaPull: (model: string) => req<{ ok: boolean; log: string }>('POST', '/api/ollama/pull', { model }),
+  freeMode: () => req<{ changed: number; changes: { id: string; from: { provider: string; model: string }; to: { provider: string; model: string } }[] }>('POST', '/api/agents/free-mode'),
+  undoFreeMode: () => req<{ restored: number }>('POST', '/api/agents/free-mode/undo'),
+
+  assistant: () => req<ChatMessage[]>('GET', '/api/assistant'),
+  askAssistant: (message: string) => req<{ reply: string; simulated: boolean; history: ChatMessage[] }>('POST', '/api/assistant', { message }),
+  clearAssistant: () => req('DELETE', '/api/assistant'),
+
+  hubs: () => req<{ hubs: HubInfo[]; bridges: Bridge[] }>('GET', '/api/hubs'),
+  askHub: (id: string, question: string, save = false) => req<{ answer: string; simulated: boolean; sources: { id: string; title: string }[]; noteId?: string }>('POST', `/api/hubs/${id}/ask`, { question, save }),
+  hubProfile: (id: string) => req<Note>('POST', `/api/hubs/${id}/profile`),
+  hubSuggest: () => req<{ suggestions: Suggestion[] }>('GET', '/api/hubs/suggest'),
+
+  cadDetect: () => req<Record<string, string | null>>('GET', '/api/cad/detect'),
+  cadJobs: () => req<CadJob[]>('GET', '/api/cad/jobs'),
+  cadRun: (b: { kind: CadKind; code: string; name?: string; gui?: boolean; taskId?: string }) => req<CadJob>('POST', '/api/cad/run', b),
+  cadOpen: (id: string, what: 'app' | 'folder') => req('POST', `/api/cad/jobs/${id}/open`, { what }),
+  cadSlice: (id: string) => req<{ ok: boolean; log: string }>('POST', `/api/cad/jobs/${id}/slice`),
+  cadDelete: (id: string) => req('DELETE', `/api/cad/jobs/${id}`),
 };
+
+/** Etiqueta corta del costo de un proveedor. */
+export const TIER_LABEL: Record<Tier, string> = { gratis: 'Gratis', mixto: 'Tiene gratis', suscripcion: 'Tu suscripción', pago: 'De pago' };
+
+/** ¿Qué programa ejecuta este bloque de código? (igual que en el servidor) */
+export function cadKind(lang: string, code: string): CadKind | null {
+  const l = lang.toLowerCase();
+  if (l === 'openscad' || l === 'scad') return 'openscad';
+  if (/^\s*(import bpy|from bpy)/m.test(code)) return 'blender';
+  if (/^\s*(import FreeCAD|from FreeCAD|import Part\b|import FreeCADGui)/m.test(code)) return 'freecad';
+  if (!l && /\b(cube|cylinder|sphere)\s*\(/.test(code) && /;\s*$/m.test(code)) return 'openscad';
+  return null;
+}
 
 /** Nivel de experiencia según trabajos completados (1, 4, 9, 16… para subir). */
 export function levelOf(a: { stats?: { tasks: number } }) {

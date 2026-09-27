@@ -2,19 +2,21 @@
 // zoom, arrastre, resaltado de vecinos, búsqueda y grafo local.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force';
-import { api, type GraphLink, type GraphNode, type Note, type Suggestion } from '../api';
+import { api, type Bridge, type GraphLink, type GraphNode, type HubInfo, type Note, type Suggestion } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { useOffice } from '../state';
 import { TYPE_META } from './Notes';
 
 type N = GraphNode & SimulationNodeDatum & { degree: number };
-type L = SimulationLinkDatum<N> & { kind: GraphLink['kind'] };
+type Kind = GraphLink['kind'] | 'bridge';
+type L = SimulationLinkDatum<N> & { kind: Kind; label?: string };
 
 const KIND_COLOR = { tag: '#2dd4bf', ghost: '#52525b', agent: '#c084fc' };
 
 function colorOf(n: N) {
   if (n.kind === 'note') return TYPE_META[n.type || 'nota']?.color || '#94a3b8';
+  if (n.kind === 'hub') return n.color || '#c084fc';
   return KIND_COLOR[n.kind];
 }
 
@@ -24,7 +26,10 @@ export function Graph() {
   const [finding, setFinding] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
+  const [data, setData] = useState<{ nodes: GraphNode[]; links: (Omit<GraphLink, 'kind'> & { kind: Kind; label?: string })[] }>({ nodes: [], links: [] });
+  const [hubInfo, setHubInfo] = useState<{ hubs: HubInfo[]; bridges: Bridge[] }>({ hubs: [], bridges: [] });
+  const [hubFilter, setHubFilter] = useState('');
+  const [hubPanel, setHubPanel] = useState<string | null>(null);
   const [opts, setOpts] = useState({ tags: true, agents: true, ghosts: true, labels: true, contrib: true });
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -56,7 +61,12 @@ export function Graph() {
   useEffect(() => view.current.redraw(), [selected, query, opts.labels]);
 
   useEffect(() => {
-    api.graph({ tags: opts.tags, agents: opts.agents }).then(setData);
+    Promise.all([api.graph({ tags: opts.tags, agents: opts.agents }), api.hubs()]).then(([g, h]) => {
+      setHubInfo(h);
+      // Puentes entre núcleos que comparten temas.
+      const bridges = h.bridges.map((b) => ({ source: `hub:${b.a}`, target: `hub:${b.b}`, kind: 'bridge' as const, label: b.shared.slice(0, 3).join(', ') }));
+      setData({ nodes: g.nodes, links: [...g.links, ...bridges] });
+    });
   }, [notesVersion, opts.tags, opts.agents]);
 
   // Filtrado: fantasmas y grafo local.
@@ -72,6 +82,16 @@ export function Graph() {
         if (visibleNotes.has(l.target)) attached.add(l.source);
       }
       nodes = nodes.filter((n) => (n.kind === 'note' ? visibleNotes.has(n.id) : attached.has(n.id)));
+    }
+    // Un solo núcleo: sus notas, lo que cuelga de ellas y los núcleos con los que comparte temas.
+    if (hubFilter) {
+      const mine = new Set(nodes.filter((n) => (n.kind === 'note' && (n.hub || 'cerebro') === hubFilter) || n.id === `hub:${hubFilter}`).map((n) => n.id));
+      const keep = new Set(mine);
+      for (const l of data.links) {
+        if (mine.has(l.source)) keep.add(l.target);
+        if (mine.has(l.target) && l.kind !== 'hub') keep.add(l.source);
+      }
+      nodes = nodes.filter((n) => keep.has(n.id));
     }
     let ids = new Set(nodes.map((n) => n.id));
     let links = data.links.filter((l) => ids.has(l.source) && ids.has(l.target));
@@ -93,7 +113,7 @@ export function Graph() {
       deg.set(l.target, (deg.get(l.target) || 0) + 1);
     }
     return { nodes, links, deg };
-  }, [data, opts.ghosts, opts.contrib, depth, center, until]);
+  }, [data, opts.ghosts, opts.contrib, depth, center, until, hubFilter]);
 
   const neighbors = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -114,11 +134,13 @@ export function Graph() {
       const p = prev.get(n.id);
       return { ...n, degree: graph.deg.get(n.id) || 0, x: p?.x, y: p?.y, vx: p?.vx, vy: p?.vy };
     });
-    const links: L[] = graph.links.map((l) => ({ source: l.source, target: l.target, kind: l.kind }));
-    const radius = (n: N) => (n.kind === 'agent' ? 9 : n.kind === 'tag' ? 4 : 4 + Math.sqrt(n.degree) * 2.2);
+    const links: L[] = graph.links.map((l) => ({ source: l.source, target: l.target, kind: l.kind, label: l.label }));
+    const radius = (n: N) => (n.kind === 'hub' ? 18 : n.kind === 'agent' ? 9 : n.kind === 'tag' ? 4 : 4 + Math.sqrt(n.degree) * 2.2);
+    const DIST: Partial<Record<Kind, number>> = { tag: 60, author: 80, hub: 120, bridge: 320 };
+    const STRENGTH: Partial<Record<Kind, number>> = { hub: 0.12, bridge: 0.04 };
 
     const sim = forceSimulation<N, L>(nodes)
-      .force('link', forceLink<N, L>(links).id((d) => d.id).distance((l) => (l.kind === 'tag' ? 60 : l.kind === 'author' ? 80 : 75)).strength(0.4))
+      .force('link', forceLink<N, L>(links).id((d) => d.id).distance((l) => DIST[l.kind] ?? 75).strength((l) => STRENGTH[l.kind] ?? 0.4))
       .force('charge', forceManyBody().strength(-260))
       .force('center', forceCenter(0, 0))
       .force('x', forceX(0).strength(0.04))
@@ -158,15 +180,25 @@ export function Graph() {
       for (const l of links) {
         const s = l.source as N, t = l.target as N;
         const hot = focus && (s.id === focus || t.id === focus);
-        ctx.strokeStyle = hot ? '#c084fc' : lineColor;
-        ctx.globalAlpha = focus && !hot ? 0.25 : 1;
-        ctx.lineWidth = (hot ? 1.8 : 1) / Math.sqrt(st.k);
-        if (l.kind === 'tag') ctx.setLineDash([3, 3]);
+        const bridge = l.kind === 'bridge';
+        ctx.strokeStyle = hot ? '#c084fc' : bridge ? '#f59e0b' : l.kind === 'hub' ? (s.color || lineColor) : lineColor;
+        ctx.globalAlpha = focus && !hot ? 0.25 : l.kind === 'hub' ? 0.35 : 1;
+        ctx.lineWidth = (hot ? 1.8 : bridge ? 3 : 1) / Math.sqrt(st.k);
+        if (l.kind === 'tag' || bridge) ctx.setLineDash(bridge ? [8, 6] : [3, 3]);
         ctx.beginPath();
         ctx.moveTo(s.x!, s.y!);
         ctx.lineTo(t.x!, t.y!);
         ctx.stroke();
         ctx.setLineDash([]);
+        // Temas en común, escritos a mitad del puente.
+        if (bridge && l.label && labels) {
+          ctx.globalAlpha = focus && !hot ? 0.3 : 0.95;
+          ctx.font = `${11 / st.k}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillText(`🔗 ${l.label}`, (s.x! + t.x!) / 2, (s.y! + t.y!) / 2 - 8 / st.k);
+        }
       }
       for (const n of nodes) {
         const r = radius(n);
@@ -182,6 +214,17 @@ export function Graph() {
           ctx.lineWidth = 2 / st.k;
           ctx.stroke();
         }
+        if (n.kind === 'hub') {
+          ctx.globalAlpha = dim ? 0.18 : 0.25;
+          ctx.beginPath();
+          ctx.arc(n.x!, n.y!, r + 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = dim ? 0.18 : 1;
+          ctx.font = `${r * 1.1}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(n.emoji || '🔵', n.x!, n.y! + 1);
+        }
         if (n.kind === 'agent') {
           const a = agents.find((x) => x.id === n.agentId);
           ctx.font = `${r * 1.2}px sans-serif`;
@@ -189,9 +232,9 @@ export function Graph() {
           ctx.textBaseline = 'middle';
           ctx.fillText(a?.avatar.prop || '🤖', n.x!, n.y! + 1);
         }
-        const showLabel = labels && (st.k > 1.3 || isFocus || (near && near.has(n.id)) || n.degree > 4 || n.kind === 'agent');
+        const showLabel = labels && (st.k > 1.3 || isFocus || (near && near.has(n.id)) || n.degree > 4 || n.kind === 'agent' || n.kind === 'hub');
         if (showLabel && !dim) {
-          ctx.font = `${11 / st.k}px system-ui, sans-serif`;
+          ctx.font = n.kind === 'hub' ? `bold ${14 / st.k}px system-ui, sans-serif` : `${11 / st.k}px system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           ctx.fillStyle = textColor;
@@ -266,7 +309,10 @@ export function Graph() {
     const onUp = (ev: MouseEvent) => {
       if (st.drag) {
         const n = st.drag;
-        if (!st.moved) setSelected(n.id);
+        if (!st.moved) {
+          setSelected(n.id);
+          if (n.kind === 'hub') setHubPanel(n.hub || null);
+        }
         n.fx = null; n.fy = null;
         sim.alphaTarget(0);
       } else if (st.panning && !st.moved && !hit(ev)) setSelected(null);
@@ -316,6 +362,19 @@ export function Graph() {
 
   return (
     <div className="graph">
+      <div className="hub-bar">
+        <span className="muted small">Núcleos:</span>
+        <button className={`hub-chip ${!hubFilter ? 'on' : ''}`} onClick={() => setHubFilter('')}>Todos</button>
+        {hubInfo.hubs.map((h) => (
+          <button key={h.id} className={`hub-chip ${hubFilter === h.id ? 'on' : ''}`} style={{ ['--hub' as string]: h.color }} onClick={() => { setHubFilter(hubFilter === h.id ? '' : h.id); setHubPanel(h.id); }}>
+            {h.emoji} {h.name} <small>{h.notes}</small>
+          </button>
+        ))}
+        <button className="btn btn--ghost small" onClick={async () => {
+          const r = await api.hubSuggest();
+          setSugg({ list: r.suggestions, chosen: new Set(r.suggestions.map((_, i) => i)), by: 'Entre núcleos se' });
+        }} title="Ideas de núcleos distintos que hablan de lo mismo">🔗 Conectar núcleos</button>
+      </div>
       <div className="graph-toolbar">
         <input className="search" placeholder="Resaltar nodos…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <label className="check"><input type="checkbox" checked={opts.tags} onChange={(e) => setOpts({ ...opts, tags: e.target.checked })} /> Etiquetas</label>
@@ -358,6 +417,7 @@ export function Graph() {
           <span><i style={{ background: KIND_COLOR.tag }} />Etiqueta</span>
           <span><i style={{ background: KIND_COLOR.agent }} />IA</span>
           <span><i style={{ background: KIND_COLOR.ghost }} />Sin crear</span>
+          <span><i style={{ background: '#f59e0b' }} />Temas en común</span>
         </div>
         {!data.nodes.length && <div className="empty overlay">Aún no hay notas. Envía una tarea en la Oficina o crea notas.</div>}
         {sugg && (
@@ -394,7 +454,8 @@ export function Graph() {
             )}
           </div>
         )}
-        {sel && (
+        {hubPanel && <HubPanel hub={hubInfo.hubs.find((h) => h.id === hubPanel)} bridges={hubInfo.bridges} hubs={hubInfo.hubs} onClose={() => setHubPanel(null)} />}
+        {sel && sel.kind !== 'hub' && (
           <div className="graph-preview">
             <header>
               <strong>{sel.label}</strong>
@@ -414,6 +475,71 @@ export function Graph() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Perfil de un núcleo: sus temas, con quién se conecta y preguntas solo a sus notas. */
+function HubPanel({ hub, hubs, bridges, onClose }: { hub?: HubInfo; hubs: HubInfo[]; bridges: Bridge[]; onClose: () => void }) {
+  const { openNote, toast, streams } = useOffice();
+  const [q, setQ] = useState('');
+  const [save, setSave] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [answer, setAnswer] = useState<{ text: string; sources: { id: string; title: string }[] } | null>(null);
+  useEffect(() => setAnswer(null), [hub?.id]);
+  if (!hub) return null;
+  const mine = bridges.filter((b) => b.a === hub.id || b.b === hub.id);
+  const nameOf = (id: string) => hubs.find((h) => h.id === id);
+  const live = streams[`hub:${hub.id}`];
+  return (
+    <div className="graph-preview hub-panel" style={{ ['--hub' as string]: hub.color }}>
+      <header>
+        <strong>{hub.emoji} {hub.name}</strong>
+        <button className="icon-btn" onClick={onClose}>✕</button>
+      </header>
+      <p className="muted small">{hub.notes} notas{hub.tags.length ? ` · ${hub.tags.slice(0, 4).map((t) => `#${t.tag}`).join(' ')}` : ''}</p>
+      {hub.topics.length > 0 && <div className="topics">{hub.topics.slice(0, 10).map((t) => <span key={t.word} className="pill">{t.word}</span>)}</div>}
+      {mine.length > 0 && (
+        <div className="small">
+          <b>Se conecta con:</b>
+          <ul>{mine.map((b) => {
+            const o = nameOf(b.a === hub.id ? b.b : b.a);
+            return <li key={b.a + b.b}>{o?.emoji} {o?.name} · afinidad {Math.round(b.score * 100)} %{b.shared.length ? ` (${b.shared.slice(0, 3).join(', ')})` : ''}{b.links ? ` · ${b.links} enlaces` : ''}</li>;
+          })}</ul>
+        </div>
+      )}
+      <div className="row">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Pregúntale a ${hub.name}…`} onKeyDown={(e) => e.key === 'Enter' && document.getElementById('hub-ask')?.click()} />
+        <button id="hub-ask" className="btn btn--primary small" disabled={!q.trim() || Boolean(busy)} onClick={async () => {
+          setBusy('ask');
+          try {
+            const r = await api.askHub(hub.id, q, save);
+            setAnswer({ text: r.answer, sources: r.sources });
+            if (r.noteId) toast('📝 Respuesta guardada como nota');
+          } catch (err) {
+            toast(`❌ ${(err as Error).message}`);
+          } finally {
+            setBusy('');
+          }
+        }}>{busy === 'ask' ? '…' : 'Preguntar'}</button>
+      </div>
+      <label className="check small"><input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} /> Guardar la respuesta en su núcleo</label>
+      {(answer || (busy === 'ask' && live)) && (
+        <div className="graph-preview-body">
+          <Markdown text={answer?.text || live || ''} onLink={(t) => openNote({ title: t })} />
+        </div>
+      )}
+      <button className="btn btn--ghost small" disabled={Boolean(busy)} onClick={async () => {
+        setBusy('profile');
+        try {
+          const n = await api.hubProfile(hub.id);
+          openNote({ id: n.id });
+        } catch (err) {
+          toast(`❌ ${(err as Error).message}`);
+        } finally {
+          setBusy('');
+        }
+      }}>{busy === 'profile' ? 'Escribiendo…' : '📝 Ver / actualizar su perfil'}</button>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # 🧠 Oficina de IAs
 
-Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs especializadas** (más 14 en el catálogo) (ChatGPT, Codex, OpenCode, Gemini, DeepSeek, Grok, Mistral, Perplexity, Llama, Qwen, Kimi y más). Cada IA tiene su **avatar chibi animado**, su escritorio, su memoria y su propio entrenamiento. Todo lo que hace el equipo se guarda como **notas conectadas en un grafo de ideas**, al estilo Obsidian.
+Una oficina virtual donde **Claude es el cerebro central** y coordina a **31 IAs especializadas** (más 16 en el catálogo), la mayoría con **modelos gratis** (ChatGPT, Codex, OpenCode, Gemini, DeepSeek, Grok, Mistral, Perplexity, Llama, Qwen, Kimi y más). Cada IA tiene su **avatar chibi animado**, su escritorio, su memoria y su propio entrenamiento. Todo lo que hace el equipo se guarda como **notas conectadas en un grafo de ideas**, al estilo Obsidian.
 
 ![El edificio de la oficina](docs/edificio.png)
 
@@ -12,6 +12,12 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 |---|---|
 | ![Oficina](docs/oficina.png) | ![Reuniones](docs/reuniones.png) |
 
+| Taller 3D con visor del STL | Núcleos del grafo |
+|---|---|
+| ![Taller 3D](docs/taller.png) | ![Núcleos](docs/nucleos.png) |
+
+![Conectar las IAs con ayuda de Claude](docs/conectar.png)
+
 ## Qué puedes hacer
 
 | Sección | Qué hace |
@@ -22,7 +28,8 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 | 🗣️ **Reuniones** | Eliges varias IAs y un tema: conversan por turnos respondiéndose entre ellas y Claude resume acuerdos y próximos pasos. |
 | 🎯 **Tareas** | Historial con el plan del cerebro, el aporte de cada IA (escrito en vivo) y la respuesta integrada. Puedes pedir ajustes para que el mismo equipo continúe, y crear **rutinas automáticas** (por ejemplo, un resumen cada mañana a las 7:00). |
 | 📝 **Notas** | Editor Markdown con `[[enlaces]]`, `#etiquetas`, backlinks, casillas `- [ ]` clicables, plantillas, notas fijadas, ideas y diario. Cada tarea genera notas enlazadas automáticamente. Incluye **Resumen del día**, **Trabajar esta nota**, **menciones sin enlazar** y una bóveda compatible con Obsidian (importa archivos o una carpeta completa). |
-| 🕸️ **Grafo** | Mapa interactivo de tus ideas: zoom, arrastre, búsqueda, grafo local (1–2 saltos), nodos de IAs, etiquetas, notas por crear y **línea de tiempo**. La bibliotecaria Haiku propone **conexiones entre ideas** relacionadas. |
+| 🕸️ **Grafo** | Mapa interactivo de tus ideas: zoom, arrastre, búsqueda, grafo local (1–2 saltos), nodos de IAs, etiquetas, notas por crear y **línea de tiempo**. La bibliotecaria Haiku propone **conexiones entre ideas** relacionadas. Tiene **núcleos** (Cerebro, Nicolás, Santiago, Miguel…): cada persona tiene sus notas, su perfil y se le pueden hacer preguntas; los núcleos que comparten temas se unen con un puente. |
+| 🖨️ **Taller 3D** | Departamento de impresión 3D: pides una pieza y las IAs escriben el modelo para **OpenSCAD, Blender o FreeCAD**. Con un clic la oficina lo abre en el programa de tu computador, genera el **STL**, lo muestra en 3D y lo lamina a **G-code** con PrusaSlicer u OrcaSlicer. |
 | 👥 **Equipo** | Todas las IAs con estadísticas de actividad y uso por proveedor. Habla con cada una, **entrénala** con lecciones y archivos (o deja que **aprenda de su experiencia**), revisa su memoria, cambia su modelo, avatar o disfraz, contrata IAs del **catálogo**, exporta o importa IAs para compartirlas y desbloquea **logros**. Valora cada aporte con 👍/👎: la IA lo recuerda. |
 | ⚙️ **Ajustes** | Tus claves de API (con botón **Probar**), herramientas de línea de comandos, tu avatar, el modo demo, la revisión de calidad final, cuántas IAs trabajan a la vez y el respaldo de tus datos. |
 
@@ -42,21 +49,27 @@ Para desarrollar con recarga en vivo: `npm run dev`, que abre la interfaz en htt
 
 ## Conectar las IAs
 
-Sin claves, todo funciona en **modo demo** con respuestas simuladas, así que puedes probar la oficina completa gratis. Para respuestas reales, ve a **Ajustes** y pega las claves que tengas:
+Sin claves, todo funciona en **modo demo** con respuestas simuladas, así que puedes probar la oficina completa gratis. Para respuestas reales ve a **Ajustes → Conectar las IAs**:
+
+- Los proveedores están ordenados en **Gratis**, **Con tu suscripción** y **De pago**. Cada uno tiene sus pasos: abrir la página de la clave, pegarla, probarla y elegir qué IAs lo usan (con una lista de modelos gratis).
+- Las herramientas de línea de comandos se **instalan con un clic** y el botón **Iniciar sesión** abre una terminal para entrar con tu cuenta.
+- **🆓 Modo gratis** pasa de una vez las IAs de proveedores de pago a modelos gratis (o a tu suscripción, si conectaste Claude Code o Codex CLI). Se puede deshacer.
+- **💬 Ayuda de Claude**: el cerebro te guía paso a paso y sus respuestas traen botones para instalar, iniciar sesión o conectar.
+- **Varias cuentas por proveedor**: por ejemplo, dos cuentas de Gemini con correos distintos. Si una se queda sin cupo, la oficina sigue con la siguiente. En el perfil de cada IA eliges qué cuenta usa primero. Con las CLIs, cada cuenta guarda su sesión en su propia carpeta.
+
+Proveedores y las IAs de la plantilla que los usan:
 
 | Proveedor | IAs de la oficina que lo usan |
 |---|---|
-| **Anthropic** | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |
-| **OpenAI** | Codex, ChatGPT, O-Estratega, Coach |
-| **Google Gemini** | Gemini (datos), Pixel (diseño) |
-| **OpenRouter** | OpenCode, Kimi, Command, Nemo PM, Lexi. Con una sola clave accedes a cientos de modelos. |
-| **Groq** | Llama Ops, Guardián |
-| **Mistral** | Codestral, Mistral, Babel |
-| **DeepSeek** | DeepSeek, DeepSeek R |
-| **xAI** | Grok |
-| **Perplexity** | Perplexity, Sonar |
-| **Together** | Qwen, Llama Finanzas |
+| **Groq** (gratis) | Llama Ops, Guardián, Qwen, Kimi, O-Estratega, Capa |
+| **Google Gemini** (gratis) | Gemini, Pixel, Command, Coach, Scad |
+| **OpenRouter** (modelos `:free`) | OpenCode, DeepSeek, DeepSeek R, Nemo PM, Lexi, Blendi, Fredi |
+| **Cerebras** (gratis) | Llama Finanzas |
+| **Mistral** (gratis) | Codestral, Mistral, Babel |
 | **Ollama** (local, gratis) | Gemma, Phi |
+| **Anthropic** (de pago, o tu plan con Claude Code) | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |
+| **OpenAI** (de pago, o tu ChatGPT con Codex CLI) | Codex, ChatGPT |
+| **xAI** / **Perplexity** (de pago) | Grok / Perplexity, Sonar |
 
 ### Con herramientas de línea de comandos (sin claves)
 
@@ -64,17 +77,42 @@ Si tienes instaladas y con sesión iniciada **Codex CLI**, **Claude Code**, **Op
 
 Puedes cambiar el proveedor y el modelo de cualquier IA desde su perfil. Los modelos se actualizan seguido, así que si uno deja de existir escribe el id nuevo. Por ejemplo, puedes pasar todas las IAs a OpenRouter y usar una sola clave.
 
-También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `TOGETHER_API_KEY`.
+También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `TOGETHER_API_KEY`.
+
+Los planes gratis y los ids de modelos cambian seguido; si un modelo deja de existir, escribe el nuevo en el perfil de la IA.
+
+## Taller de Impresión 3D
+
+El piso 1 del edificio es el taller, con cuatro IAs (todas con modelos gratis):
+
+- **Blendi** modela en **Blender** (formas libres, figuras).
+- **Scad** diseña piezas paramétricas en **OpenSCAD** (medidas exactas).
+- **Fredi** hace piezas mecánicas en **FreeCAD** (tolerancias, encajes).
+- **Capa** revisa si se puede imprimir y da la configuración del laminador.
+
+En la sección **Taller 3D** eliges el programa y describes la pieza. Cuando el equipo entrega el script, pulsa **▶ Abrir en…**: la oficina lo ejecuta en el programa instalado en tu computador, guarda el STL y el proyecto en `data/taller3d/` y lo abre en el programa para que sigas editando. También puedes pegar un script propio. Los programas son gratis: [Blender](https://www.blender.org/download/), [OpenSCAD](https://openscad.org/downloads.html), [FreeCAD](https://www.freecad.org/downloads.php), [PrusaSlicer](https://www.prusa3d.com/page/prusaslicer_424/) y [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer/releases). Si alguno está en otra carpeta, pon su ruta en **Ajustes → Taller 3D**. Antes de ejecutar un script, la oficina te pide confirmación.
+
+## Núcleos del grafo
+
+Arriba a la izquierda eliges **quién usa la oficina** en ese computador (Nicolás, Santiago, Miguel o el Cerebro). Las notas, tareas y reuniones nuevas quedan en su núcleo. En el **Grafo**:
+
+- Cada núcleo es un nodo grande con sus notas alrededor; los botones de arriba muestran uno solo.
+- Los núcleos que comparten temas se unen con un **puente naranja** que dice qué palabras tienen en común.
+- Al hacer clic en un núcleo puedes **preguntarle** (el cerebro responde usando solo sus notas), guardar la respuesta y generar su **perfil**.
+- **🔗 Conectar núcleos** propone enlaces entre notas de personas distintas que hablan de lo mismo.
+
+Los nombres, emojis y colores se cambian en **Ajustes → Núcleos del grafo**.
 
 ## El edificio
 
 - **Azotea**: jardín, gimnasio y piscina para los descansos.
 - **Penthouse**: la oficina de Claude, el cerebro central.
-- **Pisos 6 a 1**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, y Personas y Conocimiento.
+- **Pisos 7 a 2**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, y Personas y Conocimiento.
+- **Piso 1**: Taller de Impresión 3D, con impresoras y bobinas de filamento.
 - **Planta baja**: lobby, cafetería y la mesa de reuniones.
 - **Sótano**: sala de juegos (arcades, ping-pong, puffs) y servidores.
 
-Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar o en un mueble (cafetera, arcade, piano, piscina, telescopio…) para usarlo, y personalízalo en **Ajustes**. Las IAs tienen energía: se cansan trabajando y recargan con café o en la azotea. Hay mascotas (Michi, Firulais y Kiwi) y cada piso tiene skins (botón 🎨). Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
+Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar o en un mueble (cafetera, arcade, piano, piscina, telescopio…) para usarlo, y personalízalo en **Ajustes**. Las IAs tienen energía: se cansan trabajando y recargan con café o en la azotea. Hay mascotas (Michi, Firulais y Kiwi) y cada piso tiene skins (botón 🎨). Las IAs en modo demo se ven desteñidas y con la etiqueta «demo»; las conectadas llevan un punto verde. El botón **🟢** del panel del ascensor muestra solo las conectadas. Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
 
 ## Entrenamiento y memoria
 

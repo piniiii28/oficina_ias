@@ -8,7 +8,11 @@ import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, detectClis, cliCommand, callModel, setUsageSink } from './providers.js';
-import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running } from './orchestrator.js';
+import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
+import { FREE_MODELS, freePlan } from './freeModels.js';
+import { CAD_TOOLS, detectCad, runCad, openInApp, sliceJob, extractCadBlocks, listFiles } from './cad.js';
+import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
+import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
@@ -41,6 +45,15 @@ export function createApp(store) {
       if (d && !a.knowledge.some((k) => k.builtin)) a.knowledge.unshift(...structuredClone(d.knowledge));
     }
     store.data.settings.playbooksSeeded = true;
+    store.save();
+  }
+
+  // Oficinas creadas antes del Taller 3D: se contratan sus IAs una sola vez.
+  if (!store.data.settings.taller3dSeeded) {
+    for (const d of DEFAULT_AGENTS.filter((a) => a.department === 'impresion3d')) {
+      if (!store.data.agents.some((a) => a.id === d.id)) store.data.agents.push(structuredClone(d));
+    }
+    store.data.settings.taller3dSeeded = true;
     store.save();
   }
 
@@ -83,6 +96,12 @@ export function createApp(store) {
     res.status(403).json({ error: 'Acceso solo desde este computador' });
   });
   app.use(express.json({ limit: '25mb' }));
+  // Núcleo activo (quién usa la oficina: Nicolás, Santiago, Miguel…): las notas nuevas quedan en su núcleo.
+  app.use((req, _res, next) => {
+    const h = String(req.headers['x-nucleo'] || '');
+    req.hub = hubsOf(store).some((x) => x.id === h) ? h : 'cerebro';
+    next();
+  });
 
   const agentById = (id) => store.data.agents.find((a) => a.id === id);
   const publicSettings = () => {
@@ -96,14 +115,17 @@ export function createApp(store) {
     for (const [p, def] of Object.entries(PROVIDERS)) {
       if (def.cli) cli[p] = { enabled: Boolean(rest.cli?.[p]?.enabled), command: cliCommand(store.data.settings, p), defaultCommand: def.command };
     }
-    return { ...rest, keys, cli, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
+    const accounts = (rest.accounts || []).map(({ key, ...a }) => ({ ...a, preview: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null }));
+    return { ...rest, keys, cli, accounts, hubs: hubsOf(store), cadPaths: rest.cadPaths || {}, ollamaEnabled: Boolean(apiKeys?.ollamaEnabled), ollamaUrl: apiKeys?.ollamaUrl || '' };
   };
 
   // --- Meta ---
   app.get('/api/meta', (_req, res) => {
     res.json({
       departments: DEPARTMENTS,
-      providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, keyUrl: p.keyUrl, keyless: Boolean(p.keyless), cli: Boolean(p.cli) })),
+      providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, keyUrl: p.keyUrl, keyless: Boolean(p.keyless), cli: Boolean(p.cli), tier: p.tier, hint: p.hint, npm: p.npm || null })),
+      freeModels: FREE_MODELS,
+      cadTools: Object.entries(CAD_TOOLS).map(([id, t]) => ({ id, label: t.label, url: t.url })),
       vaultPath: vault.dir,
       flows: FLOWS.map((f) => ({ id: f.id, name: f.name, agentIds: f.steps.map(([a]) => a) })),
     });
@@ -137,7 +159,16 @@ export function createApp(store) {
   app.get('/api/cli/detect', async (_req, res) => res.json(await detectClis()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;
-    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards } = req.body || {};
+    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths } = req.body || {};
+    if (hubs !== undefined) s.hubs = normalizeHubs(hubs);
+    if (cadPaths && typeof cadPaths === 'object') {
+      s.cadPaths ||= {};
+      for (const [k, v] of Object.entries(cadPaths)) {
+        if (!(k in CAD_TOOLS)) continue;
+        if (typeof v === 'string' && v.trim()) s.cadPaths[k] = v.trim();
+        else delete s.cadPaths[k];
+      }
+    }
     if (autoCards !== undefined) s.autoCards = Boolean(autoCards);
     if (webSearch !== undefined) s.webSearch = Boolean(webSearch);
     if (maxTeam) s.maxTeam = Math.max(1, Math.min(8, Number(maxTeam)));
@@ -194,9 +225,10 @@ export function createApp(store) {
   app.put('/api/agents/:id', (req, res) => {
     const a = agentById(req.params.id);
     if (!a) return res.status(404).json({ error: 'No existe' });
-    for (const k of ['name', 'role', 'department', 'provider', 'model', 'skills', 'system', 'avatar', 'enabled']) {
+    for (const k of ['name', 'role', 'department', 'provider', 'model', 'skills', 'system', 'avatar', 'enabled', 'account']) {
       if (req.body[k] !== undefined) a[k] = req.body[k];
     }
+    if (!a.account || a.account === 'default') delete a.account;
     store.save();
     res.json(a);
   });
@@ -283,7 +315,7 @@ export function createApp(store) {
     if (!prompt) return res.status(400).json({ error: 'Escribe una tarea' });
     const flow = req.body.flow ? flowPlan(req.body.flow, store.data.agents) : null;
     const promise = runTask(store, notes, {
-      prompt, agentIds: flow?.agentIds || req.body.agentIds, template: flow?.template, effort: req.body.effort, fromNote: typeof req.body.fromNote === 'string' ? req.body.fromNote.slice(0, 200) : null, parentId: req.body.parentId, attachments: req.body.attachments, saveNotes: req.body.saveNotes !== false,
+      prompt, hub: req.hub, agentIds: flow?.agentIds || req.body.agentIds, template: flow?.template, effort: req.body.effort, fromNote: typeof req.body.fromNote === 'string' ? req.body.fromNote.slice(0, 200) : null, parentId: req.body.parentId, attachments: req.body.attachments, saveNotes: req.body.saveNotes !== false,
     });
     // Respondemos enseguida; el progreso llega por /api/events.
     promise.catch((err) => console.error('[tarea]', err));
@@ -350,7 +382,7 @@ export function createApp(store) {
     const current = c.taskId && store.data.tasks.find((t) => t.id === c.taskId);
     if (current && current.status !== 'done' && current.status !== 'error') return res.status(409).json({ error: 'El equipo ya trabaja en esta tarjeta' });
     const slug = c.project.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^\p{L}\d]+/gu, '-').replace(/^-|-$/g, '');
-    const promise = runTask(store, notes, { prompt: `${c.title}${c.details ? `\n\n${c.details}` : ''}`, tags: slug ? [slug] : [] });
+    const promise = runTask(store, notes, { prompt: `${c.title}${c.details ? `\n\n${c.details}` : ''}`, hub: req.hub, tags: slug ? [slug] : [] });
     c.taskId = store.data.tasks[0].id;
     c.column = 'doing';
     store.save();
@@ -397,7 +429,7 @@ export function createApp(store) {
     const topic = String(req.body?.topic || '').trim();
     const agentIds = Array.isArray(req.body?.agentIds) ? req.body.agentIds.slice(0, 6) : [];
     if (!topic || agentIds.length < 2) return res.status(400).json({ error: 'Escribe un tema y elige al menos 2 IAs' });
-    runMeeting(store, notes, { topic, agentIds, rounds: Number(req.body.rounds) || 2 }).catch((err) => console.error('[reunión]', err));
+    runMeeting(store, notes, { topic, agentIds, hub: req.hub, rounds: Number(req.body.rounds) || 2 }).catch((err) => console.error('[reunión]', err));
     res.status(202).json({ id: store.data.meetings[0].id });
   });
   app.post('/api/meetings/:id/say', (req, res) => {
@@ -435,7 +467,7 @@ export function createApp(store) {
     res.json({ ...n, backlinks: notes.backlinks(n.id) });
   });
   app.post('/api/notes', (req, res) => {
-    const n = notes.create(req.body || {});
+    const n = notes.create({ ...(req.body || {}), hub: req.body?.hub || req.hub });
     bus.emit('event', { type: 'notes' });
     res.status(201).json(n);
   });
@@ -450,7 +482,7 @@ export function createApp(store) {
     // Abrir un [[enlace]]: si la nota no existe, se crea (como en Obsidian).
     const title = String(req.body?.title || '').trim();
     if (!title) return res.status(400).json({ error: 'Falta el título' });
-    const n = notes.findByTitle(title) || notes.create({ title, content: '' });
+    const n = notes.findByTitle(title) || notes.create({ title, content: '', hub: req.hub });
     bus.emit('event', { type: 'notes' });
     res.json(n);
   });
@@ -473,7 +505,7 @@ export function createApp(store) {
         notes.update(existing.id, { content: parsed.content, tags: parsed.tags.length ? parsed.tags : existing.tags });
         updated++;
       } else {
-        notes.create(parsed);
+        notes.create({ ...parsed, hub: req.hub });
         created++;
       }
     }
@@ -496,8 +528,41 @@ export function createApp(store) {
       includeTags: req.query.tags !== '0',
       includeAgents: req.query.agents !== '0',
       agents: store.data.agents,
+      hubs: req.query.hubs === '0' ? [] : hubsOf(store),
     }));
   });
+
+  // --- Núcleos del grafo ---
+  app.get('/api/hubs', (_req, res) => {
+    const hubs = hubsOf(store);
+    res.json({ hubs: hubs.map((h) => ({ ...h, ...hubStats(store.data.notes, h.id) })), bridges: hubBridges(store.data.notes, hubs) });
+  });
+  app.post('/api/hubs/:id/ask', async (req, res) => {
+    const question = String(req.body?.question || '').trim().slice(0, 2000);
+    if (!question) return res.status(400).json({ error: 'Escribe una pregunta' });
+    try {
+      const r = await askHub(store, req.params.id, question);
+      if (req.body?.save) {
+        const hub = hubsOf(store).find((h) => h.id === req.params.id);
+        const n = notes.create({ title: `Pregunta a ${hub.name}: ${question.slice(0, 60)}`, type: 'nota', tags: ['pregunta'], hub: hub.id, content: `> ${question}\n\n${r.answer}\n\n## Fuentes\n${r.sources.map((x) => `- [[${x.title}]]`).join('\n')}` });
+        r.noteId = n.id;
+        bus.emit('event', { type: 'notes' });
+      }
+      res.json(r);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.post('/api/hubs/:id/profile', async (req, res) => {
+    try {
+      const n = await writeHubProfile(store, notes, req.params.id);
+      bus.emit('event', { type: 'notes' });
+      res.json(n);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.get('/api/hubs/suggest', (_req, res) => res.json({ suggestions: crossHubSuggestions(store.data.notes) }));
 
   app.post('/api/graph/suggest', async (_req, res) => {
     try {
@@ -513,10 +578,224 @@ export function createApp(store) {
     res.json({ applied });
   });
 
+  // --- Cuentas extra por proveedor (p. ej. dos cuentas de Gemini) ---
+  app.post('/api/accounts', (req, res) => {
+    const provider = String(req.body?.provider || '');
+    const def = PROVIDERS[provider];
+    if (!def || def.keyless) return res.status(400).json({ error: 'Ese proveedor no admite cuentas extra' });
+    const label = String(req.body?.label || '').trim().slice(0, 40) || `Cuenta ${(store.data.settings.accounts || []).filter((a) => a.provider === provider).length + 2}`;
+    const acc = { id: Store.id('acc_'), provider, label };
+    if (def.cli) acc.home = path.join(store.dir, 'cuentas', acc.id);
+    else {
+      const key = String(req.body?.key || '').trim();
+      if (!key) return res.status(400).json({ error: 'Pega la clave de esta cuenta' });
+      acc.key = key;
+    }
+    (store.data.settings.accounts ||= []).push(acc);
+    store.save();
+    res.status(201).json(publicSettings());
+  });
+  app.delete('/api/accounts/:id', (req, res) => {
+    const s = store.data.settings;
+    s.accounts = (s.accounts || []).filter((a) => a.id !== req.params.id);
+    for (const a of store.data.agents) if (a.account === req.params.id) delete a.account;
+    store.save();
+    res.json(publicSettings());
+  });
+
+  // Abre una terminal para iniciar sesión en una CLI (con la cuenta elegida).
+  app.post('/api/cli/:provider/login', (req, res) => {
+    const def = PROVIDERS[req.params.provider];
+    if (!def?.cli) return res.status(404).json({ error: 'Herramienta desconocida' });
+    const acc = (store.data.settings.accounts || []).find((a) => a.id === req.body?.account && a.provider === req.params.provider);
+    const vars = {};
+    if (acc?.home) {
+      fs.mkdirSync(acc.home, { recursive: true });
+      if (def.homeEnv) vars[def.homeEnv] = acc.home;
+      else Object.assign(vars, { HOME: acc.home, USERPROFILE: acc.home });
+    }
+    const opened = openTerminal(def.login, vars);
+    res.json({ opened, command: manualCommand(def.login, vars) });
+  });
+
+  // Instala una CLI con npm (solo las de la lista, nunca un comando libre).
+  const installing = new Set();
+  app.post('/api/cli/:provider/install', async (req, res) => {
+    const def = PROVIDERS[req.params.provider];
+    if (!def?.npm) return res.status(404).json({ error: 'Herramienta desconocida' });
+    if (installing.has(def.npm)) return res.status(409).json({ error: 'Ya se está instalando' });
+    installing.add(def.npm);
+    const log = streamer(`install:${req.params.provider}`);
+    log(`$ npm install -g ${def.npm}\n`);
+    const r = await runLogged('npm', ['install', '-g', def.npm], { onData: log, shell: process.platform === 'win32' });
+    log.end();
+    installing.delete(def.npm);
+    const found = (await detectClis())[req.params.provider];
+    res.json({ ok: r.ok && Boolean(found), path: found, log: r.out.slice(-3000) });
+  });
+
+  // --- Ollama: modelos instalados y descarga de modelos ---
+  const ollamaBase = () => (store.data.settings.apiKeys?.ollamaUrl || PROVIDERS.ollama.baseUrl).replace(/\/v1\/?$/, '');
+  app.get('/api/ollama/models', async (_req, res) => {
+    try {
+      const r = await fetch(`${ollamaBase()}/api/tags`, { signal: AbortSignal.timeout(4000) });
+      const data = await r.json();
+      res.json({ running: true, models: (data.models || []).map((m) => ({ name: m.name, size: m.size })) });
+    } catch {
+      res.json({ running: false, models: [] });
+    }
+  });
+  app.post('/api/ollama/pull', async (req, res) => {
+    const model = String(req.body?.model || '').trim();
+    if (!/^[a-z0-9][a-z0-9._:/-]{0,80}$/i.test(model)) return res.status(400).json({ error: 'Nombre de modelo no válido' });
+    const log = streamer(`install:ollama:${model}`);
+    log(`$ ollama pull ${model}\n`);
+    const r = await runLogged('ollama', ['pull', model], { onData: log, timeoutMs: 60 * 60000 });
+    log.end();
+    res.json({ ok: r.ok, log: r.out.slice(-2000) });
+  });
+
+  // --- Modo gratis: IAs de proveedores de pago pasan a modelos gratis ---
+  app.post('/api/agents/free-mode', (_req, res) => {
+    const s = store.data.settings;
+    const connected = (p) => s.demoMode !== 'always' && hasKey(s, p);
+    const changes = freePlan(store.data.agents, connected);
+    for (const c of changes) {
+      const a = agentById(c.id);
+      a.paidBackup = c.from;
+      a.provider = c.to.provider;
+      a.model = c.to.model;
+      delete a.account;
+    }
+    store.save();
+    res.json({ changed: changes.length, changes });
+  });
+  app.post('/api/agents/free-mode/undo', (_req, res) => {
+    let n = 0;
+    for (const a of store.data.agents) {
+      if (!a.paidBackup) continue;
+      a.provider = a.paidBackup.provider;
+      a.model = a.paidBackup.model;
+      delete a.paidBackup;
+      n++;
+    }
+    store.save();
+    res.json({ restored: n });
+  });
+
+  // --- Taller de Impresión 3D ---
+  app.get('/api/cad/detect', async (_req, res) => res.json(await detectCad(store.data.settings)));
+  app.get('/api/cad/jobs', (_req, res) => res.json(store.data.cadJobs || []));
+  app.post('/api/cad/extract', (req, res) => res.json(extractCadBlocks(String(req.body?.text || ''))));
+  const cadJob = (id) => (store.data.cadJobs || []).find((j) => j.id === id);
+  app.post('/api/cad/run', async (req, res) => {
+    const code = String(req.body?.code || '');
+    const kind = req.body?.kind;
+    if (!code.trim() || !['blender', 'openscad', 'freecad'].includes(kind)) return res.status(400).json({ error: 'Falta el código o el programa' });
+    const id = Store.id('j_');
+    const log = streamer(`cad:${id}`);
+    try {
+      const job = await runCad({ settings: store.data.settings, dataDir: store.dir, kind, code, name: String(req.body?.name || 'modelo').slice(0, 60), gui: Boolean(req.body?.gui), onLog: log });
+      log.end();
+      const record = { id, ...job, code: code.slice(0, 50000), taskId: req.body?.taskId || null, createdAt: new Date().toISOString() };
+      (store.data.cadJobs ||= []).unshift(record);
+      if (store.data.cadJobs.length > 60) store.data.cadJobs.length = 60;
+      store.save();
+      bus.emit('event', { type: 'cad' });
+      res.json(record);
+    } catch (err) {
+      log.end();
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.post('/api/cad/jobs/:id/open', async (req, res) => {
+    const job = cadJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'No existe' });
+    const ok = req.body?.what === 'folder' ? openPath(job.dir) : await openInApp(store.data.settings, job);
+    res.status(ok ? 200 : 400).json(ok ? { ok } : { error: 'No pude abrirlo: revisa que el programa esté instalado' });
+  });
+  app.post('/api/cad/jobs/:id/slice', async (req, res) => {
+    const job = cadJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'No existe' });
+    try {
+      const r = await sliceJob(store.data.settings, job, streamer(`cad:${job.id}`));
+      job.files = r.files;
+      store.save();
+      bus.emit('event', { type: 'cad' });
+      res.json(r);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.get('/api/cad/jobs/:id/files/:name', (req, res) => {
+    const job = cadJob(req.params.id);
+    const name = path.basename(req.params.name);
+    if (!job || !listFiles(job.dir).some((f) => f.name === name)) return res.status(404).json({ error: 'No existe' });
+    res.sendFile(path.join(job.dir, name));
+  });
+  app.delete('/api/cad/jobs/:id', (req, res) => {
+    store.data.cadJobs = (store.data.cadJobs || []).filter((j) => j.id !== req.params.id);
+    store.save();
+    res.json({ ok: true });
+  });
+
+  // --- Asistente de conexión: el cerebro te guía para conectar las IAs ---
+  app.get('/api/assistant', (_req, res) => res.json(store.data.chats._asistente || []));
+  app.delete('/api/assistant', (_req, res) => {
+    delete store.data.chats._asistente;
+    store.save();
+    res.json({ ok: true });
+  });
+  app.post('/api/assistant', async (req, res) => {
+    const message = String(req.body?.message || '').trim().slice(0, 4000);
+    if (!message) return res.status(400).json({ error: 'Escribe tu pregunta' });
+    const s = store.data.settings;
+    const brain = store.data.agents.find((a) => a.isBrain) || store.data.agents[0];
+    const clis = await detectClis();
+    const status = Object.entries(PROVIDERS).map(([id, p]) => {
+      const users = store.data.agents.filter((a) => a.provider === id).map((a) => a.name);
+      const extra = (s.accounts || []).filter((a) => a.provider === id).length;
+      return `- ${id} (${p.label}, ${p.tier}): ${hasKey(s, id) ? 'CONECTADO' : 'sin conectar'}${p.cli ? `, ${clis[id] ? 'instalada' : 'no instalada'}` : ''}${extra ? `, ${extra} cuentas extra` : ''}. IAs: ${users.join(', ') || 'ninguna'}`;
+    }).join('\n');
+    const history = (store.data.chats._asistente ||= []);
+    history.push({ role: 'user', content: message, at: new Date().toISOString() });
+    const onDelta = streamer('chat:_asistente');
+    agentStatus(brain.id, 'thinking', 'Ayudando a conectar las IAs…');
+    try {
+      const r = await callModel(s, {
+        provider: brain.provider, model: brain.model, agent: brain, effort: 'low', onDelta,
+        system: `${buildSystem(brain)}\n\n## Ahora eres el asistente de conexión de la oficina
+Ayudas al usuario (principiante, en ${process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'Mac' : 'Linux'}) a conectar IAs, prefiriendo siempre opciones GRATIS o que usen suscripciones que ya paga. Pasos cortos y numerados.
+Puedes proponer acciones que el usuario ejecuta con un clic escribiendo exactamente una de estas marcas en una línea propia:
+{{instalar:cli-codex}} {{instalar:cli-claude}} {{instalar:cli-opencode}} {{instalar:cli-gemini}} → instala esa herramienta con npm.
+{{sesion:cli-codex}} (o cli-claude, cli-opencode, cli-gemini) → abre una terminal para iniciar sesión.
+{{clave:google}} (o groq, cerebras, openrouter, mistral…) → abre el formulario para pegar la clave de ese proveedor.
+{{ollama:gemma3}} → descarga ese modelo de Ollama.
+{{modo-gratis}} → pasa las IAs de pago a modelos gratis.
+Estado actual de la oficina:\n${status}`,
+        messages: history.slice(-12).map(({ role, content }) => ({ role, content })),
+      });
+      onDelta.end();
+      const reply = r.simulated
+        ? 'Te ayudo a conectar las IAs gratis (respuesta simulada: conecta a Claude para que te responda de verdad):\n\n1. Lo más fácil y gratis es **Gemini CLI** con tu cuenta de Google.\n{{instalar:cli-gemini}}\n{{sesion:cli-gemini}}\n2. Luego saca una clave gratis de **Groq** (muy rápida).\n{{clave:groq}}\n3. Y pasa las IAs de pago a modelos gratis.\n{{modo-gratis}}'
+        : r.text;
+      history.push({ role: 'assistant', content: reply, simulated: r.simulated, at: new Date().toISOString() });
+      if (history.length > 40) history.splice(0, history.length - 40);
+      agentStatus(brain.id, 'done', 'Listo');
+      store.save();
+      res.json({ reply, simulated: r.simulated, history });
+    } catch (err) {
+      onDelta.end();
+      history.pop();
+      agentStatus(brain.id, 'error', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // --- Copia de seguridad ---
   app.get('/api/export', (_req, res) => {
     const { settings, ...rest } = store.data;
-    const { apiKeys: _omit, ...safeSettings } = settings;
+    const { apiKeys: _omit, accounts: _acc, ...safeSettings } = settings;
     res.setHeader('Content-Disposition', 'attachment; filename="oficina-ias-respaldo.json"');
     res.json({ ...rest, settings: safeSettings, exportedAt: new Date().toISOString() });
   });
@@ -524,9 +803,9 @@ export function createApp(store) {
     const b = req.body || {};
     if (!Array.isArray(b.agents) || !Array.isArray(b.notes)) return res.status(400).json({ error: 'Archivo de respaldo no válido' });
     // Las claves y los comandos de las CLIs son de este computador: un respaldo ajeno no debe poder cambiarlos.
-    const { apiKeys, cli } = store.data.settings;
-    const { apiKeys: _k, cli: _c, ...importedSettings } = b.settings || {};
-    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli } };
+    const { apiKeys, cli, accounts, cadPaths } = store.data.settings;
+    const { apiKeys: _k, cli: _c, accounts: _a, cadPaths: _p, ...importedSettings } = b.settings || {};
+    store.data = { ...store.data, ...b, settings: { ...store.data.settings, ...importedSettings, apiKeys, cli, accounts, cadPaths } };
     store.flush();
     bus.emit('event', { type: 'notes' });
     res.json({ ok: true });

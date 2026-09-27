@@ -39,7 +39,7 @@ export class Notes {
     return this.all.find((n) => norm(n.title) === t);
   }
 
-  create({ title, content = '', type = 'nota', tags = [], source = null, x, y }) {
+  create({ title, content = '', type = 'nota', tags = [], source = null, hub = null, x, y }) {
     const now = new Date().toISOString();
     let finalTitle = (title || 'Sin título').trim().slice(0, 140);
     // Títulos únicos, como en Obsidian.
@@ -55,6 +55,8 @@ export class Notes {
       type: NOTE_TYPES.includes(type) ? type : 'nota',
       tags: [...new Set(tags.map((t) => t.toLowerCase()))],
       source,
+      // Núcleo del grafo al que pertenece (el cerebro o una persona / computador).
+      hub: typeof hub === 'string' && hub ? hub.slice(0, 40) : 'cerebro',
       pinned: false,
       createdAt: now,
       updatedAt: now,
@@ -66,7 +68,7 @@ export class Notes {
   }
 
   /** Crea la nota o, si ya existe una con ese título, le añade el contenido. */
-  upsertIdea(title, extra, source) {
+  upsertIdea(title, extra, source, hub) {
     const existing = this.findByTitle(title);
     if (existing) {
       if (extra && !existing.content.includes(extra)) {
@@ -76,14 +78,14 @@ export class Notes {
       }
       return existing;
     }
-    return this.create({ title, content: extra, type: 'idea', source });
+    return this.create({ title, content: extra, type: 'idea', source, hub });
   }
 
   update(id, patch) {
     const note = this.get(id);
     if (!note) return null;
     const oldTitle = note.title;
-    for (const k of ['title', 'content', 'type', 'tags', 'pinned', 'x', 'y']) {
+    for (const k of ['title', 'content', 'type', 'tags', 'pinned', 'hub', 'x', 'y']) {
       if (patch[k] !== undefined) note[k] = patch[k];
     }
     // Renombrar actualiza los [[enlaces]] que apuntaban al título anterior.
@@ -150,14 +152,24 @@ export class Notes {
    * Grafo: nodos = notas (+ etiquetas y agentes si se piden);
    * aristas = [[enlaces]], etiquetas y autoría.
    */
-  graph({ includeTags = true, includeAgents = true, agents = [] } = {}) {
+  graph({ includeTags = true, includeAgents = true, agents = [], hubs = [] } = {}) {
     const nodes = [];
     const links = [];
     const byTitle = new Map(this.all.map((n) => [norm(n.title), n]));
     const ghostIds = new Map();
 
     for (const n of this.all) {
-      nodes.push({ id: n.id, label: n.title, kind: 'note', type: n.type, tags: n.tags, createdAt: n.createdAt });
+      nodes.push({ id: n.id, label: n.title, kind: 'note', type: n.type, tags: n.tags, hub: n.hub || 'cerebro', createdAt: n.createdAt });
+    }
+    // Núcleos: un nodo grande por persona, unido a sus notas principales
+    // (los aportes ya cuelgan de su tarea).
+    if (hubs.length) {
+      const ids = new Set(hubs.map((h) => h.id));
+      for (const h of hubs) nodes.push({ id: `hub:${h.id}`, label: h.name, kind: 'hub', hub: h.id, color: h.color, emoji: h.emoji });
+      for (const n of this.all) {
+        const h = n.hub || 'cerebro';
+        if (ids.has(h) && n.type !== 'aporte') links.push({ source: `hub:${h}`, target: n.id, kind: 'hub' });
+      }
     }
     for (const n of this.all) {
       for (const l of parseLinks(n.content)) {

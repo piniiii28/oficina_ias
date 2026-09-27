@@ -4,7 +4,7 @@
 export type Furniture = {
   i: number;
   j: number;
-  kind: 'pingpong' | 'beanbag' | 'rug' | 'pool' | 'bench' | 'gym' | 'telescope' | 'grill' | 'umbrella' | 'desk' | 'plant' | 'coffee' | 'sofa' | 'shelf' | 'board' | 'server' | 'easel' | 'table' | 'vending' | 'reception' | 'arcade' | 'globe' | 'cabinet' | 'bigtable' | 'piano' | 'aquarium';
+  kind: 'printer' | 'filament' | 'pingpong' | 'beanbag' | 'rug' | 'pool' | 'bench' | 'gym' | 'telescope' | 'grill' | 'umbrella' | 'desk' | 'plant' | 'coffee' | 'sofa' | 'shelf' | 'board' | 'server' | 'easel' | 'table' | 'vending' | 'reception' | 'arcade' | 'globe' | 'cabinet' | 'bigtable' | 'piano' | 'aquarium';
   w?: number; // ancho en casillas (eje i)
   h?: number; // fondo en casillas (eje j)
   label?: string;
@@ -151,6 +151,21 @@ export const FLOORS: FloorDef[] = [
     hangouts: [{ i: 9, j: 4 }, { i: 1, j: 6 }],
   },
   {
+    id: 'impresion3d', name: 'Taller de Impresión 3D', emoji: '🖨️', department: 'impresion3d',
+    cols: 11, rows: 6, floorA: '#2f3d1c', floorB: '#384922', wall: '#84cc16',
+    desks: deskRow(3, 1, 4),
+    furniture: [
+      { i: 6, j: 5, kind: 'rug', w: 3, h: 1 },
+      ...deskRow(3, 1, 4).map((d, k) => ({ ...d, kind: 'desk' as const, label: ['🧊', '📐', '⚙️', '🧅'][k] })),
+      { i: 5, j: 0, kind: 'printer' }, { i: 6, j: 0, kind: 'printer' }, { i: 7, j: 0, kind: 'printer' },
+      { i: 10, j: 1, kind: 'filament' }, { i: 10, j: 2, kind: 'filament' },
+      { i: 1, j: 0, kind: 'board', w: 2, h: 0.3 }, { i: 10, j: 5, kind: 'plant' }, { i: 9, j: 0, kind: 'cabinet' },
+    ],
+    art: ['🧊', '🛠️'],
+    elevator: { i: 0, j: 4 },
+    hangouts: [{ i: 6, j: 1 }, { i: 9, j: 2 }, { i: 7, j: 4 }],
+  },
+  {
     id: 'lobby', name: 'Lobby · Cafetería · Sala de reuniones', emoji: '☕',
     cols: 14, rows: 7, floorA: '#5a4632', floorB: '#6a543c', wall: '#b08968',
     desks: [],
@@ -267,7 +282,7 @@ export function tileCenter(f: FloorDef, i: number, j: number) {
 // Qué pasa cuando tu avatar usa un mueble.
 export const USE: Partial<Record<Furniture['kind'], string>> = {
   pingpong: '🏓 ¡Punto!', beanbag: '😌 Relajado', coffee: '☕ ¡Café!', vending: '🥤 ¡Refresco!', arcade: '🕹️ ¡Nuevo récord!', piano: '🎹 ♪♫', pool: '🏊 ¡Al agua!', gym: '🏋️ ¡Fuerza!',
-  telescope: '🔭 ¡Se ve la luna!', aquarium: '🐠 ¡Hola, peces!', shelf: '📖 Leyendo…', grill: '🍖 ¡Asado!', table: '🍩 ¡Rico!', sofa: '🛋️ Descansando', easel: '🎨 Pintando', globe: '🌍 ¿A dónde viajo?', board: '📝 Anotando ideas', reception: '🛎️ ¡Ding!',
+  printer: '🖨️ Imprimiendo capa por capa…', filament: '🧵 Cambiando el filamento', telescope: '🔭 ¡Se ve la luna!', aquarium: '🐠 ¡Hola, peces!', shelf: '📖 Leyendo…', grill: '🍖 ¡Asado!', table: '🍩 ¡Rico!', sofa: '🛋️ Descansando', easel: '🎨 Pintando', globe: '🌍 ¿A dónde viajo?', board: '📝 Anotando ideas', reception: '🛎️ ¡Ding!',
 };
 
 /** Casilla libre junto a un mueble (para usarlo). */

@@ -21,7 +21,7 @@ export const TYPE_META: Record<NoteType, { label: string; emoji: string; color: 
 };
 
 export function Notes() {
-  const { notesVersion, pendingNote, clearPendingNote, agents, setView, toast } = useOffice();
+  const { notesVersion, pendingNote, clearPendingNote, agents, setView, toast, hubs } = useOffice();
   const [list, setList] = useState<NoteSummary[]>([]);
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState<NoteType | ''>('');
@@ -180,6 +180,11 @@ export function Notes() {
               <select value={note.type} onChange={async (e) => { setNote(await api.updateNote(note.id, { type: e.target.value as NoteType })); load(); }}>
                 {(Object.keys(TYPE_META) as NoteType[]).map((t) => <option key={t} value={t}>{TYPE_META[t].emoji} {TYPE_META[t].label}</option>)}
               </select>
+              {hubs.length > 0 && (
+                <select value={note.hub || 'cerebro'} title="Núcleo del grafo al que pertenece" onChange={async (e) => { setNote(await api.updateNote(note.id, { hub: e.target.value })); load(); }}>
+                  {hubs.map((h) => <option key={h.id} value={h.id}>{h.emoji} {h.name}</option>)}
+                </select>
+              )}
               <button className="btn btn--ghost small" onClick={() => setEditing((e) => !e)}>{editing ? '👁 Ver' : '✏️ Editar'}</button>
               <button className="btn btn--ghost small" onClick={async () => { setNote(await api.updateNote(note.id, { pinned: !note.pinned })); load(); }}>{note.pinned ? 'Desfijar' : '📌 Fijar'}</button>
               <button className="btn btn--ghost small" title="El equipo trabaja sobre esta nota y enlaza el resultado" onClick={async () => {

@@ -1,6 +1,14 @@
 // Manuales de trabajo: el "entrenamiento" de fábrica de cada IA. Son
 // procedimientos concretos que se incluyen en cada petición que recibe.
 export const PLAYBOOKS = {
+  'blender-3d': `Flujo: 1) confirma medidas y uso de la pieza; 2) script bpy que limpia la escena, modela y aplica modificadores; 3) une las piezas que deban imprimirse juntas y exporta STL a OUT_DIR.
+Para imprimir: paredes de al menos 1,2 mm, voladizos de máximo 45°, base plana y sin mallas abiertas. Si algo es orgánico, usa subdivisión con moderación para no pasar de ~300 mil caras.`,
+  'openscad-3d': `Empieza con los parámetros (medidas en mm, holgura = 0.3), luego módulos pequeños y reutilizables y al final la llamada principal.
+Usa difference() para huecos, minkowski/hull para redondeos y $fn = 64 o más en curvas visibles. Deja comentarios cortos que expliquen cada parámetro.`,
+  'freecad-3d': `Script: import FreeCAD, Part, Mesh; crea un documento, construye con Part (makeBox, makeCylinder, fuse, cut, fillet), recalcula y exporta con Mesh.export([obj], os.path.join(OUT_DIR, "pieza.stl")).
+Para encajes deja 0,2–0,4 mm de holgura y para roscas prefiere insertos o tuercas embutidas.`,
+  'slicer-3d': `Revisa: orientación con la cara más grande abajo, voladizos (>45° necesita soporte), puentes, grosor mínimo de pared y tolerancias.
+Entrega una tabla de configuración: material, boquilla/cama (°C), altura de capa, paredes, relleno (% y patrón), soportes, velocidad y tiempo y filamento estimados.`,
   cerebro: `1. Reformula el objetivo en una frase y detecta qué falta.
 2. Divide en subtareas independientes; marca dependencias solo cuando alguien necesita la entrega de otro.
 3. Integra: elimina repeticiones, resuelve contradicciones y deja claro quién aportó qué.

@@ -4,18 +4,16 @@ import type { AvatarConfig, Settings as SettingsT } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
+import { ConnectCenter, CLI_MATCH } from '../components/ConnectCenter';
 
 export function Settings() {
-  const { providers, agents, reloadAgents, toast, vaultPath } = useOffice();
+  const { reloadAgents, toast, vaultPath } = useOffice();
   const [s, setS] = useState<S | null>(null);
-  const [keys, setKeys] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.settings().then(setS);
   }, []);
   if (!s) return <div className="empty">Cargando…</div>;
-
-  const usage = (p: string) => agents.filter((a) => a.provider === p).map((a) => a.name);
 
   async function save(patch: Record<string, unknown>, msg = '✅ Ajustes guardados') {
     setS(await api.saveSettings(patch));
@@ -35,46 +33,10 @@ export function Settings() {
 
   return (
     <div className="settings">
-      <section className="card">
-        <h2>🔑 Conectar las IAs</h2>
-        <p className="muted">
-          Las claves se guardan solo en tu computador (<code>data/oficina.json</code>) y nunca se muestran completas. Si una IA no tiene clave, responde en modo demo.
-          Consejo: con una sola clave de <b>OpenRouter</b> se conectan varias IAs de la oficina a la vez.
-        </p>
-        <div className="keys">
-          {providers.filter((p) => !p.keyless && !p.cli).map((p) => {
-            const k = s.keys[p.id];
-            const who = usage(p.id);
-            return (
-              <div key={p.id} className="key-row">
-                <div>
-                  <strong>{p.label}</strong> {k?.configured ? <span className="pill pill--done">conectado {k.preview && `· ${k.preview}`}</span> : <span className="pill">sin clave</span>}
-                  <div className="small muted">{who.length ? `Usan esta clave: ${who.join(', ')}` : 'Ninguna IA la usa todavía'} · <a href={p.keyUrl} target="_blank" rel="noreferrer">obtener clave ↗</a></div>
-                </div>
-                <div className="row">
-                  <input type="password" placeholder="Pega tu clave…" value={keys[p.id] || ''} onChange={(e) => setKeys({ ...keys, [p.id]: e.target.value })} />
-                  <button className="btn btn--primary small" disabled={!keys[p.id]} onClick={async () => { await save({ apiKeys: { [p.id]: keys[p.id] } }, `🔌 ${p.label} conectado`); setKeys({ ...keys, [p.id]: '' }); }}>Guardar</button>
-                  {k?.configured && <TestButton id={p.id} />}
-                  {k?.preview && <button className="btn btn--ghost small" onClick={() => save({ apiKeys: { [p.id]: null } }, 'Clave eliminada')}>Quitar</button>}
-                </div>
-              </div>
-            );
-          })}
-          <div className="key-row">
-            <div>
-              <strong>Ollama (modelos locales gratis)</strong> {s.ollamaEnabled ? <span className="pill pill--done">activado</span> : <span className="pill">apagado</span>}
-              <div className="small muted">Instala Ollama y descarga modelos (p. ej. <code>ollama pull gemma3</code>). Usan Ollama: {usage('ollama').join(', ') || 'nadie'}</div>
-            </div>
-            <div className="row">
-              {s.ollamaEnabled && <TestButton id="ollama" />}
-              <input placeholder="http://localhost:11434/v1" defaultValue={s.ollamaUrl} onBlur={(e) => e.target.value !== s.ollamaUrl && save({ ollamaUrl: e.target.value })} />
-              <label className="check"><input type="checkbox" checked={s.ollamaEnabled} onChange={(e) => save({ ollamaEnabled: e.target.checked })} /> Activar</label>
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <ConnectCenter s={s} setS={setS} />
       <CliSection s={s} save={save} />
+      <HubsSection s={s} setS={setS} />
+      <CadSection s={s} save={save} />
       <MeSection />
 
       <section className="card">
@@ -130,13 +92,6 @@ export function Settings() {
   );
 }
 
-// Qué IAs de la plantilla encajan con cada herramienta de línea de comandos.
-const CLI_MATCH: Record<string, string[]> = {
-  'cli-codex': ['codex', 'chatgpt', 'estratega', 'coach'],
-  'cli-claude': ['cerebro', 'sonnet-qa', 'bibliotecaria'],
-  'cli-opencode': ['opencode'],
-  'cli-gemini': ['gemini-data', 'gemini-visual'],
-};
 
 function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, unknown>, msg?: string) => Promise<void> }) {
   const { providers, agents, reloadAgents, toast } = useOffice();
@@ -152,8 +107,8 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
   }
 
   return (
-    <section className="card">
-      <h2>🖥️ Herramientas de línea de comandos</h2>
+    <details className="card">
+      <summary><h2 style={{ display: 'inline' }}>🖥️ Herramientas de línea de comandos (avanzado)</h2></summary>
       <p className="muted">
         Si ya tienes instaladas y con sesión iniciada herramientas como <b>Codex CLI</b>, <b>Claude Code</b>, <b>OpenCode</b> o <b>Gemini CLI</b>,
         la oficina puede usarlas en lugar de claves de API (usan tu suscripción). Se ejecutan en una carpeta temporal vacía y, por defecto, en modo solo lectura cuando la herramienta lo permite.
@@ -187,6 +142,65 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
             </div>
           );
         })}
+      </div>
+    </details>
+  );
+}
+
+/** Núcleos del grafo: las personas o computadores que usan la oficina. */
+function HubsSection({ s, setS }: { s: SettingsT; setS: (s: SettingsT) => void }) {
+  const { reloadHubs, toast } = useOffice();
+  const [list, setList] = useState(s.hubs);
+  const update = (i: number, patch: Partial<SettingsT['hubs'][number]>) => setList(list.map((h, j) => (j === i ? { ...h, ...patch } : h)));
+  return (
+    <section className="card">
+      <h2>🕸️ Núcleos del grafo</h2>
+      <p className="muted small">Cada persona o computador tiene su núcleo: sus notas y tareas quedan ahí y el grafo muestra qué temas comparten. Elige el tuyo arriba a la izquierda, en el menú.</p>
+      <div className="hub-edit">
+        {list.map((h, i) => (
+          <div key={h.id || i} className="row">
+            <input className="emoji-input" value={h.emoji} maxLength={4} onChange={(e) => update(i, { emoji: e.target.value })} aria-label="Emoji" />
+            <input value={h.name} disabled={h.id === 'cerebro'} onChange={(e) => update(i, { name: e.target.value })} aria-label="Nombre" />
+            <input type="color" value={h.color} onChange={(e) => update(i, { color: e.target.value })} aria-label="Color" />
+            {h.id !== 'cerebro' && <button className="btn btn--ghost small" onClick={() => setList(list.filter((_, j) => j !== i))}>Quitar</button>}
+          </div>
+        ))}
+      </div>
+      <div className="row">
+        <button className="btn btn--ghost small" onClick={() => setList([...list, { id: '', name: '', emoji: '🔵', color: '#94a3b8' }])}>＋ Otro núcleo</button>
+        <button className="btn btn--primary small" onClick={async () => {
+          const next = await api.saveSettings({ hubs: list });
+          setS(next);
+          setList(next.hubs);
+          await reloadHubs();
+          toast('🕸️ Núcleos guardados');
+        }}>Guardar núcleos</button>
+      </div>
+    </section>
+  );
+}
+
+/** Rutas de Blender, OpenSCAD, FreeCAD y laminadores (si no se detectan solos). */
+function CadSection({ s, save }: { s: SettingsT; save: (patch: Record<string, unknown>, msg?: string) => Promise<void> }) {
+  const { cadTools } = useOffice();
+  const [found, setFound] = useState<Record<string, string | null> | null>(null);
+  useEffect(() => {
+    api.cadDetect().then(setFound).catch(() => setFound({}));
+  }, [s.cadPaths]);
+  return (
+    <section className="card">
+      <h2>🖨️ Taller 3D</h2>
+      <p className="muted small">La oficina busca estos programas sola. Si instalaste alguno en otra carpeta, pega aquí la ruta del ejecutable (por ejemplo <code>C:\Program Files\Blender Foundation\Blender 4.2\blender.exe</code>).</p>
+      <div className="keys">
+        {cadTools.map((t) => (
+          <div key={t.id} className="key-row">
+            <div>
+              <strong>{t.label}</strong> {found && (found[t.id] ? <span className="pill pill--done">encontrado</span> : <span className="pill">no encontrado</span>)}
+              <div className="small muted">{found?.[t.id] || <a href={t.url} target="_blank" rel="noreferrer">descargar gratis ↗</a>}</div>
+            </div>
+            <input placeholder="Ruta (opcional)" defaultValue={s.cadPaths?.[t.id] || ''} onBlur={(e) => e.target.value !== (s.cadPaths?.[t.id] || '') && save({ cadPaths: { [t.id]: e.target.value } }, 'Ruta guardada')} />
+          </div>
+        ))}
       </div>
     </section>
   );

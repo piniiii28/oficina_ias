@@ -1,7 +1,7 @@
 // Estado compartido de la app: agentes, estados animados, tareas y eventos.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { play } from './sounds';
-import { api, type Agent, type AgentState, type Department, type Flow, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
+import { api, setActiveHub, type Agent, type AgentState, type CadTool, type Department, type FreeModel, type Flow, type Hub, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
 
 export type Live = { status: AgentState; message: string; at: number };
 
@@ -11,6 +11,13 @@ type Ctx = {
   providers: Provider[];
   vaultPath: string;
   flows: Flow[];
+  freeModels: Record<string, FreeModel[]>;
+  cadTools: CadTool[];
+  hubs: Hub[];
+  reloadHubs: () => Promise<void>;
+  hub: string;
+  setHub: (id: string) => void;
+  cadVersion: number;
   live: Record<string, Live>;
   tasks: Task[];
   meetings: Meeting[];
@@ -31,7 +38,7 @@ type Ctx = {
   setView: (v: View) => void;
 };
 
-export type View = 'oficina' | 'tablero' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'agentes' | 'ajustes';
+export type View = 'oficina' | 'tablero' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'taller' | 'agentes' | 'ajustes';
 
 const OfficeCtx = createContext<Ctx | null>(null);
 
@@ -44,6 +51,30 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [vaultPath, setVaultPath] = useState('');
   const [flows, setFlows] = useState<Flow[]>([]);
+  const [freeModels, setFreeModels] = useState<Record<string, FreeModel[]>>({});
+  const [cadTools, setCadTools] = useState<CadTool[]>([]);
+  const [hubs, setHubs] = useState<Hub[]>([]);
+  const [cadVersion, setCadVersion] = useState(0);
+  // Quién usa la oficina en este computador (su núcleo del grafo).
+  const [hub, setHubState] = useState<string>(() => {
+    let h = 'cerebro';
+    try {
+      h = localStorage.getItem('oficina.nucleo') || 'cerebro';
+    } catch {
+      /* sin almacenamiento local */
+    }
+    setActiveHub(h);
+    return h;
+  });
+  const setHub = useCallback((id: string) => {
+    setActiveHub(id);
+    setHubState(id);
+    try {
+      localStorage.setItem('oficina.nucleo', id);
+    } catch {
+      /* sin almacenamiento local */
+    }
+  }, []);
   const [live, setLive] = useState<Record<string, Live>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -80,6 +111,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const reloadAgents = useCallback(async () => setAgents(await api.agents()), []);
   const reloadTasks = useCallback(async () => setTasks(await api.tasks()), []);
+  const reloadHubs = useCallback(async () => setHubs((await api.settings()).hubs || []), []);
 
   useEffect(() => {
     api.meta().then((m) => {
@@ -87,11 +119,14 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setProviders(m.providers);
       setVaultPath(m.vaultPath);
       setFlows(m.flows || []);
+      setFreeModels(m.freeModels || {});
+      setCadTools(m.cadTools || []);
     });
+    reloadHubs();
     reloadAgents();
     reloadTasks();
     api.meetings().then(setMeetings);
-  }, [reloadAgents, reloadTasks]);
+  }, [reloadAgents, reloadTasks, reloadHubs]);
 
   useEffect(() => {
     const es = new EventSource('/api/events');
@@ -137,6 +172,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
           copy[i] = e.meeting;
           return copy;
         });
+      } else if (e.type === 'cad') {
+        setCadVersion((v) => v + 1);
       } else if (e.type === 'cards') {
         setCardsVersion((v) => v + 1);
       } else if (e.type === 'notes') {
@@ -156,11 +193,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, flows, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
+      agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, flows, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, hubs, reloadHubs, hub, setHub, cadVersion, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

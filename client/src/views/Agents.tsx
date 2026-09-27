@@ -1,6 +1,6 @@
 // Directorio del equipo: ver todas las IAs, contratar nuevas y restaurar la plantilla.
 import { useState } from 'react';
-import { api, type Agent } from '../api';
+import { api, TIER_LABEL, type Agent } from '../api';
 import { Chibi, ACCESSORIES, HAIR_STYLES, EYE_STYLES } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
 import { Stats } from '../components/Stats';
@@ -24,13 +24,13 @@ function randomAvatar(): Agent['avatar'] {
 }
 
 export function Agents() {
-  const { agents, departments, providers, reloadAgents, toast, live } = useOffice();
+  const { agents, departments, providers, reloadAgents, toast, live, freeModels, setView } = useOffice();
   const [selected, setSelected] = useState<Agent | null>(null);
   const [creating, setCreating] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [q, setQ] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
-  const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'openrouter', model: '', skills: '', system: '' });
+  const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'groq', model: 'llama-3.3-70b-versatile', skills: '', system: '' });
   const [avatar, setAvatar] = useState(randomAvatar);
   const dept = (id: string) => departments.find((d) => d.id === id);
 
@@ -83,6 +83,7 @@ export function Agents() {
               }
             }} />
           </label>
+          <button className="btn btn--ghost" onClick={() => setView('ajustes')} title="Conecta proveedores gratis o tus suscripciones">🔌 Conectar IAs</button>
           <button className="btn btn--ghost" onClick={() => setBrowsing((c) => !c)}>📇 Catálogo</button>
           <button className="btn btn--primary" onClick={() => setCreating((c) => !c)}>＋ Crear IA</button>
         </div>
@@ -134,11 +135,19 @@ export function Agents() {
                 </select>
               </label>
               <label>Proveedor
-                <select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })}>
-                  {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                <select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value, model: freeModels[e.target.value]?.[0]?.id || '' })}>
+                  {(['gratis', 'mixto', 'suscripcion', 'pago'] as const).map((t) => (
+                    <optgroup key={t} label={TIER_LABEL[t]}>
+                      {providers.filter((p) => p.tier === t).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
+                <small className="muted">{providers.find((p) => p.id === form.provider)?.hint}</small>
               </label>
-              <label>Modelo<input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej.: meta-llama/llama-3.3-70b-instruct" /></label>
+              <label>Modelo
+                <input list="nuevo-modelos" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={providers.find((p) => p.id === form.provider)?.cli ? 'lo elige la herramienta' : 'id del modelo'} />
+                <datalist id="nuevo-modelos">{(freeModels[form.provider] || []).map((m) => <option key={m.id} value={m.id}>{m.label} (gratis · {m.for})</option>)}</datalist>
+              </label>
               <label>Habilidades<input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="cocina, recetas, nutrición" /></label>
             </div>
           </div>

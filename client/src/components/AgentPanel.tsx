@@ -1,6 +1,6 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
-import { api, levelOf, type Agent, type ChatMessage } from '../api';
+import { api, levelOf, TIER_LABEL, type Account, type Agent, type ChatMessage } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { MicButton, SpeakButton } from './Voice';
@@ -228,9 +228,14 @@ function MemoryTab({ agent }: { agent: Agent }) {
 const SKINS = ['#fde7d6', '#f6d7c3', '#f1c7a5', '#e8b890', '#e0ac69', '#d59a6a', '#c68642', '#8d5524'];
 
 function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void }) {
-  const { reloadAgents, toast, providers, departments } = useOffice();
+  const { reloadAgents, toast, providers, departments, freeModels } = useOffice();
   const [f, setF] = useState(agent);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   useEffect(() => setF(agent), [agent]);
+  useEffect(() => {
+    api.settings().then((s) => setAccounts(s.accounts || []));
+  }, []);
+  const mine = accounts.filter((a) => a.provider === f.provider);
   const set = <K extends keyof Agent>(k: K, v: Agent[K]) => setF((x) => ({ ...x, [k]: v }));
   const setAv = (k: keyof Agent['avatar'], v: string) => setF((x) => ({ ...x, avatar: { ...x.avatar, [k]: v } }));
 
@@ -238,6 +243,7 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
     await api.updateAgent(agent.id, {
       name: f.name, role: f.role, department: f.department, provider: f.provider, model: f.model,
       skills: f.skills, system: f.system, avatar: f.avatar, enabled: f.enabled,
+      account: mine.some((a) => a.id === f.account) ? f.account : 'default',
     });
     await reloadAgents();
     toast('✅ Perfil guardado');
@@ -263,10 +269,25 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
         <label>Rol<input value={f.role} onChange={(e) => set('role', e.target.value)} /></label>
         <label>Proveedor
           <select value={f.provider} onChange={(e) => set('provider', e.target.value)}>
-            {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+            {(['gratis', 'mixto', 'suscripcion', 'pago'] as const).map((t) => (
+              <optgroup key={t} label={TIER_LABEL[t]}>
+                {providers.filter((p) => p.tier === t).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </optgroup>
+            ))}
           </select>
         </label>
-        <label>Modelo<input value={f.model} onChange={(e) => set('model', e.target.value)} placeholder="id del modelo" /></label>
+        <label>Modelo
+          <input list={`perfil-modelos-${f.provider}`} value={f.model} onChange={(e) => set('model', e.target.value)} placeholder={providers.find((p) => p.id === f.provider)?.cli ? 'lo elige la herramienta' : 'id del modelo'} />
+          <datalist id={`perfil-modelos-${f.provider}`}>{(freeModels[f.provider] || []).map((m) => <option key={m.id} value={m.id}>{m.label} (gratis · {m.for})</option>)}</datalist>
+        </label>
+        {mine.length > 0 && (
+          <label>Cuenta que usa primero
+            <select value={f.account || 'default'} onChange={(e) => set('account', e.target.value)}>
+              <option value="default">Principal</option>
+              {mine.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
+          </label>
+        )}
         {!agent.isBrain && (
           <label>Departamento
             <select value={f.department} onChange={(e) => set('department', e.target.value)}>

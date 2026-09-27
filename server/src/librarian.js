@@ -17,7 +17,7 @@ const STOP = new Set(
 
 const norm = (s) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 
-function tokens(text) {
+export function tokens(text) {
   return (norm(text).match(/[\p{L}\d]{4,}/gu) || []).filter((w) => !STOP.has(w));
 }
 

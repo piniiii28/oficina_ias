@@ -32,7 +32,7 @@ async function demoTurn(agent, topic, transcript, round) {
   return `${reply}${opener} enfocarnos en **${k}** desde mi rol de ${agent.role.toLowerCase()}. *(turno simulado)*`;
 }
 
-export async function runMeeting(store, notes, { topic, agentIds, rounds = 2 }) {
+export async function runMeeting(store, notes, { topic, agentIds, rounds = 2, hub = 'cerebro' }) {
   const agents = agentIds.map((id) => store.data.agents.find((a) => a.id === id)).filter(Boolean);
   const brain = store.data.agents.find((a) => a.isBrain);
   const meeting = {
@@ -105,6 +105,7 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2 }) 
       title: `Reunión: ${topic.slice(0, 70)}`,
       type: 'nota',
       tags: ['reunion'],
+      hub,
       source: { agentId: brain.id, meetingId: meeting.id },
       content: `# Reunión: ${topic}\n\n**Participantes:** ${agents.map((a) => a.name).join(', ')}\n\n## Resumen\n${meeting.summary}\n\n## Conversación\n${convo}`,
     });

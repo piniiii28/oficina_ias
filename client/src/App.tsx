@@ -8,6 +8,7 @@ import { Settings } from './views/Settings';
 import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
 import { Board } from './views/Board';
+import { Taller } from './views/Taller';
 import { Welcome } from './components/Welcome';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AchievementWatcher } from './components/Achievements';
@@ -21,12 +22,14 @@ const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'reuniones', label: 'Reuniones', icon: '🗣️' },
   { id: 'notas', label: 'Notas', icon: '📝' },
   { id: 'grafo', label: 'Grafo', icon: '🕸️' },
+  { id: 'taller', label: 'Taller 3D', icon: '🖨️' },
   { id: 'agentes', label: 'Equipo', icon: '👥' },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙️' },
 ];
 
 function Shell() {
-  const { view, setView, connected, toasts, tasks, agents } = useOffice();
+  const { view, setView, connected, toasts, tasks, agents, hubs, hub, setHub } = useOffice();
+  const me = hubs.find((h) => h.id === hub);
   const running = tasks.filter((t) => t.status !== 'done' && t.status !== 'error').length;
   const [sound, setSound] = useState(soundsOn);
   const [theme, setThemeState] = useState<string>(() => {
@@ -52,9 +55,17 @@ function Shell() {
           <span className="brand-logo">🧠</span>
           <div>
             <strong>Oficina de IAs</strong>
-            <small>{agents.length} IAs · cerebro Claude</small>
+            <small>{agents.length} IAs · {agents.filter((a) => a.live).length} conectadas</small>
           </div>
         </div>
+        {hubs.length > 0 && (
+          <label className="hub-picker" title="¿Quién usa la oficina en este computador? Tus notas y tareas quedan en tu núcleo del grafo.">
+            <span className="hub-dot" style={{ background: me?.color }}>{me?.emoji || '🧠'}</span>
+            <select value={hub} onChange={(e) => setHub(e.target.value)} aria-label="Núcleo activo">
+              {hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </label>
+        )}
         {NAV.map((n) => (
           <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => setView(n.id)}>
             <span>{n.icon}</span>
@@ -83,6 +94,7 @@ function Shell() {
         {view === 'reuniones' && <Meetings />}
         {view === 'notas' && <Notes />}
         {view === 'grafo' && <Graph />}
+        {view === 'taller' && <Taller />}
         {view === 'agentes' && <Agents />}
         {view === 'ajustes' && <Settings />}
         </ErrorBoundary>

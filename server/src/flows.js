@@ -6,6 +6,9 @@ export const FLOWS = [
   { id: 'estudio', name: '🎓 Aprender un tema', steps: [['perplexity'], ['phi-tutor', 'perplexity'], ['deepseek-r', 'phi-tutor'], ['bibliotecaria', 'phi-tutor']] },
   { id: 'negocio', name: '📈 Plan de negocio', steps: [['perplexity'], ['estratega', 'perplexity'], ['llama-fin', 'estratega'], ['lexi', 'estratega'], ['nemotron-pm', 'estratega', 'llama-fin']] },
   { id: 'datos', name: '📊 Analizar datos', steps: [['qwen-sql'], ['gemini-data', 'qwen-sql'], ['deepseek-r', 'gemini-data'], ['chatgpt', 'gemini-data']] },
+  { id: 'pieza3d', name: '🖨️ Pieza para imprimir (OpenSCAD)', steps: [['openscad-3d'], ['slicer-3d', 'openscad-3d']] },
+  { id: 'figura3d', name: '🧊 Figura 3D (Blender)', steps: [['blender-3d'], ['slicer-3d', 'blender-3d']] },
+  { id: 'mecanica3d', name: '⚙️ Pieza mecánica (FreeCAD)', steps: [['freecad-3d'], ['slicer-3d', 'freecad-3d']] },
 ];
 
 /** Convierte un flujo en ids de IAs y la plantilla de dependencias. */

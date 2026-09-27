@@ -11,24 +11,27 @@ import os from 'node:os';
 import path from 'node:path';
 import { simulate } from './demo.js';
 
+// tier: 'gratis' (tiene plan gratis), 'mixto' (modelos gratis y de pago),
+// 'suscripcion' (usa un plan que ya pagas) o 'pago' (cobra por uso).
 export const PROVIDERS = {
-  anthropic: { label: 'Anthropic (Claude)', keyUrl: 'https://console.anthropic.com/settings/keys' },
-  openai: { label: 'OpenAI (ChatGPT)', baseUrl: 'https://api.openai.com/v1', keyUrl: 'https://platform.openai.com/api-keys' },
-  google: { label: 'Google (Gemini)', keyUrl: 'https://aistudio.google.com/apikey' },
-  openrouter: { label: 'OpenRouter (cientos de modelos)', baseUrl: 'https://openrouter.ai/api/v1', keyUrl: 'https://openrouter.ai/keys' },
-  groq: { label: 'Groq (Llama, ultra rápido)', baseUrl: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys' },
-  mistral: { label: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', keyUrl: 'https://console.mistral.ai/api-keys' },
-  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', keyUrl: 'https://platform.deepseek.com/api_keys' },
-  xai: { label: 'xAI (Grok)', baseUrl: 'https://api.x.ai/v1', keyUrl: 'https://console.x.ai' },
-  perplexity: { label: 'Perplexity (búsqueda web)', baseUrl: 'https://api.perplexity.ai', keyUrl: 'https://www.perplexity.ai/settings/api' },
-  together: { label: 'Together AI (open source)', baseUrl: 'https://api.together.xyz/v1', keyUrl: 'https://api.together.xyz/settings/api-keys' },
-  ollama: { label: 'Ollama (local, gratis)', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
+  anthropic: { label: 'Anthropic (Claude)', tier: 'pago', hint: 'Claude por API, se paga aparte del plan. Si ya tienes el plan de Claude, mejor usa Claude Code.', keyUrl: 'https://console.anthropic.com/settings/keys' },
+  openai: { label: 'OpenAI (ChatGPT)', tier: 'pago', hint: 'GPT por API. Si ya tienes ChatGPT, mejor usa Codex CLI.', baseUrl: 'https://api.openai.com/v1', keyUrl: 'https://platform.openai.com/api-keys' },
+  google: { label: 'Google (Gemini)', tier: 'gratis', hint: 'Plan gratis con límites diarios. La clave se saca con tu cuenta de Google.', keyUrl: 'https://aistudio.google.com/apikey' },
+  openrouter: { label: 'OpenRouter (cientos de modelos)', tier: 'mixto', hint: 'Una sola clave para muchos modelos. Los que terminan en :free son gratis.', baseUrl: 'https://openrouter.ai/api/v1', keyUrl: 'https://openrouter.ai/keys' },
+  groq: { label: 'Groq (Llama, ultra rápido)', tier: 'gratis', hint: 'Plan gratis y muy rápido (Llama, Qwen, Kimi, GPT-OSS).', baseUrl: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys' },
+  cerebras: { label: 'Cerebras (gratis, ultra rápido)', tier: 'gratis', hint: 'Plan gratis con modelos abiertos (Llama, Qwen, GPT-OSS).', baseUrl: 'https://api.cerebras.ai/v1', keyUrl: 'https://cloud.cerebras.ai' },
+  mistral: { label: 'Mistral', tier: 'gratis', hint: 'Plan gratis de prueba (Mistral Small, Codestral).', baseUrl: 'https://api.mistral.ai/v1', keyUrl: 'https://console.mistral.ai/api-keys' },
+  deepseek: { label: 'DeepSeek', tier: 'pago', hint: 'De pago, pero cuesta centavos.', baseUrl: 'https://api.deepseek.com/v1', keyUrl: 'https://platform.deepseek.com/api_keys' },
+  xai: { label: 'xAI (Grok)', tier: 'pago', hint: 'Grok por API.', baseUrl: 'https://api.x.ai/v1', keyUrl: 'https://console.x.ai' },
+  perplexity: { label: 'Perplexity (búsqueda web)', tier: 'pago', hint: 'Respuestas con búsqueda web.', baseUrl: 'https://api.perplexity.ai', keyUrl: 'https://www.perplexity.ai/settings/api' },
+  together: { label: 'Together AI (open source)', tier: 'pago', hint: 'Modelos abiertos; suele regalar créditos al empezar.', baseUrl: 'https://api.together.xyz/v1', keyUrl: 'https://api.together.xyz/settings/api-keys' },
+  ollama: { label: 'Ollama (local, gratis)', tier: 'gratis', hint: 'Modelos en tu propio computador, gratis y sin límite.', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
   // Herramientas de línea de comandos instaladas en tu computador: usan tu
   // sesión ya iniciada (suscripción), sin clave de API.
-  'cli-codex': { label: 'Codex CLI (tu sesión de ChatGPT)', cli: true, bin: 'codex', command: 'codex exec --skip-git-repo-check --sandbox read-only -', keyUrl: 'https://github.com/openai/codex' },
-  'cli-claude': { label: 'Claude Code (tu sesión de Claude)', cli: true, bin: 'claude', command: 'claude -p', keyUrl: 'https://code.claude.com/docs' },
-  'cli-opencode': { label: 'OpenCode CLI', cli: true, bin: 'opencode', command: 'opencode run {prompt}', keyUrl: 'https://opencode.ai' },
-  'cli-gemini': { label: 'Gemini CLI (tu cuenta de Google)', cli: true, bin: 'gemini', command: 'gemini', keyUrl: 'https://github.com/google-gemini/gemini-cli' },
+  'cli-codex': { label: 'Codex CLI (tu sesión de ChatGPT)', tier: 'suscripcion', hint: 'Usa tu cuenta de ChatGPT (incluso la gratis, con pocos usos).', cli: true, bin: 'codex', npm: '@openai/codex', login: 'codex login', homeEnv: 'CODEX_HOME', command: 'codex exec --skip-git-repo-check --sandbox read-only -', keyUrl: 'https://github.com/openai/codex' },
+  'cli-claude': { label: 'Claude Code (tu sesión de Claude)', tier: 'suscripcion', hint: 'Usa tu plan Pro o Max de Claude.', cli: true, bin: 'claude', npm: '@anthropic-ai/claude-code', login: 'claude', homeEnv: 'CLAUDE_CONFIG_DIR', command: 'claude -p', keyUrl: 'https://code.claude.com/docs' },
+  'cli-opencode': { label: 'OpenCode CLI', tier: 'gratis', hint: 'Programa gratis; trae modelos gratis o usa los tuyos.', cli: true, bin: 'opencode', npm: 'opencode-ai', login: 'opencode auth login', command: 'opencode run {prompt}', keyUrl: 'https://opencode.ai' },
+  'cli-gemini': { label: 'Gemini CLI (tu cuenta de Google)', tier: 'gratis', hint: 'Gratis con tu cuenta de Google; con Gemini Pro tienes más usos.', cli: true, bin: 'gemini', npm: '@google/gemini-cli', login: 'gemini', command: 'gemini', keyUrl: 'https://github.com/google-gemini/gemini-cli' },
 };
 
 /** Comando configurado para una CLI (editable en Ajustes). */
@@ -53,15 +56,37 @@ export async function detectClis() {
 export function hasKey(settings, provider) {
   if (PROVIDERS[provider]?.cli) return Boolean(settings.cli?.[provider]?.enabled);
   if (PROVIDERS[provider]?.keyless) return Boolean(settings.apiKeys?.ollamaEnabled);
-  return Boolean(settings.apiKeys?.[provider] || envKey(provider));
+  return credentials(settings, provider).length > 0;
 }
+
+/**
+ * Cuentas de un proveedor, en orden de uso: primero la elegida para la IA,
+ * luego las demás. Si una cuenta se queda sin cupo, la oficina prueba con la
+ * siguiente. Cada cuenta: { id, label, key } (APIs) o { id, label, home } (CLIs).
+ */
+export function credentials(settings, provider, accountId = null) {
+  const def = PROVIDERS[provider];
+  if (!def) return [];
+  const extra = (settings.accounts || []).filter((a) => a.provider === provider && (def.cli ? a.home : a.key));
+  const mainKey = keyFor(settings, provider);
+  const main = def.cli || def.keyless
+    ? [{ id: 'default', label: 'Principal', key: null, home: null }]
+    : mainKey ? [{ id: 'default', label: 'Principal', key: mainKey }] : [];
+  const all = [...main, ...extra];
+  const i = all.findIndex((a) => a.id === accountId);
+  if (i > 0) all.unshift(...all.splice(i, 1));
+  return all;
+}
+
+/** ¿El error indica que la cuenta se quedó sin cupo? */
+export const isQuotaError = (msg) => /\b429\b|quota|rate.?limit|l[ií]mite de uso|usage limit|limit reached|exhausted|too many requests|insufficient/i.test(String(msg));
 
 function envKey(provider) {
   const names = {
     anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', google: 'GEMINI_API_KEY',
     openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY', mistral: 'MISTRAL_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY', xai: 'XAI_API_KEY', perplexity: 'PERPLEXITY_API_KEY',
-    together: 'TOGETHER_API_KEY',
+    together: 'TOGETHER_API_KEY', cerebras: 'CEREBRAS_API_KEY',
   };
   return names[provider] ? process.env[names[provider]] : undefined;
 }
@@ -81,7 +106,7 @@ export function setUsageSink(fn) {
  * messages: [{ role: 'user' | 'assistant', content: string }]
  * onDelta(fragmento): se llama con cada trozo de texto a medida que llega.
  */
-export async function callModel(settings, { provider, model, system, messages, agent, effort = 'medium', onDelta, signal }) {
+export async function callModel(settings, { provider, model, system, messages, agent, account, effort = 'medium', onDelta, signal }) {
   if (signal?.aborted) throw new Error('Cancelada');
   const live = settings.demoMode !== 'always' && hasKey(settings, provider);
   if (!live) {
@@ -91,22 +116,39 @@ export async function callModel(settings, { provider, model, system, messages, a
     return { text, simulated: true, provider, model };
   }
   const emit = onDelta || (() => {});
+  const creds = credentials(settings, provider, account ?? agent?.account ?? null);
   let text;
-  // Tiempo límite de 10 minutos por llamada, y cancelable desde la interfaz.
-  const sig = signal ? AbortSignal.any([signal, AbortSignal.timeout(600000)]) : AbortSignal.timeout(600000);
-  try {
-    if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, emit, sig);
-    else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit, sig, Boolean(settings.webSearch));
-    else if (provider === 'google') text = await callGemini(keyFor(settings, provider), model, system, messages, emit, sig);
-    else text = await callOpenAICompatible(provider, keyFor(settings, provider), model, system, messages, settings, emit, sig);
-  } catch (err) {
-    if (signal?.aborted) throw new Error('Cancelada');
-    if (sig.aborted) throw new Error(`${PROVIDERS[provider]?.label || provider}: no respondió en 10 minutos`);
-    throw err;
+  let used;
+  for (let i = 0; i < creds.length; i++) {
+    const cred = creds[i];
+    // Tiempo límite de 10 minutos por llamada, y cancelable desde la interfaz.
+    const sig = signal ? AbortSignal.any([signal, AbortSignal.timeout(600000)]) : AbortSignal.timeout(600000);
+    let wrote = false;
+    const tap = (d) => {
+      wrote = true;
+      emit(d);
+    };
+    try {
+      if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home);
+      else if (provider === 'anthropic') text = await callAnthropic(cred.key, model, system, messages, effort, tap, sig, Boolean(settings.webSearch));
+      else if (provider === 'google') text = await callGemini(cred.key, model, system, messages, tap, sig);
+      else text = await callOpenAICompatible(provider, cred.key, model, system, messages, settings, tap, sig);
+      used = cred;
+      break;
+    } catch (err) {
+      if (signal?.aborted) throw new Error('Cancelada');
+      if (sig.aborted) throw new Error(`${PROVIDERS[provider]?.label || provider}: no respondió en 10 minutos`);
+      // Sin cupo en esta cuenta: se prueba con la siguiente (si aún no escribió nada).
+      if (i < creds.length - 1 && !wrote && isQuotaError(err.message)) {
+        console.warn(`[cuentas] ${PROVIDERS[provider]?.label}: «${cred.label}» sin cupo, pruebo con «${creds[i + 1].label}»`);
+        continue;
+      }
+      throw err;
+    }
   }
   const inChars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
-  usageSink?.({ provider, model, calls: 1, inChars, outChars: text.length });
-  return { text, simulated: false, provider, model };
+  usageSink?.({ provider, model, calls: 1, inChars, outChars: text.length, account: used?.id });
+  return { text, simulated: false, provider, model, account: used?.id };
 }
 
 /** En modo demo, "escribe" el texto poco a poco para que se vea en vivo. */
@@ -268,11 +310,28 @@ export function splitCommand(command, prompt) {
 const CLI_DIR = path.join(os.tmpdir(), 'oficina-ias-cli');
 
 /**
+ * Variables de entorno para una CLI. Con otra cuenta, la herramienta guarda su
+ * sesión en una carpeta propia (así puedes tener dos cuentas de Gemini, por ejemplo).
+ */
+export function cliEnv(provider, home) {
+  const env = { ...process.env };
+  if (!home) return env;
+  fs.mkdirSync(home, { recursive: true });
+  const name = PROVIDERS[provider]?.homeEnv;
+  if (name) env[name] = home;
+  else {
+    env.HOME = home;
+    env.USERPROFILE = home;
+  }
+  return env;
+}
+
+/**
  * Ejecuta una CLI (Codex, Claude Code, OpenCode, Gemini…) con la conversación
  * como un único prompt. Se ejecuta en una carpeta temporal vacía para que no
  * toque tus proyectos.
  */
-function callCli(settings, provider, system, messages, onDelta, signal) {
+function callCli(settings, provider, system, messages, onDelta, signal, home = null) {
   const convo = messages.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
   const prompt = `${system}\n\n---\n\n${convo}\n\nAsistente:`;
   const command = cliCommand(settings, provider);
@@ -292,7 +351,7 @@ function callCli(settings, provider, system, messages, onDelta, signal) {
   const [cmd, ...args] = splitCommand(command, argPrompt);
   return new Promise((resolve, reject) => {
     // En Windows las CLIs de npm son .cmd y requieren la consola.
-    const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: process.env });
+    const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: cliEnv(provider, home) });
     if (!viaArg) child.stdin.end(prompt);
     else child.stdin.end();
     let out = '';

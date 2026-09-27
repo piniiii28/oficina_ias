@@ -48,6 +48,8 @@ export async function simulate({ agent, messages }) {
   }
   const kw = keywords(last, 3);
   const topic = kw.length ? kw.join(', ') : 'la tarea';
+  // El Taller 3D entrega un modelo de ejemplo que sí se puede abrir en el programa.
+  if (DEMO_CAD[agent?.id]) return DEMO_CAD[agent.id](topic);
   const angles = ANGLES[agent?.department] || ANGLES.direccion;
   const name = agent?.name || 'Agente';
   const role = agent?.role || 'especialista';
@@ -144,3 +146,112 @@ export function demoPlan(task, agents, max = 5) {
 
 const RESEARCH = new Set(['perplexity', 'kimi', 'estratega']);
 const REVIEWERS = new Set(['sonnet-qa', 'codestral', 'sonar-check', 'guardian']);
+
+// Modelos de ejemplo del Taller 3D en modo demo (un soporte sencillo).
+const DEMO_CAD = {
+  'openscad-3d': (topic) => `**Scad** (Diseño paramétrico) — *respuesta simulada en modo demo*
+
+Propuesta para **${topic}**: un soporte inclinado con base, respaldo y tope. Cambia las medidas al inicio.
+
+\`\`\`openscad
+// Soporte inclinado (medidas en mm)
+ancho = 80;      // ancho del soporte
+fondo = 70;      // profundidad de la base
+grosor = 4;      // grosor de las paredes
+angulo = 60;     // inclinación del respaldo
+alto = 90;       // largo del respaldo
+tope = 12;       // altura del tope delantero
+$fn = 64;
+
+module base() cube([ancho, fondo, grosor]);
+module respaldo() translate([0, fondo * 0.35, 0]) rotate([90 - angulo, 0, 0]) cube([ancho, grosor, alto]);
+module labio() translate([0, 0, 0]) cube([ancho, grosor, tope]);
+
+difference() {
+  union() { base(); respaldo(); labio(); }
+  // Hueco para el cable
+  translate([ancho / 2, -1, -1]) cylinder(d = 12, h = tope + 2);
+}
+\`\`\`
+
+- Imprime acostado sobre la base, sin soportes.
+- PLA o PETG, 0,2 mm de capa y 20 % de relleno.
+- Aumenta \`grosor\` a 5 si el celular es pesado.
+
+### Ideas clave
+- Diseño paramétrico para ${topic}
+- Imprimir sin soportes`,
+  'blender-3d': (topic) => `**Blendi** (Modeladora en Blender) — *respuesta simulada en modo demo*
+
+Modelo base para **${topic}** con primitivas y un bisel suave.
+
+\`\`\`python
+import bpy
+import os
+
+# Escena vacía
+bpy.ops.object.select_all(action="SELECT")
+bpy.ops.object.delete()
+
+# Base y respaldo (medidas en metros = mm / 1000)
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.002))
+base = bpy.context.object
+base.scale = (0.08, 0.07, 0.004)
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0.01, 0.04))
+respaldo = bpy.context.object
+respaldo.scale = (0.08, 0.004, 0.09)
+respaldo.rotation_euler = (0.52, 0, 0)
+
+# Unir las piezas y suavizar bordes
+for o in (base, respaldo):
+    o.select_set(True)
+bpy.context.view_layer.objects.active = base
+bpy.ops.object.join()
+mod = base.modifiers.new("Bisel", "BEVEL")
+mod.width = 0.0008
+mod.segments = 3
+
+bpy.ops.object.select_all(action="SELECT")
+if hasattr(bpy.ops.wm, "stl_export"):
+    bpy.ops.wm.stl_export(filepath=os.path.join(OUT_DIR, "modelo.stl"), global_scale=1000)
+else:
+    bpy.ops.export_mesh.stl(filepath=os.path.join(OUT_DIR, "modelo.stl"), global_scale=1000)
+\`\`\`
+
+- Aplica el bisel antes de imprimir si lo editas a mano.
+- Revisa en el laminador que la malla no tenga huecos.
+- Imprime con la base sobre la cama.
+
+### Ideas clave
+- Modelar ${topic} con primitivas
+- Exportar STL en milímetros`,
+  'freecad-3d': (topic) => `**Fredi** (Ingeniero CAD) — *respuesta simulada en modo demo*
+
+Pieza técnica para **${topic}**, con un agujero pasante de 5 mm para tornillo.
+
+\`\`\`python
+import FreeCAD
+import Part
+import Mesh
+import os
+
+doc = FreeCAD.newDocument("Pieza")
+base = Part.makeBox(80, 40, 5)
+pared = Part.makeBox(80, 5, 40)
+pieza = base.fuse(pared)
+agujero = Part.makeCylinder(2.5, 10, FreeCAD.Vector(40, 20, -1))
+pieza = pieza.cut(agujero)
+obj = doc.addObject("Part::Feature", "Soporte")
+obj.Shape = pieza.removeSplitter()
+doc.recompute()
+Mesh.export([obj], os.path.join(OUT_DIR, "pieza.stl"))
+\`\`\`
+
+- Holgura del agujero: 0,3 mm para tornillo M5.
+- Imprime con la pared vertical para que resista.
+- 3 perímetros y 30 % de relleno.
+
+### Ideas clave
+- Pieza técnica para ${topic}
+- Tolerancias de 0,3 mm`,
+};

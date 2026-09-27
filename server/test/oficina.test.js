@@ -575,3 +575,214 @@ test('Gemini: streaming por SSE', async () => {
     fake.close();
   }
 });
+
+/** Levanta la app en un puerto libre y devuelve un ayudante para llamar a la API. */
+async function withApp(store, fn) {
+  const app = createApp(store);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const call = async (method, url, body, headers = {}) => {
+    const r = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: r.status, data: await r.json().catch(() => null) };
+  };
+  try {
+    await fn(call);
+  } finally {
+    server.close();
+  }
+}
+
+test('varias cuentas: si una se queda sin cupo, se usa la siguiente', async () => {
+  const { callModel, PROVIDERS, credentials } = await import('../src/providers.js');
+  const http = await import('node:http');
+  const seen = [];
+  const fake = http.createServer((req, res) => {
+    const key = req.headers.authorization;
+    seen.push(key);
+    req.resume();
+    req.on('end', () => {
+      if (key === 'Bearer cuenta-1') {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Rate limit reached for requests' } }));
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'hola desde la cuenta 2' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const original = PROVIDERS.groq.baseUrl;
+  PROVIDERS.groq.baseUrl = `http://127.0.0.1:${fake.address().port}/v1`;
+  const settings = { apiKeys: { groq: 'cuenta-1' }, accounts: [{ id: 'acc2', provider: 'groq', label: 'Correo 2', key: 'cuenta-2' }] };
+  try {
+    assert.deepEqual(credentials(settings, 'groq', 'acc2').map((c) => c.id), ['acc2', 'default']);
+    const r = await callModel(settings, { provider: 'groq', model: 'llama', system: 'S', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(r.text, 'hola desde la cuenta 2');
+    assert.equal(r.account, 'acc2');
+    assert.deepEqual(seen, ['Bearer cuenta-1', 'Bearer cuenta-2']);
+    // Un error que no es de cupo no cambia de cuenta.
+    await assert.rejects(callModel({ apiKeys: { groq: 'cuenta-1' } }, { provider: 'groq', model: 'llama', system: 'S', messages: [{ role: 'user', content: 'x' }] }), /Rate limit/);
+  } finally {
+    PROVIDERS.groq.baseUrl = original;
+    fake.close();
+  }
+});
+
+test('cuentas por la API: la clave no se muestra y una CLI recibe su propia carpeta', async () => {
+  const store = new Store(tmp());
+  await withApp(store, async (call) => {
+    let r = await call('POST', '/api/accounts', { provider: 'google', label: 'Correo de Santiago', key: 'AIzaSECRETA1234' });
+    assert.equal(r.status, 201);
+    const acc = r.data.accounts[0];
+    assert.equal(acc.preview, 'AIza…1234');
+    assert.ok(!JSON.stringify(r.data).includes('SECRETA'));
+    r = await call('POST', '/api/accounts', { provider: 'cli-gemini', label: 'Gemini Pro 2' });
+    assert.ok(r.data.accounts[1].home.startsWith(store.dir));
+    await call('PUT', '/api/agents/gemini-data', { account: acc.id });
+    assert.equal(store.data.agents.find((a) => a.id === 'gemini-data').account, acc.id);
+    await call('DELETE', `/api/accounts/${acc.id}`);
+    assert.equal(store.data.agents.find((a) => a.id === 'gemini-data').account, undefined);
+    const exported = await call('GET', '/api/export');
+    assert.ok(!('accounts' in exported.data.settings));
+  });
+});
+
+test('la sesión de una CLI con otra cuenta usa su propia carpeta', async () => {
+  const { cliEnv } = await import('../src/providers.js');
+  const dir = tmp();
+  assert.equal(cliEnv('cli-codex', dir).CODEX_HOME, dir);
+  assert.equal(cliEnv('cli-claude', dir).CLAUDE_CONFIG_DIR, dir);
+  const g = cliEnv('cli-gemini', dir);
+  assert.equal(g.HOME, dir);
+  assert.equal(g.USERPROFILE, dir);
+  assert.equal(cliEnv('cli-gemini', null).HOME, process.env.HOME);
+});
+
+test('modo gratis: las IAs de pago pasan a modelos gratis y se puede deshacer', async () => {
+  const store = new Store(tmp());
+  await withApp(store, async (call) => {
+    store.data.settings.cli = { 'cli-claude': { enabled: true } };
+    const before = Object.fromEntries(store.data.agents.map((a) => [a.id, a.provider]));
+    const r = await call('POST', '/api/agents/free-mode');
+    assert.ok(r.data.changed > 3);
+    const paid = new Set(['anthropic', 'openai', 'xai', 'perplexity', 'together', 'deepseek']);
+    assert.ok(store.data.agents.every((a) => !paid.has(a.provider)), 'no quedan IAs de pago');
+    // Con Claude Code activo, el cerebro usa la suscripción.
+    assert.equal(store.data.agents.find((a) => a.isBrain).provider, 'cli-claude');
+    await call('POST', '/api/agents/free-mode/undo');
+    assert.deepEqual(Object.fromEntries(store.data.agents.map((a) => [a.id, a.provider])), before);
+  });
+});
+
+test('la mayoría de las IAs de la plantilla usan modelos gratis', async () => {
+  const { PROVIDERS } = await import('../src/providers.js');
+  const free = DEFAULT_AGENTS.filter((a) => ['gratis', 'mixto'].includes(PROVIDERS[a.provider].tier) && (PROVIDERS[a.provider].tier !== 'mixto' || a.model.endsWith(':free')));
+  assert.ok(free.length > DEFAULT_AGENTS.length / 2, `solo ${free.length} de ${DEFAULT_AGENTS.length} son gratis`);
+});
+
+test('núcleos: cada persona tiene sus notas, su perfil y puentes con temas en común', async () => {
+  const store = new Store(tmp());
+  await withApp(store, async (call) => {
+    const nico = { 'X-Nucleo': 'nicolas' };
+    await call('POST', '/api/notes', { title: 'Impresora Ender', content: 'Calibrar la impresora ender con filamento petg y cama caliente' }, nico);
+    await call('POST', '/api/notes', { title: 'Soporte de celular', content: 'Diseñar soporte en openscad para imprimir con filamento petg' }, nico);
+    await call('POST', '/api/notes', { title: 'Taller de Miguel', content: 'Comprar filamento petg y una impresora nueva para el taller' }, { 'X-Nucleo': 'miguel' });
+    await call('POST', '/api/notes', { title: 'Nota rara', content: 'x' }, { 'X-Nucleo': 'inventado' });
+    assert.equal(store.data.notes.find((n) => n.title === 'Impresora Ender').hub, 'nicolas');
+    assert.equal(store.data.notes.find((n) => n.title === 'Nota rara').hub, 'cerebro', 'un núcleo desconocido cae en el cerebro');
+
+    const g = await call('GET', '/api/graph');
+    assert.ok(g.data.nodes.some((n) => n.id === 'hub:nicolas' && n.kind === 'hub'));
+    assert.ok(g.data.links.some((l) => l.source === 'hub:nicolas' && l.kind === 'hub'));
+
+    const h = await call('GET', '/api/hubs');
+    const nicolas = h.data.hubs.find((x) => x.id === 'nicolas');
+    assert.equal(nicolas.notes, 2);
+    assert.ok(nicolas.topics.some((t) => t.word === 'filamento'));
+    const bridge = h.data.bridges.find((b) => [b.a, b.b].sort().join() === 'miguel,nicolas');
+    assert.ok(bridge && bridge.shared.includes('filamento'), 'Nicolás y Miguel comparten el tema');
+
+    const s = await call('GET', '/api/hubs/suggest');
+    assert.ok(s.data.suggestions.every((x) => store.data.notes.find((n) => n.id === x.from).hub !== store.data.notes.find((n) => n.id === x.to).hub));
+
+    store.data.settings.demoMode = 'always';
+    const ask = await call('POST', '/api/hubs/nicolas/ask', { question: '¿qué filamento uso?', save: true });
+    assert.ok(ask.data.sources.length >= 1);
+    assert.ok(ask.data.sources.every((x) => store.data.notes.find((n) => n.id === x.id).hub === 'nicolas'), 'solo usa notas de ese núcleo');
+    assert.equal(store.data.notes.find((n) => n.id === ask.data.noteId).hub, 'nicolas');
+
+    const p = await call('POST', '/api/hubs/nicolas/profile');
+    assert.equal(p.data.title, 'Perfil de Nicolás');
+    assert.match(p.data.content, /\[\[Perfil de Miguel\]\]/);
+
+    const empty = await call('POST', '/api/hubs/santiago/ask', { question: 'hola' });
+    assert.equal(empty.status, 400);
+
+    await call('PUT', '/api/settings', { hubs: [{ name: 'Nicolás' }, { name: 'Laura', color: '#ff0000' }] });
+    assert.deepEqual(store.data.settings.hubs.map((x) => x.id), ['cerebro', 'nicolas', 'laura']);
+  });
+});
+
+test('las tareas guardan sus notas en el núcleo de quien las pidió', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  const task = await runTask(store, notes, { prompt: 'Plan para imprimir piezas en 3D', hub: 'santiago' });
+  assert.equal(task.hub, 'santiago');
+  const mine = store.data.notes.filter((n) => n.source?.taskId === task.id);
+  assert.ok(mine.length > 1);
+  assert.ok(mine.every((n) => n.hub === 'santiago'));
+});
+
+test('Taller 3D: reconoce scripts de Blender, OpenSCAD y FreeCAD', async () => {
+  const { extractCadBlocks, wrapPython } = await import('../src/cad.js');
+  const md = 'Mira:\n```python\nimport bpy\nbpy.ops.mesh.primitive_cube_add()\n```\n```openscad\ncube(10);\n```\n```python\nimport FreeCAD, Part\n```\n```python\nprint("hola")\n```';
+  assert.deepEqual(extractCadBlocks(md).map((b) => b.kind), ['blender', 'openscad', 'freecad']);
+  const py = wrapPython('blender', 'import bpy', 'C:\\Users\\Nico\\taller');
+  assert.match(py, /OUT_DIR = "C:\\\\Users\\\\Nico\\\\taller"/);
+  assert.match(py, /stl_export|export_mesh\.stl/);
+});
+
+test('Taller 3D: ejecuta el modelo en el programa y guarda el STL', { skip: process.platform === 'win32' }, async () => {
+  const store = new Store(tmp());
+  // Un "OpenSCAD" falso que escribe el STL que le piden con -o.
+  const fake = path.join(tmp(), 'openscad-falso');
+  fs.writeFileSync(fake, '#!/usr/bin/env node\nconst fs = require("fs");\nconst i = process.argv.indexOf("-o");\nfs.writeFileSync(process.argv[i + 1], "solid prueba\\nendsolid prueba\\n");\nconsole.log("Exportado");\n', { mode: 0o755 });
+  store.data.settings.cadPaths = { openscad: fake };
+  await withApp(store, async (call) => {
+    const d = await call('GET', '/api/cad/detect');
+    assert.equal(d.data.openscad, fake);
+    const r = await call('POST', '/api/cad/run', { kind: 'openscad', code: 'cube([20, 10, 5]);', name: 'Caja de prueba' });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.ok, true);
+    assert.deepEqual(r.data.files.map((f) => f.name).sort(), ['modelo.scad', 'modelo.stl']);
+    assert.match(r.data.log, /Exportado/);
+    const jobs = await call('GET', '/api/cad/jobs');
+    assert.equal(jobs.data[0].id, r.data.id);
+    const bad = await call('GET', `/api/cad/jobs/${r.data.id}/files/..%2F..%2Foficina.json`);
+    assert.equal(bad.status, 404);
+    // Sin el programa instalado, explica cómo conseguirlo.
+    store.data.settings.cadPaths = { blender: '/no/existe' };
+    const missing = await call('POST', '/api/cad/run', { kind: 'blender', code: 'import bpy' });
+    if (!missing.data.ok) assert.match(missing.data.log, /blender\.org|Blender/);
+  });
+});
+
+test('oficinas antiguas reciben las IAs del Taller 3D una sola vez', () => {
+  const dir = tmp();
+  const s1 = new Store(dir);
+  createApp(s1);
+  s1.data.agents = s1.data.agents.filter((a) => a.department !== 'impresion3d');
+  delete s1.data.settings.taller3dSeeded;
+  s1.flush();
+  const s2 = new Store(dir);
+  createApp(s2);
+  assert.equal(s2.data.agents.filter((a) => a.department === 'impresion3d').length, 4);
+  s2.data.agents = s2.data.agents.filter((a) => a.id !== 'slicer-3d');
+  s2.flush();
+  const s3 = new Store(dir);
+  createApp(s3);
+  assert.ok(!s3.data.agents.some((a) => a.id === 'slicer-3d'), 'si la despides no vuelve');
+});

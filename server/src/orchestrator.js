@@ -173,7 +173,7 @@ function remember(store, agent, text) {
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
 /** Ejecuta una tarea completa en la oficina. */
-export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null, effort = 'medium', fromNote = null }) {
+export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null, effort = 'medium', fromNote = null, hub = null }) {
   if (!['low', 'medium', 'high'].includes(effort)) effort = 'medium';
   // Continuación: el equipo recibe el resultado de la tarea anterior.
   const parent = parentId ? store.data.tasks.find((t) => t.id === parentId) : null;
@@ -199,6 +199,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     : '');
   const ctx = () => knowledgeBase + extraText;
   const task = {
+    hub: hub || parent?.hub || 'cerebro',
     parentId: parent?.id || null,
     effort,
     fromNote,
@@ -406,6 +407,7 @@ function saveTaskNotes(store, notes, task, names) {
     title: task.title,
     type: 'tarea',
     tags: ['tarea', ...(task.tags || [])],
+    hub: task.hub,
     source: { taskId: task.id, agentId: 'cerebro' },
     content: `# ${task.title}\n\n> ${task.prompt}\n\n${parent?.noteId ? `Continúa [[${notes.get(parent.noteId)?.title || parent.title}]]\n\n` : ''}${task.fromNote ? `A partir de la nota [[${task.fromNote}]]\n\n` : ''}${task.final}\n\n## Equipo\n${task.steps
       .filter((s) => s.status === 'done')
@@ -428,6 +430,7 @@ function saveTaskNotes(store, notes, task, names) {
       title: `${names(s.agentId)} · ${task.title}`,
       type: 'aporte',
       tags: [agent?.department || 'equipo'],
+      hub: task.hub,
       source: { taskId: task.id, agentId: s.agentId },
       content: `Parte de [[${main.title}]]\n\n**Instrucción:** ${s.instruction}\n\n${s.output}`,
     });
@@ -437,7 +440,7 @@ function saveTaskNotes(store, notes, task, names) {
   if (ideas.length) {
     for (const idea of ideas) {
       const clean = idea.replace(/\*\(de [^)]*\)\*/, '').replace(/[[\]]/g, '').trim();
-      notes.upsertIdea(clean, `- Surgió en [[${main.title}]]`, { taskId: task.id, agentId: 'cerebro' });
+      notes.upsertIdea(clean, `- Surgió en [[${main.title}]]`, { taskId: task.id, agentId: 'cerebro' }, task.hub);
     }
     main.content += `\n\n## Ideas\n${ideas.map((i) => `- [[${i.replace(/\*\(de [^)]*\)\*/, '').replace(/[[\]]/g, '').trim()}]]`).join('\n')}`;
     store.save();

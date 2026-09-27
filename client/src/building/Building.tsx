@@ -53,6 +53,8 @@ const up = (p: { x: number; y: number }, z: number) => ({ x: p.x, y: p.y - z });
 
 const LOOK: Record<Furniture['kind'], { z: number; color: string; emoji?: string; size?: number }> = {
   rug: { z: 1, color: '#b91c1c' },
+  printer: { z: 40, color: '#e5e7eb', emoji: '🖨️', size: 20 },
+  filament: { z: 44, color: '#a16207', emoji: '🧵', size: 16 },
   pingpong: { z: 16, color: '#15803d', emoji: '🏓', size: 18 },
   beanbag: { z: 10, color: '#f97316' },
   pool: { z: 4, color: '#22d3ee', emoji: '🏊', size: 22 },
@@ -199,7 +201,8 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
   if (w.running) style.filter = 'drop-shadow(-6px 0 2px rgba(255,255,255,0.35))';
   const msg = state === 'working' ? '⌨️' : state === 'thinking' ? '💭' : state === 'done' ? '✅' : state === 'error' ? '💥' : state === 'talking' ? '💬' : w.emote;
   return (
-    <button className={`walker ${w.moving ? 'walker--moving' : ''} ${me ? 'walker--me' : ''}`} style={style} onClick={(e) => { e.stopPropagation(); onClick(); }} title={`${a.name} · ${a.role}`}>
+    <button className={`walker ${w.moving ? 'walker--moving' : ''} ${me ? 'walker--me' : ''} ${!me && !a.live ? 'walker--demo' : ''}`} style={style} onClick={(e) => { e.stopPropagation(); onClick(); }} title={`${a.name} · ${a.role} · ${a.live ? 'conectada' : 'modo demo'}`}>
+      {!me && <span className={`walker-live ${a.live ? 'on' : ''}`} aria-hidden>{a.live ? '' : 'demo'}</span>}
       {state === 'talking' && l?.message ? <span className="walker-say">{l.message.slice(0, 60)}{l.message.length > 60 ? '…' : ''}</span> : msg && <span className="walker-emote">{msg}</span>}
       <span className="walker-shadow" />
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
@@ -211,6 +214,7 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
         <span className="walker-name walker-card">
           <span><b>{a.name}</b> <em>Nv {levelOf(a)}</em></span>
           <small>{a.role}</small>
+          <small className={a.live ? 'ok' : 'muted'}>{a.live ? `● Conectada · ${a.provider}` : '○ Modo demo (sin conectar)'}</small>
           <small>{ACTIVITY[state] || ACTIVITY[w.inElevator ? 'ascensor' : w.reason] || 'Paseando'}</small>
           <span className="energy"><i style={{ width: `${Math.round(w.energy ?? 100)}%` }} /></span>
         </span>
@@ -266,7 +270,7 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
         <strong>{f.emoji} {f.name}</strong>
         {(f.id === 'lobby' || f.id === 'penthouse') && current && <span className="bfloor-tv" title={current.prompt}>📺 {current.title}</span>}
         {f.open && <span className="weather" title="Clima">{({ sol: night ? '🌙 Despejado' : '☀️ Soleado', nubes: '⛅ Nublado', lluvia: '🌧️ Lluvia' } as Record<string, string>)[weatherNow()]}</span>}
-        <small className="muted">{here.length} aquí{working ? ` · ${working} trabajando` : ''}</small>
+        <small className="muted">{here.length} aquí{here.length ? ` · ${here.filter((a) => a.live).length} conectadas` : ''}{working ? ` · ${working} trabajando` : ''}</small>
         <button className="skin-btn" onClick={cycle} title={`Cambiar skin del piso (${THEMES[theme]?.name || 'original'})`}>🎨</button>
       </header>
       <div className="bfloor-stage" ref={ref} style={{ height: H * scale }}>
@@ -353,7 +357,16 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
     document.addEventListener('visibilitychange', on);
     return () => document.removeEventListener('visibilitychange', on);
   }, []);
-  const active = useMemo(() => agents.filter((a) => a.enabled), [agents]);
+  // Opción de ver solo las IAs conectadas (las que responden de verdad).
+  const [onlyLive, setOnlyLive] = useState(() => {
+    try {
+      return localStorage.getItem('oficina.soloConectadas') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const liveCount = agents.filter((a) => a.enabled && a.live).length;
+  const active = useMemo(() => agents.filter((a) => a.enabled && (!onlyLive || a.live)), [agents, onlyLive]);
   const walkers = useSim(active, live, meetings, hidden);
   const hour = new Date().getHours();
   const night = hour < 6 || hour >= 19;
@@ -378,6 +391,16 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
       <nav className="elevator-panel" aria-label="Ir a un piso">
         <button title="Pantalla completa" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : wrap.current?.requestFullscreen?.())}>🖥️</button>
         <button title={tour ? 'Detener recorrido' : 'Recorrido automático por los pisos'} className={tour ? 'on' : ''} onClick={() => setTour((t) => !t)}>📹</button>
+        <button className={onlyLive ? 'on' : ''} title={onlyLive ? 'Mostrar todas las IAs' : `Mostrar solo las ${liveCount} IAs conectadas`} onClick={() => {
+          setOnlyLive((v) => {
+            try {
+              localStorage.setItem('oficina.soloConectadas', v ? '0' : '1');
+            } catch {
+              /* sin almacenamiento local */
+            }
+            return !v;
+          });
+        }}>🟢<small>{liveCount}</small></button>
         <span>🛗</span>
         {FLOORS.map((f, k) => (
           <button key={f.id} title={f.name} onClick={() => document.getElementById(`piso-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
