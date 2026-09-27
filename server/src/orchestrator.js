@@ -172,7 +172,8 @@ function remember(store, agent, text) {
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
 /** Ejecuta una tarea completa en la oficina. */
-export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null }) {
+export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null, effort = 'medium' }) {
+  if (!['low', 'medium', 'high'].includes(effort)) effort = 'medium';
   // Continuación: el equipo recibe el resultado de la tarea anterior.
   const parent = parentId ? store.data.tasks.find((t) => t.id === parentId) : null;
   const background = parent
@@ -198,6 +199,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   const ctx = () => knowledgeBase + extraText;
   const task = {
     parentId: parent?.id || null,
+    effort,
     contextNotes: related.map((n) => n.title),
     tags,
     attachments: files.map((f) => ({ name: f.name, size: f.content.length })),
@@ -265,7 +267,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
       const onDelta = streamer(`task:${task.id}:${agent.id}`);
       try {
         const res = await callModel(settings, {
-          provider: agent.provider, model: agent.model, agent, onDelta, signal,
+          provider: agent.provider, model: agent.model, agent, onDelta, signal, effort,
           system: buildSystem(agent),
           messages: [{
             role: 'user',
@@ -296,7 +298,7 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     const contributions = ok.map((s) => `## Aporte de ${names(s.agentId)}\n${s.output}`).join('\n\n');
     const synthDelta = streamer(`task:${task.id}:final`);
     const synth = await callModel(settings, {
-      provider: brain.provider, model: brain.model, agent: brain, effort: 'medium',
+      provider: brain.provider, model: brain.model, agent: brain, effort,
       onDelta: synthDelta, signal,
       system: buildSystem(brain),
       messages: [{

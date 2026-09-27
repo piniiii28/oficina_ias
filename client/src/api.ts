@@ -162,8 +162,8 @@ export const api = {
   clearChat: (id: string) => req('DELETE', `/api/agents/${id}/chat`),
 
   tasks: () => req<Task[]>('GET', '/api/tasks'),
-  runTask: (prompt: string, agentIds?: string[], parentId?: string, attachments?: { name: string; content: string }[], flow?: string) =>
-    req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments, flow }),
+  runTask: (prompt: string, agentIds?: string[], parentId?: string, attachments?: { name: string; content: string }[], flow?: string, effort?: string) =>
+    req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments, flow, effort }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
   cancelTask: (id: string) => req('POST', `/api/tasks/${id}/cancel`),
 

@@ -91,6 +91,7 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
 export function Office() {
   const { agents, departments, live, tasks, toast, setView, flows } = useOffice();
   const [flow, setFlow] = useState('');
+  const [effort, setEffort] = useState('medium');
   const [prompt, setPrompt] = useState('');
   const [files, setFiles] = useState<{ name: string; content: string }[]>([]);
   const [selected, setSelected] = useState<Agent | null>(null);
@@ -139,7 +140,7 @@ export function Office() {
     const p = prompt.trim();
     if (!p) return;
     try {
-      await api.runTask(p, picking && pick.length ? pick : undefined, undefined, files.length ? files : undefined, flow || undefined);
+      await api.runTask(p, picking && pick.length ? pick : undefined, undefined, files.length ? files : undefined, flow || undefined, effort);
       setPrompt('');
       setFiles([]);
       toast('🧠 Claude recibió la tarea y está armando el equipo');
@@ -196,6 +197,11 @@ export function Office() {
             {files.map((f) => (
               <span key={f.name} className="chip">📎 {f.name} <button className="link" onClick={() => setFiles((x) => x.filter((y) => y.name !== f.name))}>✕</button></span>
             ))}
+            <select className="effort" value={effort} onChange={(e) => setEffort(e.target.value)} title="Cuánto piensan los modelos que lo permiten (más profundo = más lento y costoso)">
+              <option value="low">⚡ Rápida</option>
+              <option value="medium">⚖️ Normal</option>
+              <option value="high">🔬 Profunda</option>
+            </select>
             <label className="check">
               <input type="checkbox" checked={picking} onChange={(e) => setPicking(e.target.checked)} />
               Elegir el equipo yo mismo {picking && pick.length ? `(${pick.length})` : ''}

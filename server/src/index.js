@@ -281,7 +281,7 @@ export function createApp(store) {
     if (!prompt) return res.status(400).json({ error: 'Escribe una tarea' });
     const flow = req.body.flow ? flowPlan(req.body.flow, store.data.agents) : null;
     const promise = runTask(store, notes, {
-      prompt, agentIds: flow?.agentIds || req.body.agentIds, template: flow?.template, parentId: req.body.parentId, attachments: req.body.attachments, saveNotes: req.body.saveNotes !== false,
+      prompt, agentIds: flow?.agentIds || req.body.agentIds, template: flow?.template, effort: req.body.effort, parentId: req.body.parentId, attachments: req.body.attachments, saveNotes: req.body.saveNotes !== false,
     });
     // Respondemos enseguida; el progreso llega por /api/events.
     promise.catch((err) => console.error('[tarea]', err));
