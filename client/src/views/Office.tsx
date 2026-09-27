@@ -6,6 +6,7 @@ import { AgentPanel } from '../components/AgentPanel';
 import { Flights } from '../components/Flights';
 import { Building } from '../building/Building';
 import { Feed } from '../components/Feed';
+import { MicButton } from '../components/Voice';
 import { useOffice, type Live } from '../state';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -177,6 +178,7 @@ export function Office() {
             rows={3}
           />
           <div className="hq-actions">
+            <MicButton onText={(t) => setPrompt((p) => (p ? `${p} ${t}` : t))} />
             <label className="btn btn--ghost small" title="Adjunta textos, datos o código para que el equipo los use">
               📎 Adjuntar
               <input type="file" multiple hidden accept=".txt,.md,.csv,.json,.html,.css,.js,.ts,.tsx,.py,.java,.sql,.xml,.yml,.yaml,.log"

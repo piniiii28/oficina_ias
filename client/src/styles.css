@@ -600,3 +600,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .welcome-dots { display: flex; gap: 6px; justify-content: center; }
 .welcome-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
 .welcome-dots span.on { background: var(--accent); width: 20px; border-radius: 4px; }
+.mic-on { border-color: var(--danger) !important; color: var(--danger) !important; animation: pulse 1s infinite; }

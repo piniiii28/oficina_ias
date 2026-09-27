@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, levelOf, type Agent, type ChatMessage } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
+import { MicButton, SpeakButton } from './Voice';
 import { useOffice } from '../state';
 
 type Tab = 'chat' | 'entrenamiento' | 'memoria' | 'perfil';
@@ -96,6 +97,7 @@ function ChatTab({ agent }: { agent: Agent }) {
             {m.role === 'assistant' && (
               <div className="msg-actions">
                 {m.simulated && <span className="pill">demo</span>}
+                <SpeakButton text={m.content} />
                 <button className="link" onClick={() => saveAsNote(m.content)}>Guardar como nota</button>
               </div>
             )}
@@ -121,6 +123,7 @@ function ChatTab({ agent }: { agent: Agent }) {
             }
           }}
         />
+        <MicButton onText={(t) => setText((p) => (p ? `${p} ${t}` : t))} />
         <button className="btn btn--primary" onClick={send} disabled={sending || !text.trim()}>Enviar</button>
       </div>
       {msgs.length > 0 && (

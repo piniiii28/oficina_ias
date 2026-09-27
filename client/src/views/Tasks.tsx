@@ -4,6 +4,7 @@ import { api, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { Routines } from '../components/Routines';
+import { SpeakButton } from '../components/Voice';
 import { useOffice } from '../state';
 
 export const STATUS_ES: Record<string, string> = {
@@ -75,7 +76,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       ) : null}
 
       <section className="card final">
-        <h3>Respuesta integrada</h3>
+        <div className="row between"><h3>Respuesta integrada</h3>{task.final && <SpeakButton text={task.final} />}</div>
         {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : liveFinal ? <div className="streaming"><Markdown text={liveFinal} /></div> : <p className="muted">El equipo sigue trabajando…</p>}
       </section>
 
