@@ -25,7 +25,7 @@ export function Graph() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
-  const [opts, setOpts] = useState({ tags: true, agents: true, ghosts: true, labels: true });
+  const [opts, setOpts] = useState({ tags: true, agents: true, ghosts: true, labels: true, contrib: true });
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Note | null>(null);
@@ -62,7 +62,7 @@ export function Graph() {
   // Filtrado: fantasmas y grafo local.
   const center = depth > 0 ? selected : null;
   const graph = useMemo(() => {
-    let nodes = data.nodes.filter((n) => opts.ghosts || n.kind !== 'ghost');
+    let nodes = data.nodes.filter((n) => (opts.ghosts || n.kind !== 'ghost') && (opts.contrib || n.type !== 'aporte'));
     if (until !== null) {
       // Solo notas creadas hasta ese momento (y lo que cuelga de ellas).
       const visibleNotes = new Set(nodes.filter((n) => n.kind === 'note' && Date.parse(n.createdAt || '0') <= until).map((n) => n.id));
@@ -93,7 +93,7 @@ export function Graph() {
       deg.set(l.target, (deg.get(l.target) || 0) + 1);
     }
     return { nodes, links, deg };
-  }, [data, opts.ghosts, depth, center, until]);
+  }, [data, opts.ghosts, opts.contrib, depth, center, until]);
 
   const neighbors = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -321,6 +321,7 @@ export function Graph() {
         <label className="check"><input type="checkbox" checked={opts.tags} onChange={(e) => setOpts({ ...opts, tags: e.target.checked })} /> Etiquetas</label>
         <label className="check"><input type="checkbox" checked={opts.agents} onChange={(e) => setOpts({ ...opts, agents: e.target.checked })} /> IAs</label>
         <label className="check"><input type="checkbox" checked={opts.ghosts} onChange={(e) => setOpts({ ...opts, ghosts: e.target.checked })} /> Notas sin crear</label>
+        <label className="check"><input type="checkbox" checked={opts.contrib} onChange={(e) => setOpts({ ...opts, contrib: e.target.checked })} /> Aportes de IA</label>
         <label className="check"><input type="checkbox" checked={opts.labels} onChange={(e) => setOpts({ ...opts, labels: e.target.checked })} /> Nombres</label>
         <label>
           Vista{' '}
