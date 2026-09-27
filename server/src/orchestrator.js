@@ -320,8 +320,14 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   // Tarjetas del tablero ligadas a esta tarea pasan a «Hecho».
   for (const c of store.data.cards || []) {
     if (c.taskId === task.id) {
-      c.column = task.status === 'done' ? 'done' : 'doing';
-      c.noteId = task.noteId;
+      if (task.status === 'done') {
+        c.column = 'done';
+        c.noteId = task.noteId;
+      } else {
+        // Falló: la tarjeta vuelve a «Por hacer» para poder reintentarla.
+        c.column = 'todo';
+        c.taskId = null;
+      }
       bus.emit('event', { type: 'cards' });
     }
   }
@@ -457,7 +463,8 @@ export async function selfTrain(store, agentId) {
 
 /** Resumen del día: una nota de diario enlazada con todo lo que hizo la oficina hoy. */
 export async function dailySummary(store, notes, date = new Date()) {
-  const day = date.toISOString().slice(0, 10);
+  // Fecha local (no UTC), para que coincida con sameDay y con el día del usuario.
+  const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const sameDay = (iso) => iso && new Date(iso).toDateString() === date.toDateString();
   const tasks = store.data.tasks.filter((t) => sameDay(t.createdAt) && t.status === 'done');
   const meetings = (store.data.meetings || []).filter((m) => sameDay(m.createdAt) && m.status === 'done');

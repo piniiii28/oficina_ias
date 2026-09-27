@@ -188,7 +188,7 @@ export function Notes() {
               <div className="note-preview" onDoubleClick={() => setEditing(true)}>
                 {draft ? <Markdown text={draft} onLink={openByTitle} onToggle={(k) => {
                   let n = -1;
-                  setDraft((d) => d.replace(/^(\s*[-*] \[)( |x|X)(\])/gm, (m, a, c, b) => (++n === k ? `${a}${c === ' ' ? 'x' : ' '}${b}` : m)));
+                  setDraft((d) => d.replace(/^(\s*(?:[-*+]|\d+[.)]) \[)( |x|X)(\])/gm, (m, a, c, b) => (++n === k ? `${a}${c === ' ' ? 'x' : ' '}${b}` : m)));
                 }} /> : <p className="muted">Nota vacía. Doble clic para editar.</p>}
               </div>
             )}

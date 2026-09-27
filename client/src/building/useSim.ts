@@ -208,7 +208,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
       const me = ws[ME];
       for (const a of agents) {
         const w = ws[a.id];
-        if (!w || w.floor !== me.floor || w.inElevator || me.inElevator) continue;
+        if (!w || w.floor !== me.floor || w.inElevator || me.inElevator || w.reason === 'reunion') continue;
         if (Math.abs(w.i - me.i) + Math.abs(w.j - me.j) === 1 && !w.greeted && !['working', 'thinking'].includes(live[a.id]?.status || '')) {
           w.greeted = true;
           w.goal = null;
@@ -285,4 +285,5 @@ function step(w: Walker) {
   w.i = n.i;
   w.j = n.j;
   w.moving = true;
+  w.emote = undefined; // al volver a caminar se borra el globo anterior
 }
