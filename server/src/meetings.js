@@ -46,6 +46,7 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2 }) 
     createdAt: new Date().toISOString(),
   };
   (store.data.meetings ||= []).unshift(meeting);
+  if (store.data.meetings.length > 100) store.data.meetings.length = 100;
   store.save();
   const emit = () => bus.emit('event', { type: 'meeting', meeting });
   emit();

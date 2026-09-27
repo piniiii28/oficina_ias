@@ -206,6 +206,8 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     finishedAt: null,
   };
   store.data.tasks.unshift(task);
+  // El historial crudo se recorta; el resultado de cada tarea vive en sus notas.
+  if (store.data.tasks.length > 300) store.data.tasks.length = 300;
   store.save();
   const emitTask = () => bus.emit('event', { type: 'task', task });
   emitTask();
