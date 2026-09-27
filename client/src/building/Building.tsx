@@ -52,6 +52,7 @@ const pts = (list: { x: number; y: number }[]) => list.map((p) => `${p.x},${p.y}
 const up = (p: { x: number; y: number }, z: number) => ({ x: p.x, y: p.y - z });
 
 const LOOK: Record<Furniture['kind'], { z: number; color: string; emoji?: string; size?: number }> = {
+  rug: { z: 1, color: '#b91c1c' },
   pool: { z: 4, color: '#22d3ee', emoji: '🏊', size: 22 },
   bench: { z: 12, color: '#a16207' },
   gym: { z: 8, color: '#52525b', emoji: '🏋️', size: 24 },
@@ -87,7 +88,8 @@ function Box({ f, m }: { f: FloorDef; m: Furniture }) {
   const { w: W, h: H } = roomSize(f);
   const emoji = m.label || look.emoji;
   return (
-    <svg className="iso-item" width={W} height={H} style={{ zIndex: (m.i + w - 1 + m.j + Math.ceil(h) - 1) * 10 + 2 }} aria-hidden>
+    <svg className="iso-item" width={W} height={H} style={{ zIndex: m.kind === 'rug' ? 0 : (m.i + w - 1 + m.j + Math.ceil(h) - 1) * 10 + 2 }} aria-hidden>
+      {m.kind === 'rug' && <polygon points={pts([up(A, 1), up(B, 1), up(C, 1), up(D, 1)].map((p, k, arr) => ({ x: p.x + (arr[(k + 2) % 4].x - p.x) * 0.12, y: p.y + (arr[(k + 2) % 4].y - p.y) * 0.12 })))} fill="none" stroke="#fde68a" strokeWidth="2" opacity="0.7" />}
       <polygon points={pts([D, C, up(C, z), up(D, z)])} fill={shade(look.color, -0.18)} />
       <polygon points={pts([C, B, up(B, z), up(C, z)])} fill={shade(look.color, -0.3)} />
       <polygon points={pts(top)} fill={look.color} stroke={shade(look.color, -0.35)} strokeWidth="0.6" />
@@ -153,6 +155,18 @@ function Room({ f, night, doorOpen, weather }: { f: FloorDef; night: boolean; do
       <polygon points={pts([up(left, wallH), up(top, wallH), up(top, wallH + 6), up(left, wallH + 6)])} fill={shade(f.wall, 0.15)} />
       <polygon points={pts([up(top, wallH), up(right, wallH), up(right, wallH + 6), up(top, wallH + 6)])} fill={shade(f.wall, 0.2)} />
       {!f.open && windows}
+      {!f.open && (f.art || []).map((a, k) => {
+        const jj = 1 + k * 2.2;
+        if (jj + 1 >= f.elevator.j && jj <= f.elevator.j + 1) return null;
+        const p1 = P(f, 0, jj), p2 = P(f, 0, jj + 1);
+        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2 - 52;
+        return (
+          <g key={k}>
+            <polygon points={pts([up(p1, 34), up(p2, 34), up(p2, 66), up(p1, 66)])} fill="#fef3c7" stroke="#78350f" strokeWidth="3" />
+            <text x={mx} y={my + 4} fontSize="18" textAnchor="middle">{a}</text>
+          </g>
+        );
+      })}
       {/* Ascensor */}
       <polygon points={pts([d1, d2, up(d2, 62), up(d1, 62)])} fill={doorOpen ? '#fef3c7' : '#9ca3af'} stroke="#4b5563" strokeWidth="2" />
       {doorOpen ? (
