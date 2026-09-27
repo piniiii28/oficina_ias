@@ -81,8 +81,13 @@ export function Notes() {
 
   async function importFiles(files: FileList) {
     const list = await Promise.all([...files].map(async (f) => ({ name: f.name, content: await f.text() })));
-    const r = await api.importNotes(list);
-    toast(`📥 ${r.created} notas nuevas, ${r.updated} actualizadas`);
+    let created = 0, updated = 0;
+    for (let i = 0; i < list.length; i += 150) {
+      const r = await api.importNotes(list.slice(i, i + 150));
+      created += r.created;
+      updated += r.updated;
+    }
+    toast(`📥 ${created} notas nuevas, ${updated} actualizadas`);
     load();
   }
 
