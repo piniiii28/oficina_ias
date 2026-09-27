@@ -111,7 +111,7 @@ const ADMIN = [
   [/^\/api\/nodes/, ['POST', 'PUT', 'DELETE']],
   [/^\/api\/mcp\//, ['POST', 'DELETE']],
   [/^\/api\/agents\/reset$/, null],
-  [/^\/api\/agents\/free-mode/, null],
+  [/^\/api\/agents\/(free-mode|gemini-pro)/, null],
   [/^\/api\/cad\/(run|jobs\/[^/]+\/(open|slice))$/, null],
 ];
 export function needsAdmin(method, path) {

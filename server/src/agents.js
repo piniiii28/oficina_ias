@@ -278,6 +278,13 @@ export const DEFAULT_AGENTS = [
     avatar: { skin: '#f1c7a5', hair: '#0f172a', hairStyle: 'bun', eyes: 'glasses', outfit: '#1d4ed8', accessory: 'magnifier', prop: '📚', costume: 'none' },
   }),
   base({
+    id: 'maxi', name: 'Maxi', role: 'Agente de tareas largas y programación (MiniMax)', department: 'codigo',
+    provider: 'minimax', model: 'MiniMax-M3',
+    skills: ['programar', 'agente', 'automatizar', 'proyecto', 'paso a paso', 'plan', 'código', 'depurar', 'integración'],
+    system: P('Eres Maxi, agente con MiniMax M3. Te dan tareas largas de varios pasos (un proyecto, una automatización, un script grande): haces un plan corto, lo ejecutas completo y entregas el resultado listo para usar, con el código entero y cómo probarlo.'),
+    avatar: { skin: '#eab88f', hair: '#e11d48', hairStyle: 'spiky', eyes: 'cool', outfit: '#111827', accessory: 'headphones', prop: '🚀', costume: 'none' },
+  }),
+  base({
     id: 'babel', name: 'Babel', role: 'Traductora multilingüe', department: 'personas',
     provider: 'mistral', model: 'mistral-small-latest',
     skills: ['traducir', 'traducción', 'inglés', 'francés', 'portugués', 'idioma', 'gramática', 'ortografía'],

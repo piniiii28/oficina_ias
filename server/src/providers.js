@@ -31,13 +31,14 @@ export const PROVIDERS = {
   huggingface: { label: 'Hugging Face', tier: 'gratis', hint: 'Créditos gratis cada mes para miles de modelos abiertos.', baseUrl: 'https://router.huggingface.co/v1', keyUrl: 'https://huggingface.co/settings/tokens' },
   nvidia: { label: 'NVIDIA NIM', tier: 'gratis', hint: 'Créditos gratis para probar Llama, DeepSeek, Qwen y más.', baseUrl: 'https://integrate.api.nvidia.com/v1', keyUrl: 'https://build.nvidia.com' },
   cohere: { label: 'Cohere (Command)', tier: 'gratis', hint: 'Clave de prueba gratis con límites (modelos Command).', baseUrl: 'https://api.cohere.ai/compatibility/v1', keyUrl: 'https://dashboard.cohere.com/api-keys' },
+  minimax: { label: 'MiniMax (M3, muy barato)', tier: 'pago', hint: 'De pago pero muy barato (unos US$0,30 por millón de tokens de entrada). Fuerte para programar y tareas largas. Modelos: MiniMax-M3, MiniMax-M2.7.', baseUrl: 'https://api.minimax.io/v1', keyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key' },
   ollama: { label: 'Ollama (local, gratis)', tier: 'gratis', hint: 'Modelos en tu propio computador, gratis y sin límite.', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
   // Herramientas de línea de comandos instaladas en tu computador: usan tu
   // sesión ya iniciada (suscripción), sin clave de API.
   'cli-codex': { label: 'Codex CLI (tu sesión de ChatGPT)', tier: 'suscripcion', hint: 'Usa tu cuenta de ChatGPT (incluso la gratis, con pocos usos).', cli: true, bin: 'codex', npm: '@openai/codex', login: 'codex login', homeEnv: 'CODEX_HOME', command: 'codex exec --skip-git-repo-check --sandbox read-only -', keyUrl: 'https://github.com/openai/codex' },
   'cli-claude': { label: 'Claude Code (tu sesión de Claude)', tier: 'suscripcion', hint: 'Usa tu plan Pro o Max de Claude.', cli: true, bin: 'claude', npm: '@anthropic-ai/claude-code', login: 'claude', homeEnv: 'CLAUDE_CONFIG_DIR', command: 'claude -p', keyUrl: 'https://code.claude.com/docs' },
   'cli-opencode': { label: 'OpenCode CLI', tier: 'gratis', hint: 'Programa gratis; trae modelos gratis o usa los tuyos.', cli: true, bin: 'opencode', npm: 'opencode-ai', login: 'opencode auth login', command: 'opencode run {prompt}', keyUrl: 'https://opencode.ai' },
-  'cli-gemini': { label: 'Gemini CLI (tu cuenta de Google)', tier: 'gratis', hint: 'Gratis con tu cuenta de Google; con Gemini Pro tienes más usos.', cli: true, bin: 'gemini', npm: '@google/gemini-cli', login: 'gemini', command: 'gemini', keyUrl: 'https://github.com/google-gemini/gemini-cli' },
+  'cli-gemini': { label: 'Gemini CLI (tu cuenta de Google)', tier: 'gratis', hint: 'Gratis con tu cuenta de Google (1.000 consultas al día); con Google AI Pro, 1.500. Si tienes varias cuentas Pro, agrégalas y se turnan.', cli: true, bin: 'gemini', npm: '@google/gemini-cli', login: 'gemini', command: 'gemini', keyUrl: 'https://github.com/google-gemini/gemini-cli' },
 };
 
 /** Comando configurado para una CLI (editable en Ajustes). */
@@ -114,7 +115,7 @@ function envKey(provider) {
     openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY', mistral: 'MISTRAL_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY', xai: 'XAI_API_KEY', perplexity: 'PERPLEXITY_API_KEY',
     together: 'TOGETHER_API_KEY', cerebras: 'CEREBRAS_API_KEY', github: 'GITHUB_MODELS_TOKEN',
-    sambanova: 'SAMBANOVA_API_KEY', huggingface: 'HF_TOKEN', nvidia: 'NVIDIA_API_KEY', cohere: 'COHERE_API_KEY',
+    sambanova: 'SAMBANOVA_API_KEY', huggingface: 'HF_TOKEN', nvidia: 'NVIDIA_API_KEY', cohere: 'COHERE_API_KEY', minimax: 'MINIMAX_API_KEY',
   };
   return names[provider] ? process.env[names[provider]] : undefined;
 }
@@ -180,7 +181,7 @@ async function callModelInner(settings, { provider, model, system, messages, age
     const done = ollama ? track(ollama.id) : null;
     try {
       if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar
-      if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home, agent?.mcp ? [agent.mcp] : []);
+      if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home, agent?.mcp ? [agent.mcp] : [], model);
       else if (provider === 'anthropic') text = await callAnthropic(cred.key, model, system, messages, effort, tap, sig, Boolean(settings.webSearch));
       else if (provider === 'google') {
         try {
@@ -322,6 +323,8 @@ async function callOpenAICompatible(provider, cred, model, system, messages, onD
       model,
       stream: true,
       messages: [{ role: 'system', content: system }, ...messages],
+      // MiniMax separa su razonamiento del texto final (si no, llega entre <think>).
+      ...(provider === 'minimax' ? { reasoning_split: true } : {}),
     }),
   });
   if (!res.ok) {
@@ -338,7 +341,7 @@ async function callOpenAICompatible(provider, cred, model, system, messages, onD
       onDelta(d);
     }
   });
-  return text;
+  return provider === 'minimax' ? text.replace(/<think>[\s\S]*?<\/think>\s*/g, '') : text;
 }
 
 async function callGemini(apiKey, model, system, messages, onDelta, signal) {
@@ -406,7 +409,14 @@ export function cliEnv(provider, home) {
  * como un único prompt. Se ejecuta en una carpeta temporal vacía para que no
  * toque tus proyectos.
  */
-function callCli(settings, provider, system, messages, onDelta, signal, home = null, mcp = []) {
+/**
+ * Opción de cada CLI para elegir el modelo, y qué ids le sirven (si la IA venía
+ * de otro proveedor con otro modelo, no se pasa y la herramienta usa el suyo).
+ */
+const CLI_MODEL_FLAG = { 'cli-claude': '--model', 'cli-codex': '-m', 'cli-gemini': '-m', 'cli-opencode': '-m' };
+const CLI_MODEL_OK = { 'cli-claude': /^(claude|opus|sonnet|haiku|fable)/i, 'cli-codex': /^(gpt|o\d|codex)/i, 'cli-gemini': /^gemini/i, 'cli-opencode': /\// };
+
+function callCli(settings, provider, system, messages, onDelta, signal, home = null, mcp = [], model = '') {
   const convo = messages.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
   const prompt = `${system}\n\n---\n\n${convo}\n\nAsistente:`;
   const command = cliCommand(settings, provider);
@@ -431,6 +441,9 @@ function callCli(settings, provider, system, messages, onDelta, signal, home = n
     if (provider === 'cli-claude') for (const d of dirs) args.push('--add-dir', q(d));
     if (provider === 'cli-gemini') args.push('--include-directories', q(dirs.join(',')));
   }
+  // Modelo elegido en el perfil de la IA (vacío = el que decida la herramienta).
+  const m = String(model || '').trim();
+  if (m && /^[\w.:/-]+$/.test(m) && !settings.cli?.[provider]?.command && CLI_MODEL_OK[provider]?.test(m)) args.push(CLI_MODEL_FLAG[provider], m);
   // Servicios MCP (p. ej. Undermind): permiso solo para las herramientas de ese servicio.
   if (provider === 'cli-claude' && mcp.length) args.push('--allowedTools', ...mcp.map((n) => `mcp__${n}`));
   return new Promise((resolve, reject) => {

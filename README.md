@@ -77,6 +77,7 @@ Proveedores y las IAs de la plantilla que los usan:
 | **Cohere** (clave de prueba gratis) | Forma (diseño de producto) |
 | **Hugging Face** (créditos gratis) | Disponible para cualquier IA |
 | **Mistral** (gratis) | Codestral, Mistral, Babel |
+| **MiniMax** (de pago, muy barato) | Maxi |
 | **Ollama** (local, gratis) | Gemma, Phi, Gemma 4 (12B), Coda (Qwen Coder), Deep (DeepSeek R1), Qwen (3.5), Brisa (Mistral), Granito (Granite 4), Llamita (Llama 3.2) |
 | **Anthropic** (de pago, o tu plan con Claude Code) | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |
 | **OpenAI** (de pago, o tu ChatGPT con Codex CLI) | Codex, ChatGPT |
@@ -198,6 +199,15 @@ En **Taller 3D → Mi impresora** escribe la IP, el número de serie y el códig
 3. Activa el acceso remoto: la oficina también escucha en la IP de Tailscale de este computador (`http://100.x.y.z:4747`). Los demás entran desde el navegador e inician sesión.
 
 En este computador no hace falta iniciar sesión. Los **miembros** trabajan con las IAs, las notas y el tablero, pero no pueden cambiar tus claves, aprobar permisos, ejecutar scripts en tu computador ni tocar la impresora. Nadie fuera de tu red de Tailscale puede ver la oficina.
+
+## Tu suscripción de Gemini (Google AI Pro)
+
+La suscripción no es una API, pero sirve en la oficina a través de **Gemini CLI**: con tu cuenta Pro da **1.500 consultas al día** (la clave gratis de la API da 250).
+
+1. **Ajustes → Conectar las IAs → Gratis → Gemini CLI**: instálalo e inicia sesión con tu cuenta Pro. Si tienes varias cuentas Pro, agrégalas: cuando una se queda sin cupo, se usa la siguiente.
+2. Pulsa **✨ Usar mi Gemini Pro**: las IAs de Gemini pasan a Gemini CLI en modo «Auto» (elige Pro o Flash según la tarea). **Volver a la clave** lo deshace.
+
+En el perfil de cualquier IA de Claude Code, Codex o Gemini CLI puedes escribir un modelo (por ejemplo `gemini-3.8-flash`); vacío, la herramienta elige.
 
 ## Undermind: artículos científicos
 

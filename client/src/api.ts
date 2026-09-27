@@ -35,6 +35,7 @@ export type Agent = {
   usable?: boolean;
   account?: string;
   paidBackup?: { provider: string; model: string };
+  geminiBackup?: { provider: string; model: string };
   isHead?: boolean;
   delegate?: boolean;
   assistants?: AssistantDef[];
@@ -310,6 +311,8 @@ export const api = {
   ollamaServers: () => req<OllamaServer[]>('GET', '/api/ollama/servers'),
   ollamaSync: (server: string) => req<{ ok: boolean; missing: string[]; done: string[]; failed: { model: string; error: string }[] }>('POST', '/api/ollama/sync', { server }),
   freeMode: () => req<{ changed: number; changes: { id: string; from: { provider: string; model: string }; to: { provider: string; model: string } }[] }>('POST', '/api/agents/free-mode'),
+  geminiPro: () => req<{ changed: number; cliEnabled: boolean }>('POST', '/api/agents/gemini-pro'),
+  undoGeminiPro: () => req<{ restored: number }>('POST', '/api/agents/gemini-pro/undo'),
   undoFreeMode: () => req<{ restored: number }>('POST', '/api/agents/free-mode/undo'),
 
   assistant: () => req<ChatMessage[]>('GET', '/api/assistant'),

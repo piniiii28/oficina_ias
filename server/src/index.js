@@ -74,7 +74,7 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
@@ -841,6 +841,33 @@ export function createApp(store) {
     }
     store.save();
     res.json({ changed: changes.length, changes });
+  });
+  // Suscripción de Gemini (Google AI Pro): las IAs de Google pasan a Gemini CLI
+  // con tu cuenta, que da muchas más consultas al día que la clave gratis.
+  app.post('/api/agents/gemini-pro', (_req, res) => {
+    let n = 0;
+    for (const a of store.data.agents) {
+      if (a.provider !== 'google') continue;
+      a.geminiBackup = { provider: a.provider, model: a.model };
+      a.provider = 'cli-gemini';
+      a.model = ''; // «Auto»: Gemini CLI elige Pro o Flash según la tarea
+      delete a.account;
+      n++;
+    }
+    store.save();
+    res.json({ changed: n, cliEnabled: Boolean(store.data.settings.cli?.['cli-gemini']?.enabled) });
+  });
+  app.post('/api/agents/gemini-pro/undo', (_req, res) => {
+    let n = 0;
+    for (const a of store.data.agents) {
+      if (!a.geminiBackup) continue;
+      Object.assign(a, a.geminiBackup);
+      delete a.geminiBackup;
+      delete a.account;
+      n++;
+    }
+    store.save();
+    res.json({ restored: n });
   });
   app.post('/api/agents/free-mode/undo', (_req, res) => {
     let n = 0;

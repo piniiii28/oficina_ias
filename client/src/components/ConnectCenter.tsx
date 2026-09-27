@@ -26,6 +26,8 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
   const [helper, setHelper] = useState(false);
   const liveCount = agents.filter((a) => a.live).length;
   const backups = agents.filter((a) => a.paidBackup).length;
+  const onGeminiCli = agents.filter((a) => a.geminiBackup).length;
+  const googleApi = agents.filter((a) => a.provider === 'google').length;
 
   const connected = (p: Provider) => s.keys[p.id]?.configured || (p.cli && s.cli[p.id]?.enabled) || (p.keyless && s.ollamaEnabled);
   const list = providers.filter((p) => GROUPS.find((g) => g.id === group)!.tiers.includes(p.tier));
@@ -49,6 +51,12 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
             toast(r.changed ? `🆓 ${r.changed} IAs pasaron a modelos gratis` : 'Todas las IAs ya usan opciones gratis o tu suscripción');
           }} title="Las IAs que usan proveedores de pago pasan a modelos gratis (o a tu suscripción si la conectaste)">🆓 Modo gratis</button>
           {backups > 0 && <button className="btn btn--ghost small" onClick={async () => { const r = await api.undoFreeMode(); await refresh(); toast(`↩️ ${r.restored} IAs volvieron a su modelo anterior`); }}>Deshacer</button>}
+          {googleApi > 0 && <button className="btn btn--ghost" title="Tus IAs de Gemini pasan a Gemini CLI con tu cuenta de Google AI Pro: 1.500 consultas al día (la clave gratis da 250)" onClick={async () => {
+            const r = await api.geminiPro();
+            await refresh();
+            toast(r.cliEnabled ? `✨ ${r.changed} IAs de Gemini usan ahora tu suscripción Pro` : `✨ ${r.changed} IAs pasaron a Gemini CLI: conéctalo abajo (Gratis → Gemini CLI) e inicia sesión con tu cuenta Pro`);
+          }}>✨ Usar mi Gemini Pro</button>}
+          {onGeminiCli > 0 && <button className="btn btn--ghost small" onClick={async () => { const r = await api.undoGeminiPro(); await refresh(); toast(`↩️ ${r.restored} IAs volvieron a la clave de Gemini`); }}>Volver a la clave</button>}
           <button className={`btn ${helper ? 'btn--primary' : 'btn--ghost'}`} onClick={() => setHelper((h) => !h)}>💬 Ayuda de Claude</button>
         </div>
       </div>

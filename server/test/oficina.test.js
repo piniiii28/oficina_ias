@@ -1834,3 +1834,64 @@ else { process.stdin.resume(); process.stdin.on('end', () => console.log('ARGS '
     process.env.PATH = oldPath;
   }
 });
+
+test('MiniMax (compatible con OpenAI), el modelo en las CLIs y «Usar mi Gemini Pro»', async () => {
+  const http = await import('node:http');
+  const { callModel, PROVIDERS } = await import('../src/providers.js');
+  let body;
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      body = { auth: req.headers.authorization, ...JSON.parse(b) };
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: '<think>pienso…</think>\nListo.' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const oldBase = PROVIDERS.minimax.baseUrl;
+  PROVIDERS.minimax.baseUrl = `http://127.0.0.1:${fake.address().port}/v1`;
+  const bin = tmp();
+  fs.writeFileSync(path.join(bin, 'gemini'), '#!/usr/bin/env node\nprocess.stdin.resume(); process.stdin.on("end", () => console.log("ARGS " + JSON.stringify(process.argv.slice(2))));\n', { mode: 0o755 });
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${oldPath}`;
+  try {
+    const r = await callModel({ apiKeys: { minimax: 'mm-clave' } }, { provider: 'minimax', model: 'MiniMax-M3', system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+    assert.equal(r.text, 'Listo.', 'se quita el razonamiento <think>');
+    assert.equal(body.auth, 'Bearer mm-clave');
+    assert.equal(body.reasoning_split, true);
+    assert.equal(body.model, 'MiniMax-M3');
+    assert.equal(DEFAULT_AGENTS.find((a) => a.id === 'maxi').provider, 'minimax');
+
+    const store = new Store(tmp());
+    await withApp(store, async (call) => {
+      store.data.settings.cli = { 'cli-gemini': { enabled: true } };
+      // Modelo elegido en el perfil: se le pasa a la CLI solo si es de Gemini.
+      await call('PUT', '/api/agents/babel', { provider: 'cli-gemini', model: 'gemini-3.8-flash' });
+      let reply = (await call('POST', '/api/agents/babel/chat', { message: 'hola' })).data.reply;
+      assert.deepEqual(JSON.parse(reply.replace(/^ARGS /, '')).slice(-2), ['-m', 'gemini-3.8-flash']);
+      await call('PUT', '/api/agents/babel', { model: 'mistral-small-latest' });
+      reply = (await call('POST', '/api/agents/babel/chat', { message: 'hola' })).data.reply;
+      assert.ok(!reply.includes('"-m"'), 'un modelo de otro proveedor no se pasa');
+
+      // «Usar mi Gemini Pro»: las IAs de Google pasan a Gemini CLI (modo Auto) y se puede deshacer.
+      const google = store.data.agents.filter((a) => a.provider === 'google').map((a) => [a.id, a.model]);
+      assert.ok(google.length >= 3);
+      const g = await call('POST', '/api/agents/gemini-pro');
+      assert.equal(g.data.changed, google.length);
+      assert.equal(g.data.cliEnabled, true);
+      for (const [id] of google) {
+        const a = store.data.agents.find((x) => x.id === id);
+        assert.equal(a.provider, 'cli-gemini');
+        assert.equal(a.model, '');
+      }
+      assert.equal((await call('POST', '/api/agents/gemini-pro/undo')).data.restored, google.length);
+      for (const [id, model] of google) assert.equal(store.data.agents.find((x) => x.id === id).model, model);
+    });
+  } finally {
+    fake.close();
+    PROVIDERS.minimax.baseUrl = oldBase;
+    process.env.PATH = oldPath;
+  }
+});
