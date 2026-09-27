@@ -77,7 +77,7 @@ Proveedores y las IAs de la plantilla que los usan:
 | **Cohere** (clave de prueba gratis) | Forma (diseño de producto) |
 | **Hugging Face** (créditos gratis) | Disponible para cualquier IA |
 | **Mistral** (gratis) | Codestral, Mistral, Babel |
-| **Ollama** (local, gratis) | Gemma, Phi, Gemma 4 (12B) |
+| **Ollama** (local, gratis) | Gemma, Phi, Gemma 4 (12B), Coda (Qwen Coder), Deep (DeepSeek R1), Qwen (3.5), Brisa (Mistral), Granito (Granite 4), Llamita (Llama 3.2) |
 | **Anthropic** (de pago, o tu plan con Claude Code) | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |
 | **OpenAI** (de pago, o tu ChatGPT con Codex CLI) | Codex, ChatGPT |
 | **xAI** / **Perplexity** (de pago) | Grok / Perplexity, Sonar |
@@ -213,7 +213,7 @@ Se usan **todos a la vez**: el de este computador y el de cada nodo.
 
 - **Cada IA elige el suyo** en su perfil (⚙️ → «¿Qué Ollama usa?»): el preferido de la oficina, uno en concreto, o **automático** (el menos ocupado). Así, en una tarea con varias IAs, cada computador trabaja en paralelo.
 - **Respaldo:** si ese computador está apagado o no tiene el modelo, se usa otro. Uno que falló se deja de últimas durante un minuto.
-- **Modelos:** la oficina le avisa a cada nodo qué modelos usan las IAs (al agregarlo, al cambiar una IA y cada 10 minutos) y el nodo descarga los que le falten. En **Ajustes → Nodos → Tus Ollama** ves qué tiene cada uno y descargas lo que falta. Se puede apagar por nodo.
+- **Modelos:** cada computador descarga solo los modelos de las IAs que corren en él (las que lo eligieron, las de «automático», y las demás en el preferido). La oficina se lo avisa a cada nodo al agregarlo, al cambiar una IA y cada 10 minutos, y el nodo descarga los que le falten. En **Ajustes → Nodos → Tus Ollama** ves qué tiene cada uno y descargas lo que falta. Se puede apagar por nodo.
 
 ### Actualizaciones de los nodos
 

@@ -251,12 +251,13 @@ function OllamaServers() {
   return (
     <div className="ollama-servers">
       <h3>🦙 Tus Ollama</h3>
-      <p className="muted small">Se usan <b>todos a la vez</b>: cada IA elige el suyo en su perfil (⚙️ → «¿Qué Ollama usa?»), o «automático» para mandar el trabajo al menos ocupado. Si uno está apagado o no tiene el modelo, se usa otro. Las IAs sin uno elegido usan el preferido.</p>
+      <p className="muted small">Se usan <b>todos a la vez</b>: cada IA elige el suyo en su perfil (⚙️ → «¿Qué Ollama usa?»), o «automático» para mandar el trabajo al menos ocupado. Si uno está apagado o no tiene el modelo, se usa otro. Las IAs sin uno elegido usan el preferido. Cada computador descarga solo los modelos de las IAs que corren en él (los nodos, solos).</p>
       <ul className="grant-list">
         {list?.map((o) => (
           <li key={o.id}>
             <b>{o.label}</b> <span className={`pill ${o.running ? 'pill--done' : 'pill--error'}`}>{o.running ? (o.busy ? `trabajando (${o.busy})` : 'listo') : 'apagado'}</span>
-            {o.running && <span className="small muted"> · {o.models.map((m) => m.name.replace(/:latest$/, '')).join(', ') || 'sin modelos'}</span>}
+            {o.running && <span className="small muted"> · tiene: {o.models.map((m) => m.name.replace(/:latest$/, '')).join(', ') || 'ningún modelo'}</span>}
+            {o.wanted.length > 0 && <span className="small muted"> · corren aquí: {o.wanted.join(', ')}</span>}
             {o.running && o.missing.length > 0 && (
               <>
                 <span className="small warn"> · le faltan: {o.missing.join(', ')}</span>{' '}

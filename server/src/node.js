@@ -14,8 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { connectPrinter, getPrinter, printerInfo, cameraFrame, PRINTER_COMMANDS, isLanHost } from './bambu.js';
 import { detectCad } from './cad.js';
 import { hostAllowed, tailscaleAddresses } from './auth.js';
-import { DEFAULT_AGENTS } from './agents.js';
-import { ollamaModelsUsed, syncModels } from './ollama.js';
+import { syncModels } from './ollama.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
 
 export const NODE_PORT = Number(process.env.OFICINA_NODO_PORT || 4748);
@@ -23,8 +22,8 @@ const ollamaUrl = () => process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const MODEL_RE = /^[a-z0-9][a-z0-9._:/-]{0,80}$/i;
 
-/** Modelos que el nodo debe tener: los que le pidió la oficina, o los de fábrica. */
-export const wantedModels = (cfg) => (Array.isArray(cfg.data.ollamaModels) ? cfg.data.ollamaModels : ollamaModelsUsed(DEFAULT_AGENTS));
+/** Modelos que el nodo debe tener: los que le pidió la oficina (al enlazarlo se los dice). */
+export const wantedModels = (cfg) => (Array.isArray(cfg.data.ollamaModels) ? cfg.data.ollamaModels : []);
 
 /** Descargas de modelos del nodo (una a la vez, en segundo plano). */
 export function modelSyncer(cfg, { log = (t) => process.stdout.write(t) } = {}) {
@@ -165,7 +164,7 @@ export function createNodeApp(cfg, { remoteHosts = [], syncer = modelSyncer(cfg)
 <ol><li>En la oficina principal ve a <b>Ajustes → Nodos</b> y pulsa <b>Agregar nodo</b>.</li>
 <li>Dirección del nodo: ${urls.length ? urls.map((u) => `<code>${u}</code>`).join(' ') : '<span class="warn">todavía no detecto Tailscale en este computador</span>'}</li>
 <li>Código de enlace: <code>${cfg.data.token}</code></li></ol>
-<p>Ollama: ${ollamaLine(syncer.state)} · modelos: ${wantedModels(cfg).map(escape).join(', ') || 'ninguno'}</p>
+<p>Ollama: ${ollamaLine(syncer.state)} · modelos: ${wantedModels(cfg).map(escape).join(', ') || 'los que pida la oficina al enlazar este nodo'}</p>
 <p>Impresora: ${info.configured ? (info.connected ? `<span class="ok">conectada (${escape(info.state?.estado || '')})</span>` : `<span class="warn">sin conexión: ${escape(info.error || '')}</span>`) : 'sin configurar (se configura desde la oficina principal)'}</p></main></html>`);
   });
   const auth = (req, res, next) => (same(String(req.headers['x-nodo-token'] || ''), cfg.data.token) ? next() : res.status(401).json({ error: 'Código de enlace incorrecto' }));

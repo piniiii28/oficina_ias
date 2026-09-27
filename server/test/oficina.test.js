@@ -1592,20 +1592,26 @@ test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se u
   try {
     await withApp(store, async (call) => {
       store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${local.address().port}/v1` };
-      await call('PUT', '/api/agents/gemma4', { enabled: false }); // solo Gemma y Phi en esta prueba
+      // Solo Gemma y Phi usan Ollama en esta prueba.
+      for (const a of store.data.agents) if (a.provider === 'ollama' && !['gemma-salud', 'phi-tutor'].includes(a.id)) a.enabled = false;
       const nodeId = (await call('POST', '/api/nodes', { url: `http://127.0.0.1:${nodeServer.address().port}`, token: cfg.data.token, name: 'Bogotá' })).data.id;
-      // Al agregarlo, el nodo recibe la lista de modelos de las IAs y descarga los que le faltan.
-      for (let i = 0; i < 60 && !nodeModels.includes('gemma3:latest'); i++) await new Promise((res) => setTimeout(res, 50));
-      assert.ok(nodeModels.includes('gemma3:latest'), 'el nodo descargó gemma3 solo');
-      assert.deepEqual(cfg.data.ollamaModels, ['gemma3', 'phi4']);
-      while (syncer.state.running) await new Promise((res) => setTimeout(res, 20));
+      const waitSync = async () => {
+        await new Promise((res) => setTimeout(res, 60));
+        while (syncer.state.running) await new Promise((res) => setTimeout(res, 20));
+      };
+      // Al enlazarlo, el nodo recibe la lista de modelos de las IAs que corren en él: por ahora ninguna.
+      await waitSync();
+      assert.deepEqual(cfg.data.ollamaModels, []);
       const servers = (await call('GET', '/api/ollama/servers')).data;
       assert.deepEqual(servers.map((s) => s.id), ['local', `node:${nodeId}`]);
       assert.ok(servers.every((s) => s.running));
+      assert.deepEqual(servers[0].wanted, ['gemma3', 'phi4'], 'sin elegir, corren en el Ollama preferido (este computador)');
 
       // Cada IA usa su Ollama: Gemma el de este computador, Phi el del nodo.
       await call('PUT', '/api/agents/gemma-salud', { provider: 'ollama', model: 'gemma3', account: 'local' });
       await call('PUT', '/api/agents/phi-tutor', { provider: 'ollama', model: 'phi4', account: `node:${nodeId}` });
+      await waitSync();
+      assert.deepEqual(cfg.data.ollamaModels, ['phi4'], 'el nodo solo pide el modelo de la IA que corre en él');
       const [g, p] = await Promise.all([
         call('POST', '/api/agents/gemma-salud/chat', { message: 'hola' }),
         call('POST', '/api/agents/phi-tutor/chat', { message: 'hola' }),
@@ -1613,9 +1619,17 @@ test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se u
       assert.match(g.data.reply, /desde mosquera/);
       assert.match(p.data.reply, /desde bogota/);
 
+      // «Automático»: el modelo se descarga en todos los Ollama.
+      await call('PUT', '/api/agents/gemma-salud', { account: 'auto' });
+      await waitSync();
+      assert.ok(nodeModels.includes('gemma3:latest'), 'el nodo descargó gemma3 solo');
+      assert.deepEqual(cfg.data.ollamaModels, ['gemma3', 'phi4']);
+
       // Si el modelo no está en el Ollama elegido, se usa el otro que sí lo tiene.
       await call('PUT', '/api/agents/gemma-salud', { model: 'solo-local', account: `node:${nodeId}` });
       assert.match((await call('POST', '/api/agents/gemma-salud/chat', { message: 'hola' })).data.reply, /desde mosquera/);
+      await waitSync();
+      assert.deepEqual(syncer.state.failed.map((f) => f.model), ['solo-local'], 'el nodo cuenta lo que no pudo descargar');
 
       // Un Ollama que falló hace poco pasa al final de la fila (incluso en «automático»).
       markDown(`node:${nodeId}`);
@@ -1623,19 +1637,16 @@ test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se u
       markUp(`node:${nodeId}`);
       assert.equal(ollamaOrder(store.data.settings, 'auto')[0].id, 'local');
 
-      // Faltan modelos: la principal los descarga en el Ollama que elijas…
+      // Faltan modelos: la principal los descarga en el Ollama que elijas.
+      await call('PUT', '/api/agents/phi-tutor', { account: 'auto' });
       const sv = (await call('GET', '/api/ollama/servers')).data;
       assert.deepEqual(sv[0].missing, ['phi4']);
       assert.deepEqual(sv[1].missing, ['solo-local']);
       const sync = await call('POST', '/api/ollama/sync', { server: 'local' });
       assert.deepEqual(sync.data.done, ['phi4']);
       assert.ok(localModels.includes('phi4:latest'));
-      // …y el nodo recibe la lista nueva (si uno no se puede descargar, lo cuenta).
       const r = await call('POST', `/api/nodes/${nodeId}/models`);
       assert.deepEqual(r.data.wanted, ['phi4', 'solo-local']);
-      await new Promise((res) => setTimeout(res, 30));
-      while (syncer.state.running) await new Promise((res) => setTimeout(res, 20));
-      assert.deepEqual(syncer.state.failed.map((f) => f.model), ['solo-local']);
 
       // Un nodo sin Ollama se puede sacar de la fila.
       await call('PUT', `/api/nodes/${nodeId}`, { ollama: false });
@@ -1651,7 +1662,7 @@ test('dos Ollama a la vez: cada IA elige el suyo, se reparte y si uno falla se u
 
       // Al quitar el nodo, las IAs que lo usaban vuelven al Ollama preferido.
       await call('DELETE', `/api/nodes/${nodeId}`);
-      assert.equal(store.data.agents.find((a) => a.id === 'phi-tutor').account, undefined);
+      assert.equal(store.data.agents.find((a) => a.id === 'gemma-salud').account, undefined);
     });
   } finally {
     nodeServer.close();
@@ -1695,11 +1706,12 @@ test('solo IAs conectadas: las de modo demo no trabajan ni se ven, salvo que no 
       assert.ok(agents.every((a) => a.usable));
       assert.equal((await call('GET', '/api/settings')).data.onlyLive, true, 'viene activado');
 
-      // Se conecta Ollama: Gemma, Phi y Gemma 4 quedan conectadas; las demás, en demo.
+      // Se conecta Ollama: sus IAs (Gemma, Phi, Gemma 4, Coda…) quedan conectadas; las demás, en demo.
       store.data.settings.apiKeys = { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
       agents = (await call('GET', '/api/agents')).data;
       const live = agents.filter((a) => a.usable && !a.isBrain).map((a) => a.id).sort();
-      assert.deepEqual(live, ['gemma-salud', 'gemma4', 'phi-tutor']);
+      assert.deepEqual(live, store.data.agents.filter((a) => a.provider === 'ollama').map((a) => a.id).sort());
+      assert.ok(live.includes('gemma4') && live.includes('coda-local') && !live.includes('opencode'));
       assert.ok(agents.find((a) => a.isBrain).usable, 'el cerebro siempre se ve');
 
       // El cerebro (en demo) solo reparte entre las conectadas, y si eliges una en demo se ignora.
@@ -1726,4 +1738,48 @@ test('solo IAs conectadas: las de modo demo no trabajan ni se ven, salvo que no 
   } finally {
     fake.close();
   }
+});
+
+test('Gemini: los modelos retirados pasan a los 3.x gratis, y llegan las IAs nuevas de Ollama', async () => {
+  const http = await import('node:http');
+  const { callModel } = await import('../src/providers.js');
+  const seen = [];
+  const fake = http.createServer((req, res) => {
+    req.resume();
+    seen.push(req.url);
+    if (req.url.includes('gemini-2.5-pro')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: { message: 'This model models/gemini-2.5-pro is no longer available to new users. Please update your code to use models/gemini-3.1-pro-preview.' } }));
+    }
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    res.end(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'hola desde 3.8' }] } }] })}\n\n`);
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  process.env.GEMINI_BASE_URL = `http://127.0.0.1:${fake.address().port}`;
+  try {
+    // Una IA con un modelo retirado sigue funcionando con el gratis recomendado, y se queda con él.
+    const agent = { id: 'x', name: 'X', provider: 'google', model: 'gemini-2.5-pro' };
+    const r = await callModel({ apiKeys: { google: 'k' } }, { provider: 'google', model: agent.model, agent, system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+    assert.equal(r.text, 'hola desde 3.8');
+    assert.equal(agent.model, 'gemini-3.8-flash');
+    assert.ok(seen.at(-1).includes('gemini-3.8-flash'), 'no usa el de pago que sugiere el error');
+  } finally {
+    fake.close();
+    delete process.env.GEMINI_BASE_URL;
+  }
+
+  // Oficina que ya existía: se cambian los modelos 2.5 y se agregan las IAs de Ollama.
+  const store = new Store(tmp());
+  store.data.agents = structuredClone(DEFAULT_AGENTS);
+  const g = store.data.agents.find((a) => a.id === 'gemini-data');
+  g.model = 'gemini-2.5-pro';
+  g.assistants = [{ id: 'as1', name: 'A', focus: 'x', provider: 'google', model: 'gemini-2.5-flash' }];
+  store.data.agents = store.data.agents.filter((a) => a.id !== 'coda-local');
+  Object.assign(store.data.settings, { agentsV3Seeded: true, gemma4Seeded: true });
+  createApp(store).locals.stop?.();
+  assert.equal(g.model, 'gemini-3.8-flash');
+  assert.equal(g.assistants[0].model, 'gemini-3.7-flash');
+  assert.ok(store.data.agents.some((a) => a.id === 'coda-local'));
+  assert.ok(!DEFAULT_AGENTS.some((a) => a.provider === 'google' && /gemini-2/.test(a.model)));
 });

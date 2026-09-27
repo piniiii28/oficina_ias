@@ -11,8 +11,8 @@ import { PROVIDERS, hasKey, isLive, usableFilter, detectClis, cliCommand, callMo
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
-import { addNode, nodeById, nodeCall, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
-import { busyNow, ollamaModelsUsed, ollamaPull, ollamaServer, ollamaServers, ollamaTags, hasModel, syncModels } from './ollama.js';
+import { addNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { busyNow, ollamaModelsFor, ollamaPull, ollamaServer, ollamaServers, ollamaTags, hasModel, syncModels } from './ollama.js';
 import { requestAccess } from './access.js';
 import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
@@ -73,11 +73,22 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
     store.data.settings[flag] = true;
+    store.save();
+  }
+
+  // Google limitó los modelos 2.x a cuentas que ya los usaban: se pasan a los 3.x gratis (una vez).
+  if (!store.data.settings.gemini3Seeded) {
+    const NEW = { 'gemini-2.5-pro': 'gemini-3.8-flash', 'gemini-2.5-flash': 'gemini-3.7-flash', 'gemini-2.5-flash-lite': 'gemini-3.5-flash-lite', 'gemini-2.0-flash': 'gemini-3.7-flash', 'gemini-2.0-flash-lite': 'gemini-3.5-flash-lite', 'gemini-1.5-pro': 'gemini-3.8-flash', 'gemini-1.5-flash': 'gemini-3.7-flash' };
+    for (const a of store.data.agents) {
+      if (a.provider === 'google' && NEW[a.model]) a.model = NEW[a.model];
+      for (const s of a.assistants || []) if (s.provider === 'google' && NEW[s.model]) s.model = NEW[s.model];
+    }
+    store.data.settings.gemini3Seeded = true;
     store.save();
   }
 
@@ -269,6 +280,7 @@ export function createApp(store) {
       if (req.body.ollamaNode && !(s.nodes || []).some((n) => n.id === req.body.ollamaNode)) return res.status(400).json({ error: 'Ese nodo no existe' });
       if (req.body.ollamaNode) s.ollamaNode = req.body.ollamaNode;
       else delete s.ollamaNode;
+      setImmediate(() => modelSync.changed()); // cambia qué computador corre las IAs sin Ollama elegido
     }
     if (req.body?.verifySteps !== undefined) s.verifySteps = Boolean(req.body.verifySteps);
     if (req.body?.jury && typeof req.body.jury === 'object') s.jury = { enabled: Boolean(req.body.jury.enabled), size: Math.max(1, Math.min(3, Number(req.body.jury.size) || 2)) };
@@ -763,9 +775,9 @@ export function createApp(store) {
   // --- Ollama: este computador y los nodos (varios a la vez) ---
   const serverOf = (req) => ollamaServer(store.data.settings, req.query.server || req.body?.server);
   app.get('/api/ollama/servers', async (_req, res) => {
-    const used = ollamaModelsUsed(store.data.agents);
     res.json(await Promise.all(ollamaServers(store.data.settings).map(async (sv) => {
-      const out = { id: sv.id, label: sv.label, nodeId: sv.nodeId || null, busy: busyNow(sv.id) };
+      const used = ollamaModelsFor(store.data.settings, store.data.agents, sv.id);
+      const out = { id: sv.id, label: sv.label, nodeId: sv.nodeId || null, busy: busyNow(sv.id), wanted: used };
       try {
         const models = await ollamaTags(sv);
         const names = models.map((m) => m.name);
@@ -805,7 +817,7 @@ export function createApp(store) {
     if (!sv) return res.status(404).json({ error: 'Ese Ollama no existe' });
     const log = streamer(`install:ollama-sync:${sv.id}`);
     try {
-      const r = await syncModels(sv, ollamaModelsUsed(store.data.agents), log);
+      const r = await syncModels(sv, ollamaModelsFor(store.data.settings, store.data.agents, sv.id), log);
       log.end();
       res.json({ ok: !r.failed.length, ...r });
     } catch (err) {
@@ -1292,7 +1304,7 @@ export function createApp(store) {
     const n = nodeById(store.data.settings, req.params.id);
     if (!n) return res.status(404).json({ error: 'Ese nodo no existe' });
     try {
-      res.json(await nodeCall(n, 'PUT', '/nodo/modelos', { models: ollamaModelsUsed(store.data.agents), now: true }));
+      res.json(await nodeCall(n, 'PUT', '/nodo/modelos', { models: nodeModels(store, n), now: true }));
     } catch (err) {
       res.status(502).json({ error: err.message });
     }

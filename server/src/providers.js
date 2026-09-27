@@ -100,6 +100,11 @@ export function credentials(settings, provider, accountId = null) {
   return all;
 }
 
+/** Modelo gratis de Gemini que se usa si el elegido fue retirado. */
+export const GEMINI_FALLBACK = 'gemini-3.8-flash';
+/** ¿El error dice que el modelo ya no existe o no está disponible? */
+export const isRetiredModel = (msg) => /no longer available|is not found|not found for API|not supported for generateContent|has been (deprecated|retired|shut ?down)/i.test(String(msg));
+
 /** ¿El error indica que la cuenta se quedó sin cupo? */
 export const isQuotaError = (msg) => /\b429\b|quota|rate.?limit|l[ií]mite de uso|usage limit|limit reached|exhausted|too many requests|insufficient/i.test(String(msg));
 
@@ -177,7 +182,20 @@ async function callModelInner(settings, { provider, model, system, messages, age
       if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar
       if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home);
       else if (provider === 'anthropic') text = await callAnthropic(cred.key, model, system, messages, effort, tap, sig, Boolean(settings.webSearch));
-      else if (provider === 'google') text = await callGemini(cred.key, model, system, messages, tap, sig);
+      else if (provider === 'google') {
+        try {
+          text = await callGemini(cred.key, model, system, messages, tap, sig);
+        } catch (err) {
+          // Google retira modelos seguido: si este ya no está, se usa el gratis recomendado
+          // y la IA queda con ese modelo (se puede cambiar en su perfil).
+          const next = GEMINI_FALLBACK;
+          if (wrote || model === next || !isRetiredModel(err.message)) throw err;
+          console.warn(`[gemini] «${model}» ya no está disponible; uso «${next}»`);
+          if (agent && agent.model === model) agent.model = next;
+          model = next;
+          text = await callGemini(cred.key, model, system, messages, tap, sig);
+        }
+      }
       else text = await callOpenAICompatible(provider, cred, model, system, messages, tap, sig);
       if (ollama) markUp(ollama.id);
       used = cred;

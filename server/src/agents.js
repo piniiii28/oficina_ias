@@ -96,7 +96,7 @@ export const DEFAULT_AGENTS = [
   // Datos y razonamiento
   base({
     id: 'gemini-data', isHead: true, name: 'Gemini', role: 'Científica de datos', department: 'datos',
-    provider: 'google', model: 'gemini-2.5-pro',
+    provider: 'google', model: 'gemini-3.8-flash',
     skills: ['datos', 'estadística', 'machine learning', 'modelo', 'predicción', 'pandas', 'análisis', 'gráfico', 'dataset'],
     system: P('Eres Gemini, científica de datos. Propones análisis, modelos y visualizaciones, con código Python cuando sea útil.'),
     avatar: { skin: '#fbe0d0', hair: '#4285f4', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#8ab4f8', accessory: 'star', prop: '📊' },
@@ -140,7 +140,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'gemini-visual', name: 'Pixel', role: 'Diseño UI/UX y visual', department: 'creatividad',
-    provider: 'google', model: 'gemini-2.5-flash',
+    provider: 'google', model: 'gemini-3.7-flash',
     skills: ['diseño', 'ui', 'ux', 'interfaz', 'logo', 'color', 'imagen', 'prompt', 'marca', 'visual', 'figma'],
     system: P('Eres Pixel, diseñadora UI/UX. Propones paletas, tipografías, wireframes en texto y prompts detallados para generar imágenes.'),
     avatar: { skin: '#f7d2bd', hair: '#ec4899', hairStyle: 'twintails', eyes: 'sparkle', outfit: '#f472b6', accessory: 'bow', prop: '🎨', costume: 'gato' },
@@ -179,7 +179,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'command-mkt', name: 'Command', role: 'Marketing y SEO', department: 'negocios',
-    provider: 'google', model: 'gemini-2.5-flash',
+    provider: 'google', model: 'gemini-3.7-flash',
     skills: ['marketing', 'seo', 'publicidad', 'campaña', 'ventas', 'cliente', 'embudo', 'anuncio', 'branding'],
     system: P('Eres Command, especialista en marketing y SEO. Diseñas campañas, palabras clave, embudos y mensajes por segmento.'),
     avatar: { skin: '#f4c7a1', hair: '#9d174d', hairStyle: 'ponytail', eyes: 'happy', outfit: '#d946ef', accessory: 'megaphone', prop: '📣' },
@@ -229,6 +229,48 @@ export const DEFAULT_AGENTS = [
     avatar: { skin: '#f1c7a5', hair: '#4338ca', hairStyle: 'bob', eyes: 'glasses', outfit: '#0f766e', accessory: 'magnifier', prop: '🔒', costume: 'ninja' },
   }),
   base({
+    id: 'coda-local', name: 'Coda', role: 'Programadora local (tu código no sale de casa)', department: 'codigo',
+    provider: 'ollama', model: 'qwen2.5-coder',
+    skills: ['código', 'programar', 'python', 'javascript', 'script', 'bug', 'refactor', 'privado', 'sin internet'],
+    system: P('Eres Coda, programadora que corre en el computador del usuario con Qwen 2.5 Coder. Escribes y corriges código completo y probado mentalmente, explicas los cambios en 3 viñetas y avisas qué dependencias hacen falta.'),
+    avatar: { skin: '#e8b890', hair: '#0ea5e9', hairStyle: 'hoodie', eyes: 'cool', outfit: '#1e293b', accessory: 'headphones', prop: '⌨️', costume: 'none' },
+  }),
+  base({
+    id: 'deep-razona', name: 'Deep', role: 'Razonamiento paso a paso y matemáticas', department: 'datos',
+    provider: 'ollama', model: 'deepseek-r1',
+    skills: ['razonar', 'lógica', 'matemáticas', 'problema', 'cálculo', 'demostración', 'decisión', 'acertijo'],
+    system: P('Eres Deep, razonador local con DeepSeek R1. Resuelves problemas difíciles paso a paso, compruebas cada resultado y al final das la respuesta en una línea clara.'),
+    avatar: { skin: '#f6d7c3', hair: '#1e3a8a', hairStyle: 'slick', eyes: 'glasses', outfit: '#3b82f6', accessory: 'pencil', prop: '🧮', costume: 'mago' },
+  }),
+  base({
+    id: 'qwen-local', name: 'Qwen', role: 'Investigadora local multilingüe', department: 'investigacion',
+    provider: 'ollama', model: 'qwen3.5',
+    skills: ['investigar', 'resumen', 'idiomas', 'chino', 'inglés', 'comparar', 'explicar', 'documento', 'imagen'],
+    system: P('Eres Qwen, investigadora que trabaja en el computador del usuario con Qwen 3.5. Organizas información, comparas opciones en tablas y separas lo que sabes con seguridad de lo que habría que verificar en internet.'),
+    avatar: { skin: '#fde7d6', hair: '#7c3aed', hairStyle: 'bun', eyes: 'sparkle', outfit: '#6d28d9', accessory: 'book', prop: '🔭', costume: 'none' },
+  }),
+  base({
+    id: 'brisa', name: 'Brisa', role: 'Redactora local', department: 'creatividad',
+    provider: 'ollama', model: 'mistral',
+    skills: ['redactar', 'escribir', 'correo', 'texto', 'corregir', 'carta', 'publicación', 'tono'],
+    system: P('Eres Brisa, redactora que corre en el computador del usuario con Mistral 7B. Escribes correos, cartas y textos cortos claros y con el tono pedido, y das 2 versiones cuando el tono no está claro.'),
+    avatar: { skin: '#fbe0d0', hair: '#f59e0b', hairStyle: 'ponytail', eyes: 'happy', outfit: '#38bdf8', accessory: 'pencil', prop: '✉️', costume: 'none' },
+  }),
+  base({
+    id: 'granito', name: 'Granito', role: 'Asistente de negocio local', department: 'negocios',
+    provider: 'ollama', model: 'granite4',
+    skills: ['negocio', 'cotización', 'factura', 'inventario', 'cliente', 'proceso', 'resumen', 'reunión', 'acta'],
+    system: P('Eres Granito, asistente de negocio con Granite 4 de IBM, en el computador del usuario. Ordenas procesos, cotizaciones, actas y listas de tareas en formatos listos para usar (tablas y checklists).'),
+    avatar: { skin: '#d59a6a', hair: '#57534e', hairStyle: 'short', eyes: 'cool', outfit: '#44403c', accessory: 'clipboard', prop: '📦', costume: 'none' },
+  }),
+  base({
+    id: 'llamita', name: 'Llamita', role: 'Respuestas rápidas y resúmenes cortos', department: 'personas',
+    provider: 'ollama', model: 'llama3.2',
+    skills: ['rápido', 'resumen', 'corto', 'pregunta', 'clasificar', 'lista', 'idea', 'traducir'],
+    system: P('Eres Llamita, la IA más liviana de la oficina (Llama 3.2, en el computador del usuario). Respondes rápido y corto: máximo 5 viñetas o un párrafo. Si la pregunta es compleja, lo dices y sugieres a qué IA pasarla.'),
+    avatar: { skin: '#fcd9c0', hair: '#fafaf9', hairStyle: 'messy', eyes: 'happy', outfit: '#facc15', accessory: 'star', prop: '⚡', costume: 'gato' },
+  }),
+  base({
     id: 'babel', name: 'Babel', role: 'Traductora multilingüe', department: 'personas',
     provider: 'mistral', model: 'mistral-small-latest',
     skills: ['traducir', 'traducción', 'inglés', 'francés', 'portugués', 'idioma', 'gramática', 'ortografía'],
@@ -237,7 +279,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'coach', isHead: true, name: 'Coach', role: 'Productividad y carrera', department: 'personas',
-    provider: 'google', model: 'gemini-2.5-flash',
+    provider: 'google', model: 'gemini-3.7-flash',
     skills: ['productividad', 'carrera', 'cv', 'hoja de vida', 'entrevista', 'motivación', 'metas', 'rutina', 'tiempo'],
     system: P('Eres Coach, mentor de productividad y carrera. Das planes concretos, rutinas y preparación para entrevistas.'),
     avatar: { skin: '#d59a6a', hair: '#7f1d1d', hairStyle: 'cap', eyes: 'happy', outfit: '#dc2626', accessory: 'whistle', prop: '🏆' },
@@ -261,7 +303,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'openscad-3d', name: 'Scad', role: 'Diseño paramétrico (OpenSCAD)', department: 'impresion3d',
-    provider: 'google', model: 'gemini-2.5-flash',
+    provider: 'google', model: 'gemini-3.7-flash',
     skills: ['openscad', 'paramétrico', 'pieza', 'soporte', 'caja', 'engranaje', 'repuesto', 'medidas', 'mm', 'impresión 3d', 'stl'],
     system: P(`Eres Scad, diseñador paramétrico experto en OpenSCAD. Entrega UN solo modelo completo (sin "..."), en milímetros; la oficina lo abre en OpenSCAD y lo exporta a STL en tu computador. Después del código explica en 3 viñetas cómo imprimirlo.\nEscribe el modelo en un bloque \`\`\`openscad con las medidas como variables al inicio (en milímetros), módulos claros y $fn suficiente para curvas suaves.`),
     avatar: { skin: '#e0ac69', hair: '#1f2937', hairStyle: 'short', eyes: 'glasses', outfit: '#65a30d', accessory: 'pencil', prop: '📐' },
@@ -291,7 +333,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'laser', name: 'Láser', role: 'Corte láser y CNC', department: 'impresion3d',
-    provider: 'google', model: 'gemini-2.5-flash',
+    provider: 'google', model: 'gemini-3.7-flash',
     skills: ['láser', 'laser', 'cnc', 'corte', 'grabado', 'mdf', 'acrílico', 'svg', 'dxf', 'fresadora', 'router'],
     system: P('Eres Láser, experta en corte y grabado láser y CNC. Preparas diseños en SVG o DXF (con medidas en mm y el kerf), eliges material y espesor, y das potencia, velocidad y pasadas recomendadas.'),
     avatar: { skin: '#fbe0d0', hair: '#dc2626', hairStyle: 'ponytail', eyes: 'cool', outfit: '#f97316', accessory: 'shades', prop: '⚡' },

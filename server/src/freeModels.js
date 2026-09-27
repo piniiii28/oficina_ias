@@ -14,9 +14,10 @@ export const FREE_MODELS = {
     { id: 'qwen-3-32b', label: 'Qwen3 32B', for: 'código' },
   ],
   google: [
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', for: 'general' },
-    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', for: 'rápido' },
-    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (cupo gratis pequeño)', for: 'razonamiento' },
+    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (el más capaz gratis)', for: 'razonamiento' },
+    { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', for: 'general' },
+    { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', for: 'rápido' },
+    // gemini-3.1-pro-preview no tiene plan gratis (solo de pago).
   ],
   openrouter: [
     { id: 'qwen/qwen3-coder:free', label: 'Qwen3 Coder', for: 'código' },
@@ -62,13 +63,16 @@ export const FREE_MODELS = {
   ],
   ollama: [
     { id: 'gemma4:12b', label: 'Gemma 4 12B (7,6 GB, lee imágenes)', for: 'documentos largos' },
-    { id: 'gemma3', label: 'Gemma 3', for: 'general' },
-    { id: 'qwen2.5-coder', label: 'Qwen 2.5 Coder', for: 'código' },
-    { id: 'llama3.2', label: 'Llama 3.2 (liviano)', for: 'rápido' },
-    { id: 'deepseek-r1', label: 'DeepSeek R1', for: 'razonamiento' },
-    { id: 'phi4', label: 'Phi-4', for: 'explicar' },
-    { id: 'granite3.3', label: 'Granite 3.3 (IBM)', for: 'general' },
-    { id: 'hermes3', label: 'Hermes 3', for: 'redacción' },
+    { id: 'qwen3.5', label: 'Qwen 3.5 (6,6 GB, lee imágenes)', for: 'general' },
+    { id: 'qwen2.5-coder', label: 'Qwen 2.5 Coder (4,7 GB)', for: 'código' },
+    { id: 'deepseek-r1', label: 'DeepSeek R1 (5,2 GB)', for: 'razonamiento' },
+    { id: 'mistral', label: 'Mistral 7B (4,4 GB)', for: 'redacción' },
+    { id: 'granite4', label: 'Granite 4 de IBM (2,1 GB)', for: 'negocios' },
+    { id: 'llama3.2', label: 'Llama 3.2 (2 GB, liviano)', for: 'rápido' },
+    { id: 'gemma3', label: 'Gemma 3 (3,3 GB)', for: 'general' },
+    { id: 'phi4', label: 'Phi-4 (9,1 GB)', for: 'explicar' },
+    { id: 'gpt-oss:20b', label: 'GPT-OSS 20B (14 GB, necesita buena tarjeta)', for: 'razonamiento' },
+    { id: 'hermes3', label: 'Hermes 3 (4,7 GB)', for: 'redacción' },
   ],
 };
 
@@ -80,10 +84,10 @@ const NEED = {
 
 // Orden de preferencia de proveedores gratis para cada necesidad.
 const ORDER = {
-  código: [['openrouter', 'qwen/qwen3-coder:free'], ['groq', 'qwen/qwen3-32b'], ['cerebras', 'qwen-3-32b'], ['mistral', 'codestral-latest'], ['google', 'gemini-2.5-flash'], ['ollama', 'qwen2.5-coder']],
-  razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'deepseek/deepseek-r1:free'], ['google', 'gemini-2.5-flash'], ['ollama', 'deepseek-r1']],
-  redacción: [['google', 'gemini-2.5-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free'], ['groq', 'llama-3.3-70b-versatile'], ['ollama', 'gemma3']],
-  general: [['groq', 'llama-3.3-70b-versatile'], ['google', 'gemini-2.5-flash'], ['cerebras', 'llama-3.3-70b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'deepseek/deepseek-chat-v3.1:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
+  código: [['openrouter', 'qwen/qwen3-coder:free'], ['groq', 'qwen/qwen3-32b'], ['cerebras', 'qwen-3-32b'], ['mistral', 'codestral-latest'], ['google', 'gemini-3.7-flash'], ['ollama', 'qwen2.5-coder']],
+  razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'deepseek/deepseek-r1:free'], ['google', 'gemini-3.8-flash'], ['ollama', 'deepseek-r1']],
+  redacción: [['google', 'gemini-3.7-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free'], ['groq', 'llama-3.3-70b-versatile'], ['ollama', 'gemma3']],
+  general: [['groq', 'llama-3.3-70b-versatile'], ['google', 'gemini-3.7-flash'], ['cerebras', 'llama-3.3-70b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'deepseek/deepseek-chat-v3.1:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
 };
 
 const PAID = new Set(['anthropic', 'openai', 'xai', 'perplexity', 'together', 'deepseek']);

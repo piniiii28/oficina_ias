@@ -3,7 +3,7 @@
 // hablarle, para que el resto de la oficina no tenga que saberlo.
 import { Store } from './store.js';
 import { printerInfo, getPrinter, cameraFrame, isLanHost, connectPrinter } from './bambu.js';
-import { ollamaModelsUsed } from './ollama.js';
+import { ollamaModelsFor } from './ollama.js';
 
 // --- Nodos (tus otros computadores, por Tailscale) ---
 export function normalizeNodeUrl(url) {
@@ -47,20 +47,25 @@ export async function addNode(store, { url, token, name }) {
   return { node, info };
 }
 
+/** Modelos que debe tener el Ollama de un nodo (los de las IAs que corren allí). */
+export const nodeModels = (store, node) => ollamaModelsFor(store.data.settings, store.data.agents, `node:${node.id}`);
+
 /**
- * Le dice a un nodo qué modelos de Ollama usan las IAs; el nodo descarga los
- * que le falten, en segundo plano. Se puede apagar por nodo (syncModels: false).
+ * Le dice a un nodo qué modelos de Ollama usan las IAs que corren en él; el
+ * nodo descarga los que le falten, en segundo plano. Se puede apagar por nodo
+ * (syncModels: false).
  */
 export async function pushNodeModels(store, node, { now = false } = {}) {
   if (node.syncModels === false || node.ollama === false) return null;
-  return nodeCall(node, 'PUT', '/nodo/modelos', { models: ollamaModelsUsed(store.data.agents), now }, { timeoutMs: 6000 });
+  return nodeCall(node, 'PUT', '/nodo/modelos', { models: nodeModels(store, node), now }, { timeoutMs: 6000 });
 }
 
 /** Revisa los modelos de todos los nodos al abrir y cada 10 minutos. */
 export function startNodeModelSync(store) {
   let last = '';
+  const key = () => JSON.stringify((store.data.settings.nodes || []).map((n) => nodeModels(store, n)));
   const tick = () => {
-    last = JSON.stringify(ollamaModelsUsed(store.data.agents));
+    last = key();
     for (const n of store.data.settings.nodes || []) pushNodeModels(store, n).catch(() => {});
   };
   tick();
@@ -69,7 +74,7 @@ export function startNodeModelSync(store) {
     stop: () => clearInterval(timer),
     /** Llamar cuando cambian los modelos de las IAs (solo avisa si cambió algo). */
     changed: () => {
-      if (JSON.stringify(ollamaModelsUsed(store.data.agents)) !== last) tick();
+      if (key() !== last) tick();
     },
   };
 }

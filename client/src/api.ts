@@ -56,7 +56,7 @@ export type NodeInfo = {
     version?: { head: string | null }; updating?: { running: boolean; error: string | null };
   };
 };
-export type OllamaServer = { id: string; label: string; nodeId: string | null; busy: number; running: boolean; models: { name: string; size: number }[]; missing: string[] };
+export type OllamaServer = { id: string; label: string; nodeId: string | null; busy: number; running: boolean; wanted: string[]; models: { name: string; size: number }[]; missing: string[] };
 export type UpdateStatus = { git: boolean; head?: string; branch?: string; behind?: number; commits?: string[]; error?: string | null; canRestart: boolean };
 export type PrinterInfo = { node?: { id: string; name: string };
   configured: boolean; name: string; model: string; host: string; serial: string; accessPreview: string | null; connected: boolean; error: string | null; state: PrinterState | null; updatedAt: number | null };

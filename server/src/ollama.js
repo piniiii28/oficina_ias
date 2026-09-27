@@ -136,13 +136,21 @@ export async function ollamaPull(server, model, onLog = () => {}) {
   return { ok: true };
 }
 
-/** Modelos de Ollama que usan las IAs (y sus asistentes). */
-export function ollamaModelsUsed(agents) {
+/**
+ * Modelos que necesita un Ollama en concreto: los de las IAs que lo usan
+ * (elegido en su perfil, «automático», o el preferido de la oficina si no
+ * eligieron). Así cada computador descarga solo lo que va a correr.
+ */
+export function ollamaModelsFor(settings, agents, serverId) {
+  const ids = new Set(ollamaServers(settings).map((s) => s.id));
+  const preferred = settings.ollamaNode && ids.has(`node:${settings.ollamaNode}`) ? `node:${settings.ollamaNode}` : 'local';
+  const runsHere = (pref) => pref === 'auto' || pref === serverId || ((!pref || !ids.has(pref)) && preferred === serverId);
   const out = new Set();
   for (const a of agents || []) {
     if (a.enabled === false) continue;
-    if (a.provider === 'ollama' && a.model) out.add(a.model);
-    for (const s of a.assistants || []) if (s.provider === 'ollama' && s.model) out.add(s.model);
+    if (a.provider === 'ollama' && a.model && runsHere(a.account)) out.add(a.model);
+    // Los asistentes usan el Ollama preferido.
+    for (const s of a.assistants || []) if (s.provider === 'ollama' && s.model && runsHere(null)) out.add(s.model);
   }
   return [...out].sort();
 }
