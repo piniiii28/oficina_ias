@@ -418,3 +418,16 @@ test('lectura de enlaces: extrae URLs, limpia HTML y bloquea direcciones privada
   assert.ok(isPrivateIp('192.168.1.5') && isPrivateIp('127.0.0.1') && isPrivateIp('::1') && !isPrivateIp('8.8.8.8'));
   await assert.rejects(fetchReadable('http://localhost:4747/api/settings'), /locales o privadas/);
 });
+
+test('reunión: el usuario puede intervenir y la siguiente IA le responde', async () => {
+  const { runMeeting } = await import('../src/meetings.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const p = runMeeting(store, new Notes(store), { topic: 'Precio del producto', agentIds: ['estratega', 'llama-fin'], rounds: 2 });
+  await new Promise((r) => setTimeout(r, 50));
+  store.data.meetings[0].transcript.push({ agentId: 'usuario', name: 'Tú', text: '¿Y si cobramos por suscripción?', round: 1 });
+  const m = await p;
+  const k = m.transcript.findIndex((t) => t.agentId === 'usuario');
+  assert.match(m.transcript[k + 1].text, /Buena pregunta/);
+});

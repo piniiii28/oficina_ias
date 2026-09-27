@@ -140,7 +140,7 @@ function MeetingRoom({ meeting, onDelete, openNote, live, agents, brainId }: {
           const a = byId(t.agentId);
           return (
             <div key={i} className="line">
-              {a && <Chibi avatar={a.avatar} size={36} />}
+              {a ? <Chibi avatar={a.avatar} size={36} /> : <span className="you-badge">🙋</span>}
               <div>
                 <strong>{t.name}</strong> <small className="muted">ronda {t.round}{t.simulated ? ' · demo' : ''}</small>
                 <Markdown text={t.text} />
@@ -150,12 +150,31 @@ function MeetingRoom({ meeting, onDelete, openNote, live, agents, brainId }: {
         })}
         <div ref={end} />
       </section>
+      {meeting.status === 'running' && <SayBox id={meeting.id} />}
       {meeting.summary && (
         <section className="card final">
           <h3>Resumen de Claude</h3>
           <Markdown text={meeting.summary} onLink={(t) => openNote({ title: t })} />
         </section>
       )}
+    </div>
+  );
+}
+
+function SayBox({ id }: { id: string }) {
+  const [text, setText] = useState('');
+  const { toast } = useOffice();
+  return (
+    <div className="chat-input">
+      <textarea rows={2} value={text} placeholder="Intervén en la reunión: tu opinión, una pregunta o un dato…" onChange={(e) => setText(e.target.value)} />
+      <button className="btn btn--primary" disabled={!text.trim()} onClick={async () => {
+        try {
+          await fetch(`/api/meetings/${id}/say`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => { if (!r.ok) throw new Error('La reunión ya terminó'); });
+          setText('');
+        } catch (err) {
+          toast((err as Error).message);
+        }
+      }}>Hablar</button>
     </div>
   );
 }

@@ -372,6 +372,18 @@ export function createApp(store) {
     runMeeting(store, notes, { topic, agentIds, rounds: Number(req.body.rounds) || 2 }).catch((err) => console.error('[reunión]', err));
     res.status(202).json({ id: store.data.meetings[0].id });
   });
+  app.post('/api/meetings/:id/say', (req, res) => {
+    const m = (store.data.meetings || []).find((x) => x.id === req.params.id);
+    if (!m) return res.status(404).json({ error: 'No existe' });
+    if (m.status !== 'running') return res.status(409).json({ error: 'La reunión ya terminó' });
+    const text = String(req.body?.text || '').trim().slice(0, 1000);
+    if (!text) return res.status(400).json({ error: 'Escribe algo' });
+    const round = m.transcript.at(-1)?.round || 1;
+    m.transcript.push({ agentId: 'usuario', name: 'Tú', text, round, simulated: false, at: new Date().toISOString() });
+    store.save();
+    bus.emit('event', { type: 'meeting', meeting: m });
+    res.json({ ok: true });
+  });
   app.delete('/api/meetings/:id', (req, res) => {
     store.data.meetings = (store.data.meetings || []).filter((m) => m.id !== req.params.id);
     store.save();

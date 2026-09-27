@@ -24,7 +24,9 @@ async function demoTurn(agent, topic, transcript, round) {
   const k = kw[round % Math.max(kw.length, 1)] || 'el tema';
   const opener = (OPENERS[agent.department] || OPENERS.personas)[round % 3] || 'Propongo';
   const prev = transcript.at(-1);
-  const reply = prev && prev.agentId !== agent.id
+  const reply = prev?.agentId === 'usuario'
+    ? `¡Buena pregunta! Sobre lo que dices ("${prev.text.slice(0, 50)}"), `
+    : prev && prev.agentId !== agent.id
     ? `${round % 2 ? 'Coincido con' : 'Buen punto de'} ${prev.name}, ${round % 2 ? 'y agrego algo:' : 'aunque lo matizaría:'} `
     : '';
   return `${reply}${opener} enfocarnos en **${k}** desde mi rol de ${agent.role.toLowerCase()}. *(turno simulado)*`;
@@ -63,7 +65,7 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2 }) 
           ? { text: await demoTurn(a, topic, meeting.transcript, r), simulated: true }
           : await callModel(settings, {
             provider: a.provider, model: a.model, agent: a, effort: 'low',
-            system: buildSystem(a) + '\n\nEstás en una reunión con otras IAs. Habla en primera persona, máximo 120 palabras, sin títulos. Responde a lo que dijeron los demás y aporta algo nuevo desde tu especialidad.',
+            system: buildSystem(a) + '\n\nEstás en una reunión con otras IAs. Habla en primera persona, máximo 120 palabras, sin títulos. Responde a lo que dijeron los demás (si el usuario, «Tú», intervino, respóndele primero) y aporta algo nuevo desde tu especialidad.',
             messages: [{ role: 'user', content: `Tema de la reunión: ${topic}\n\n${convo ? `Lo que se ha dicho:\n\n${convo}\n\n` : ''}Tu turno (ronda ${r + 1} de ${meeting.rounds}).` }],
           }).catch((err) => ({ text: `(No pude intervenir: ${err.message})`, simulated: false }));
         const text = res.simulated && settings.demoMode !== 'always' ? await demoTurn(a, topic, meeting.transcript, r) : res.text;
