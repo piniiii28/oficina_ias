@@ -38,7 +38,7 @@ export function Palette() {
   const items = useMemo<Item[]>(() => {
     const go = (v: View) => () => setView(v);
     const views: Item[] = [
-      ['oficina', '🏢', 'Oficina'], ['tareas', '🎯', 'Tareas'], ['reuniones', '🗣️', 'Reuniones'], ['notas', '📝', 'Notas'],
+      ['oficina', '🏢', 'Oficina'], ['tablero', '📋', 'Tablero'], ['tareas', '🎯', 'Tareas'], ['reuniones', '🗣️', 'Reuniones'], ['notas', '📝', 'Notas'],
       ['grafo', '🕸️', 'Grafo'], ['agentes', '👥', 'Equipo'], ['ajustes', '⚙️', 'Ajustes'],
     ].map(([v, icon, label]) => ({ key: `v:${v}`, icon, label, hint: 'Sección', run: go(v as View) }));
     const ns: Item[] = notes.map((n) => ({ key: `n:${n.id}`, icon: '📝', label: n.title, hint: 'Nota', run: () => openNote({ id: n.id }) }));

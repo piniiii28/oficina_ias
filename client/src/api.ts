@@ -93,6 +93,8 @@ export type GraphLink = { source: string; target: string; kind: 'link' | 'tag' |
 
 export type Suggestion = { from: string; to: string; fromTitle: string; toTitle: string; reason: string; score: number };
 
+export type Card = { id: string; title: string; details: string; column: 'todo' | 'doing' | 'done'; project: string; taskId: string | null; noteId: string | null; createdAt: string };
+
 export type ChatMessage = { role: 'user' | 'assistant'; content: string; at: string; simulated?: boolean };
 
 export type Settings = {
@@ -122,6 +124,7 @@ export type OfficeEvent =
   | { type: 'agent'; agentId: string; status: AgentState; message: string; at: number }
   | { type: 'meeting'; meeting: Meeting }
   | { type: 'delta'; key: string; text: string | null }
+  | { type: 'cards' }
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 
@@ -163,6 +166,12 @@ export const api = {
   meetings: () => req<Meeting[]>('GET', '/api/meetings'),
   startMeeting: (topic: string, agentIds: string[], rounds: number) => req<{ id: string }>('POST', '/api/meetings', { topic, agentIds, rounds }),
   deleteMeeting: (id: string) => req('DELETE', `/api/meetings/${id}`),
+
+  cards: () => req<Card[]>('GET', '/api/cards'),
+  createCard: (c: Partial<Card>) => req<Card>('POST', '/api/cards', c),
+  updateCard: (id: string, c: Partial<Card>) => req<Card>('PUT', `/api/cards/${id}`, c),
+  runCard: (id: string) => req<Card>('POST', `/api/cards/${id}/run`),
+  deleteCard: (id: string) => req('DELETE', `/api/cards/${id}`),
 
   notes: (q = '') => req<NoteSummary[]>('GET', `/api/notes?q=${encodeURIComponent(q)}`),
   note: (id: string) => req<Note>('GET', `/api/notes/${id}`),

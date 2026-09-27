@@ -16,6 +16,7 @@ type Ctx = {
   feed: { at: number; agentId: string; status: AgentState; message: string }[];
   setMeetings: (m: Meeting[]) => void;
   notesVersion: number;
+  cardsVersion: number;
   connected: boolean;
   reloadAgents: () => Promise<void>;
   reloadTasks: () => Promise<void>;
@@ -28,7 +29,7 @@ type Ctx = {
   setView: (v: View) => void;
 };
 
-export type View = 'oficina' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'agentes' | 'ajustes';
+export type View = 'oficina' | 'tablero' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'agentes' | 'ajustes';
 
 const OfficeCtx = createContext<Ctx | null>(null);
 
@@ -46,6 +47,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [streams, setStreams] = useState<Record<string, string>>({});
   const [feed, setFeed] = useState<Ctx['feed']>([]);
   const [notesVersion, setNotesVersion] = useState(0);
+  const [cardsVersion, setCardsVersion] = useState(0);
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
   const [pendingNote, setPendingNote] = useState<{ id?: string; title?: string } | null>(null);
@@ -128,6 +130,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
           copy[i] = e.meeting;
           return copy;
         });
+      } else if (e.type === 'cards') {
+        setCardsVersion((v) => v + 1);
       } else if (e.type === 'notes') {
         setNotesVersion((v) => v + 1);
       }
@@ -145,11 +149,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, live, tasks, meetings, setMeetings, streams, feed, notesVersion, connected,
+      agents, departments, providers, vaultPath, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, live, tasks, meetings, streams, feed, notesVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

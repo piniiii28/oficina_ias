@@ -7,9 +7,11 @@ import { Agents } from './views/Agents';
 import { Settings } from './views/Settings';
 import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
+import { Board } from './views/Board';
 
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'oficina', label: 'Oficina', icon: '🏢' },
+  { id: 'tablero', label: 'Tablero', icon: '📋' },
   { id: 'tareas', label: 'Tareas', icon: '🎯' },
   { id: 'reuniones', label: 'Reuniones', icon: '🗣️' },
   { id: 'notas', label: 'Notas', icon: '📝' },
@@ -47,6 +49,7 @@ function Shell() {
       </nav>
       <main className={`content content--${view}`}>
         {view === 'oficina' && <Office />}
+        {view === 'tablero' && <Board />}
         {view === 'tareas' && <Tasks />}
         {view === 'reuniones' && <Meetings />}
         {view === 'notas' && <Notes />}

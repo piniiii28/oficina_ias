@@ -242,3 +242,23 @@ test('revisión de calidad final opcional', async () => {
   assert.equal(t.review.agentId, 'sonar-check');
   assert.match(t.final, /Revisión de calidad \(Sonar\)/);
 });
+
+test('tablero: una tarjeta enviada al equipo pasa a «Hecho» al terminar', async () => {
+  const store = new Store(tmp());
+  const app = createApp(store);
+  store.data.settings.demoMode = 'always';
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}/api/cards`;
+  try {
+    const card = await (await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Landing de la cafetería' }) })).json();
+    assert.equal(card.column, 'todo');
+    const running = await (await fetch(`${base}/${card.id}/run`, { method: 'POST' })).json();
+    assert.equal(running.column, 'doing');
+    for (let i = 0; i < 60 && store.data.cards[0].column !== 'done'; i++) await new Promise((r) => setTimeout(r, 250));
+    assert.equal(store.data.cards[0].column, 'done');
+    assert.ok(store.data.cards[0].noteId);
+  } finally {
+    server.close();
+  }
+});

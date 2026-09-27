@@ -314,6 +314,14 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     task.final = `Error: ${err.message}`;
     agentStatus(brain.id, 'error', err.message);
   }
+  // Tarjetas del tablero ligadas a esta tarea pasan a «Hecho».
+  for (const c of store.data.cards || []) {
+    if (c.taskId === task.id) {
+      c.column = task.status === 'done' ? 'done' : 'doing';
+      c.noteId = task.noteId;
+      bus.emit('event', { type: 'cards' });
+    }
+  }
   store.save();
   emitTask();
   bus.emit('event', { type: 'notes' });

@@ -251,6 +251,46 @@ export function createApp(store) {
     res.json({ ok: true });
   });
 
+  // --- Tablero de proyectos ---
+  const COLUMNS = ['todo', 'doing', 'done'];
+  const emitCards = () => bus.emit('event', { type: 'cards' });
+  app.get('/api/cards', (_req, res) => res.json(store.data.cards || []));
+  app.post('/api/cards', (req, res) => {
+    const title = String(req.body?.title || '').trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: 'Escribe un título' });
+    const card = { id: Store.id('c_'), title, details: String(req.body?.details || '').slice(0, 4000), column: 'todo', project: String(req.body?.project || '').slice(0, 60), taskId: null, noteId: null, createdAt: new Date().toISOString() };
+    (store.data.cards ||= []).push(card);
+    store.save();
+    emitCards();
+    res.status(201).json(card);
+  });
+  app.put('/api/cards/:id', (req, res) => {
+    const c = (store.data.cards || []).find((x) => x.id === req.params.id);
+    if (!c) return res.status(404).json({ error: 'No existe' });
+    if (COLUMNS.includes(req.body?.column)) c.column = req.body.column;
+    for (const k of ['title', 'details', 'project']) if (typeof req.body?.[k] === 'string') c[k] = req.body[k].slice(0, k === 'details' ? 4000 : 200);
+    store.save();
+    emitCards();
+    res.json(c);
+  });
+  app.post('/api/cards/:id/run', (req, res) => {
+    const c = (store.data.cards || []).find((x) => x.id === req.params.id);
+    if (!c) return res.status(404).json({ error: 'No existe' });
+    const promise = runTask(store, notes, { prompt: `${c.title}${c.details ? `\n\n${c.details}` : ''}` });
+    c.taskId = store.data.tasks[0].id;
+    c.column = 'doing';
+    store.save();
+    emitCards();
+    promise.catch((err) => console.error('[tablero]', err));
+    res.status(202).json(c);
+  });
+  app.delete('/api/cards/:id', (req, res) => {
+    store.data.cards = (store.data.cards || []).filter((x) => x.id !== req.params.id);
+    store.save();
+    emitCards();
+    res.json({ ok: true });
+  });
+
   // --- Rutinas programadas ---
   app.get('/api/routines', (_req, res) => res.json(store.data.routines || []));
   app.post('/api/routines', (req, res) => {

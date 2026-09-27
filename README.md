@@ -7,12 +7,15 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 | Sección | Qué hace |
 |---|---|
 | 🏢 **Oficina** | Un **edificio estilo Habbo** con 8 pisos isométricos (penthouse, departamentos y lobby con cafetería y sala de reuniones) donde las IAs caminan, toman el ascensor, van a su escritorio cuando trabajan y se sientan en la mesa del lobby durante las reuniones. Cada una tiene su disfraz (mago, ninja, astronauta…). Le escribes una tarea a Claude. Él la divide, elige a los especialistas, los pone a trabajar **en paralelo** (los ves pensar, teclear y celebrar) e integra todo en una respuesta final. |
+| 📋 **Tablero** | Kanban por proyectos (Por hacer, En curso, Hecho). Envía una tarjeta al equipo con un clic; pasa sola a «Hecho» con el enlace al resultado. |
 | 🗣️ **Reuniones** | Eliges varias IAs y un tema: conversan por turnos respondiéndose entre ellas y Claude resume acuerdos y próximos pasos. |
 | 🎯 **Tareas** | Historial con el plan del cerebro, el aporte de cada IA (escrito en vivo) y la respuesta integrada. Puedes pedir ajustes para que el mismo equipo continúe, y crear **rutinas automáticas** (por ejemplo, un resumen cada mañana a las 7:00). |
 | 📝 **Notas** | Editor Markdown con `[[enlaces]]`, `#etiquetas`, backlinks, notas fijadas, ideas y diario. Cada tarea genera notas enlazadas automáticamente. |
 | 🕸️ **Grafo** | Mapa interactivo de tus ideas: zoom, arrastre, búsqueda, grafo local (1–2 saltos), nodos de IAs, etiquetas y notas por crear. |
 | 👥 **Equipo** | Todas las IAs. Habla con cada una, **entrénala** con tus lecciones y archivos, revisa su memoria, cambia su modelo o su avatar, o contrata IAs nuevas. |
-| ⚙️ **Ajustes** | Tus claves de API, el modo demo, cuántas IAs trabajan a la vez y el respaldo de tus datos. |
+| ⚙️ **Ajustes** | Tus claves de API (con botón **Probar**), herramientas de línea de comandos, tu avatar, el modo demo, la revisión de calidad final, cuántas IAs trabajan a la vez y el respaldo de tus datos. |
+
+Atajo: **Ctrl+K** (⌘K en Mac) abre la búsqueda global de notas, IAs, tareas y secciones.
 
 ## Cómo iniciarla
 
