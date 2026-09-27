@@ -97,6 +97,10 @@ export function Settings() {
           <input type="checkbox" checked={Boolean(s.reviewFinal)} onChange={(e) => save({ reviewFinal: e.target.checked })} />
           Revisión de calidad final: Sonar verifica la respuesta integrada antes de entregarla (una llamada extra por tarea)
         </label>
+        <label className="check" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={Boolean(s.webSearch)} onChange={(e) => save({ webSearch: e.target.checked })} />
+          Búsqueda web para Claude y Sonnet (herramienta de Anthropic; cada búsqueda tiene un costo extra)
+        </label>
         <p className="muted small">El modelo del Cerebro Central se cambia desde su perfil (haz clic en Claude en la Oficina → Perfil).</p>
       </section>
 

@@ -452,3 +452,41 @@ test('trabajar una nota: el resultado la enlaza', async () => {
   const t = await runTask(store, notes, { prompt: 'Idea: app de recetas', fromNote: 'Bienvenida a la Oficina' });
   assert.ok(notes.backlinks(notes.findByTitle('Bienvenida a la Oficina').id).some((b) => b.id === t.noteId));
 });
+
+test('Anthropic con búsqueda web: continúa tras pause_turn', async () => {
+  const http = await import('node:http');
+  const bodies = [];
+  const fake = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      bodies.push(JSON.parse(body));
+      const first = bodies.length === 1;
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
+      ev('message_start', { message: { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 0 } } });
+      ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
+      ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: first ? 'Buscando… ' : 'Resultado final' } });
+      ev('content_block_stop', { index: 0 });
+      ev('message_delta', { delta: { stop_reason: first ? 'pause_turn' : 'end_turn', stop_sequence: null }, usage: { output_tokens: 1 } });
+      ev('message_stop', {});
+      res.end();
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${fake.address().port}`;
+  const { callModel } = await import('../src/providers.js');
+  try {
+    const r = await callModel({ apiKeys: { anthropic: 'sk-ant-prueba-web' }, webSearch: true }, {
+      provider: 'anthropic', model: 'claude-sonnet-5', system: 'S', messages: [{ role: 'user', content: 'noticias de hoy' }],
+    });
+    assert.equal(r.text, 'Buscando… Resultado final');
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[0].tools[0].type, 'web_search_20260209');
+    assert.equal(bodies[1].messages.at(-1).role, 'assistant');
+  } finally {
+    delete process.env.ANTHROPIC_BASE_URL;
+    fake.close();
+  }
+});

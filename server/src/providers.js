@@ -96,7 +96,7 @@ export async function callModel(settings, { provider, model, system, messages, a
   const sig = signal ? AbortSignal.any([signal, AbortSignal.timeout(600000)]) : AbortSignal.timeout(600000);
   try {
     if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, emit, sig);
-    else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit, sig);
+    else if (provider === 'anthropic') text = await callAnthropic(keyFor(settings, provider), model, system, messages, effort, emit, sig, Boolean(settings.webSearch));
     else if (provider === 'google') text = await callGemini(keyFor(settings, provider), model, system, messages, emit, sig);
     else text = await callOpenAICompatible(provider, keyFor(settings, provider), model, system, messages, settings, emit, sig);
   } catch (err) {
@@ -120,7 +120,7 @@ async function typeOut(text, onDelta) {
 
 const anthropicClients = new Map();
 
-async function callAnthropic(apiKey, model, system, messages, effort, onDelta, signal) {
+async function callAnthropic(apiKey, model, system, messages, effort, onDelta, signal, webSearch = false) {
   if (!anthropicClients.has(apiKey)) anthropicClients.set(apiKey, new Anthropic({ apiKey }));
   const client = anthropicClients.get(apiKey);
   const params = {
@@ -132,25 +132,38 @@ async function callAnthropic(apiKey, model, system, messages, effort, onDelta, s
   // Haiku 4.5 no admite `effort`; los modelos actuales sí.
   if (!model.includes('haiku')) params.output_config = { effort };
 
-  // Si el modelo declina por seguridad, el servidor reintenta con otro modelo.
-  const stream = /opus-5|fable/.test(model)
-    ? client.beta.messages.stream({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, { signal })
-    : client.messages.stream(params, { signal });
-  stream.on('text', (delta) => onDelta(delta));
+  // Búsqueda web del lado de Anthropic (solo modelos que la admiten).
+  if (webSearch && /opus|sonnet/.test(model)) params.tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }];
+
+  const convo = [...messages];
+  const texts = [];
   let response;
-  try {
-    response = await stream.finalMessage();
-  } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new Error('Anthropic: la clave de API no es válida.');
-    if (err instanceof Anthropic.RateLimitError) throw new Error('Anthropic: límite de uso alcanzado, intenta en un momento.');
-    if (err instanceof Anthropic.NotFoundError) throw new Error(`Anthropic: el modelo "${model}" no existe o no está disponible para tu cuenta.`);
-    if (err instanceof Anthropic.APIError) throw new Error(`Anthropic (${err.status ?? 'red'}): ${err.error?.error?.message || err.message}`);
-    throw err;
+  // Con herramientas del servidor la respuesta puede pausarse (pause_turn): se continúa hasta 3 veces.
+  for (let round = 0; round < 4; round++) {
+    // Si el modelo declina por seguridad, el servidor reintenta con otro modelo.
+    const body = { ...params, messages: convo };
+    const stream = /opus-5|fable/.test(model)
+      ? client.beta.messages.stream({ ...body, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, { signal })
+      : client.messages.stream(body, { signal });
+    stream.on('text', (delta) => onDelta(delta));
+    try {
+      response = await stream.finalMessage();
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) throw new Error('Anthropic: la clave de API no es válida.');
+      if (err instanceof Anthropic.RateLimitError) throw new Error('Anthropic: límite de uso alcanzado, intenta en un momento.');
+      if (err instanceof Anthropic.NotFoundError) throw new Error(`Anthropic: el modelo "${model}" no existe o no está disponible para tu cuenta.`);
+      if (err instanceof Anthropic.APIError) throw new Error(`Anthropic (${err.status ?? 'red'}): ${err.error?.error?.message || err.message}`);
+      throw err;
+    }
+    if (response.stop_reason === 'refusal') {
+      throw new Error('El modelo declinó esta petición por políticas de seguridad.');
+    }
+    texts.push(...response.content.filter((b) => b.type === 'text').map((b) => b.text));
+    if (response.stop_reason !== 'pause_turn') break;
+    convo.push({ role: 'assistant', content: response.content });
   }
-  if (response.stop_reason === 'refusal') {
-    throw new Error('El modelo declinó esta petición por políticas de seguridad.');
-  }
-  return response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  return texts.join('');
+
 }
 
 /** Lee un cuerpo SSE ("data: {...}") y entrega cada evento JSON. */

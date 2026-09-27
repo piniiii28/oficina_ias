@@ -102,6 +102,7 @@ export type Settings = {
   demoMode: 'auto' | 'always';
   reviewFinal?: boolean;
   maxTeam?: number;
+  webSearch?: boolean;
   maxParallel: number;
   keys: Record<string, { configured: boolean; preview: string | null }>;
   ollamaEnabled: boolean;

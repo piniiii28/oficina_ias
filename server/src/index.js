@@ -137,7 +137,8 @@ export function createApp(store) {
   app.get('/api/cli/detect', async (_req, res) => res.json(await detectClis()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;
-    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam } = req.body || {};
+    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch } = req.body || {};
+    if (webSearch !== undefined) s.webSearch = Boolean(webSearch);
     if (maxTeam) s.maxTeam = Math.max(1, Math.min(8, Number(maxTeam)));
     if (reviewFinal !== undefined) s.reviewFinal = Boolean(reviewFinal);
     if (cli && typeof cli === 'object') {
