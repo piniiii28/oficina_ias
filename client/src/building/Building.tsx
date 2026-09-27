@@ -5,6 +5,12 @@ import { levelOf, type Agent } from '../api';
 import { Chibi } from '../components/Chibi';
 import { useOffice } from '../state';
 import { FLOORS, TH, TW, WALL, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
+
+// Qué pasa cuando tu avatar usa un mueble.
+const USE: Partial<Record<Furniture['kind'], string>> = {
+  coffee: '☕ ¡Café!', vending: '🥤 ¡Refresco!', arcade: '🕹️ ¡Nuevo récord!', piano: '🎹 ♪♫', pool: '🏊 ¡Al agua!', gym: '🏋️ ¡Fuerza!',
+  telescope: '🔭 ¡Se ve la luna!', aquarium: '🐠 ¡Hola, peces!', shelf: '📖 Leyendo…', grill: '🍖 ¡Asado!', table: '🍩 ¡Rico!', sofa: '🛋️ Descansando', easel: '🎨 Pintando', globe: '🌍 ¿A dónde viajo?', board: '📝 Anotando ideas', reception: '🛎️ ¡Ding!',
+};
 import { ME, PETS, TICK_MS, useSim, type Walker } from './useSim';
 import type { AvatarConfig } from '../api';
 
@@ -186,7 +192,7 @@ const f0 = (id: string) => id === 'lobby';
 
 function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTile }: {
   f: FloorDef; number: string; walkers: Record<string, Walker>; agents: Agent[]; onSelect: (a: Agent) => void; night: boolean;
-  me: Agent; onTile: (floor: string, i: number, j: number) => void;
+  me: Agent; onTile: (floor: string, i: number, j: number, emote?: string) => void;
 }) {
   const { live, tasks, meetings } = useOffice();
   const meeting = f0(base.id) && meetings.find((m) => m.status === 'running');
@@ -229,7 +235,23 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
             const y = (e.clientY - r.top) / k - WALL;
             const i = Math.floor((x / (TW / 2) + y / (TH / 2)) / 2);
             const j = Math.floor((y / (TH / 2) - x / (TW / 2)) / 2);
-            if (walkable(f, i, j)) onTile(f.id, i, j);
+            // ¿Clic sobre un mueble? (se mira su caja en pantalla, del más cercano al más lejano)
+            const px = x + (f.rows * TW) / 2, py = y + WALL;
+            const hit = [...f.furniture]
+              .sort((a, b) => b.i + b.j - (a.i + a.j))
+              .find((m) => {
+                const w = m.w || 1, h = Math.ceil(m.h || 1), z = LOOK[m.kind].z + 16;
+                const A = P(f, m.i, m.j), B = P(f, m.i + w, m.j), C = P(f, m.i + w, m.j + h), D = P(f, m.i, m.j + h);
+                return px >= D.x && px <= B.x && py >= A.y - z && py <= C.y;
+              });
+            if (!hit && walkable(f, i, j)) return onTile(f.id, i, j);
+            // Clic en un mueble: caminar a su lado y usarlo.
+            const m = hit || f.furniture.find((x) => i >= x.i && i < x.i + (x.w || 1) && j >= x.j && j < x.j + Math.ceil(x.h || 1));
+            if (!m) return;
+            const near = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1]]
+              .flatMap(([di, dj]) => [[m.i + di * (m.w || 1), m.j + dj * Math.ceil(m.h || 1)], [m.i + di, m.j + dj]])
+              .find(([a, b]) => walkable(f, a, b));
+            if (near) onTile(f.id, near[0], near[1], USE[m.kind] || '👀');
           }}
         >
           <Room f={f} night={night} doorOpen={doorOpen} />
@@ -310,7 +332,7 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
         </div>
         {FLOORS.map((f, k) => (
           <FloorView key={f.id} f={f} number={numbers[k]} walkers={walkers} agents={active} onSelect={onSelect} night={night} me={me}
-            onTile={(floor, i, j) => { walkers[ME].goal = { floor, i, j }; }} />
+            onTile={(floor, i, j, emote) => { walkers[ME].goal = { floor, i, j }; walkers[ME].onArrive = emote; }} />
         ))}
         <div className="street">
           <span>🌳</span><span>🚲</span><span className="street-door">🚪 Entrada</span><span>🚕</span><span>🌳</span>

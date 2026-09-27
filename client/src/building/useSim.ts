@@ -19,6 +19,7 @@ export type Walker = {
   emote?: string;
   running?: boolean;
   greeted?: boolean;
+  onArrive?: string; // emote al llegar (usar un mueble)
   energy?: number; // 0-100: se gasta trabajando y se recupera en la cafetería o la azotea
 };
 
@@ -252,7 +253,13 @@ function step(w: Walker) {
   if (w.i === target.i && w.j === target.j) {
     w.moving = false;
     if (w.goal.floor !== w.floor) w.inElevator = 4;
-    else w.goal = null;
+    else {
+      w.goal = null;
+      if (w.onArrive) {
+        w.emote = w.onArrive;
+        w.onArrive = undefined;
+      }
+    }
     return;
   }
   const n = nextStep(f, w, target);

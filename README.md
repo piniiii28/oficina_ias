@@ -72,7 +72,7 @@ También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `G
 - **Pisos 6 a 1**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, y Personas y Conocimiento.
 - **Planta baja**: lobby, cafetería y la mesa de reuniones.
 
-Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar y personalízalo en **Ajustes**. Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
+Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar o en un mueble (cafetera, arcade, piano, piscina, telescopio…) para usarlo, y personalízalo en **Ajustes**. Las IAs tienen energía: se cansan trabajando y recargan con café o en la azotea. Hay mascotas (Michi, Firulais y Kiwi) y cada piso tiene skins (botón 🎨). Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
 
 ## Entrenamiento y memoria
 
