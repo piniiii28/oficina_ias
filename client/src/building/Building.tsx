@@ -182,11 +182,14 @@ function useFit(width: number) {
   return { ref, scale };
 }
 
+const f0 = (id: string) => id === 'lobby';
+
 function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTile }: {
   f: FloorDef; number: string; walkers: Record<string, Walker>; agents: Agent[]; onSelect: (a: Agent) => void; night: boolean;
   me: Agent; onTile: (floor: string, i: number, j: number) => void;
 }) {
-  const { live, tasks } = useOffice();
+  const { live, tasks, meetings } = useOffice();
+  const meeting = f0(base.id) && meetings.find((m) => m.status === 'running');
   const [theme, setTheme] = useState(() => loadThemes()[base.id] || 0);
   const f = useMemo(() => (THEMES[theme] ? { ...base, ...THEMES[theme]!, name: base.name } : base), [base, theme]);
   const cycle = () => {
@@ -232,6 +235,10 @@ function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTi
           <Room f={f} night={night} doorOpen={doorOpen} />
           {f.furniture.map((m, k) => <Box key={k} f={f} m={m} />)}
           {here.map((a) => <Person key={a.id} f={f} a={a} w={walkers[a.id]} onClick={() => onSelect(a)} idx={agents.indexOf(a)} />)}
+          {meeting && (() => {
+            const c = tileCenter(f, 10, 3);
+            return <span className="meeting-sign" style={{ transform: `translate(${c.x}px, ${c.y - 70}px) translateX(-50%)` }}>🗣️ {meeting.topic.slice(0, 40)}{meeting.topic.length > 40 ? '…' : ''}</span>;
+          })()}
           {PETS.filter((p) => walkers[p.id]?.floor === f.id).map((p) => {
             const w = walkers[p.id];
             const c = tileCenter(f, w.i, w.j);

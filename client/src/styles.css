@@ -601,3 +601,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .welcome-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
 .welcome-dots span.on { background: var(--accent); width: 20px; border-radius: 4px; }
 .mic-on { border-color: var(--danger) !important; color: var(--danger) !important; animation: pulse 1s infinite; }
+.meeting-sign { position: absolute; left: 0; top: 0; z-index: 400; pointer-events: none; font: 800 11px system-ui, sans-serif; color: #111; background: #fde047; border: 2px solid #111; border-radius: 8px; padding: 2px 8px; white-space: nowrap; box-shadow: 0 3px 0 #111; animation: float 2s ease-in-out infinite; }
