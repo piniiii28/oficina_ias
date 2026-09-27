@@ -9,6 +9,26 @@ import { ME, TICK_MS, useSim, type Walker } from './useSim';
 import type { AvatarConfig } from '../api';
 
 const CHIBI = 40;
+
+// Skins de piso: se rotan con el botón 🎨 de cada piso.
+const THEMES = [
+  null, // colores originales
+  { name: 'Madera', floorA: '#8b5a2b', floorB: '#9c6b3a', wall: '#d6b38a' },
+  { name: 'Mármol', floorA: '#d4d4d8', floorB: '#e4e4e7', wall: '#94a3b8' },
+  { name: 'Neón', floorA: '#1e1b4b', floorB: '#312e81', wall: '#db2777' },
+  { name: 'Selva', floorA: '#14532d', floorB: '#166534', wall: '#65a30d' },
+  { name: 'Candy', floorA: '#f9a8d4', floorB: '#fbcfe8', wall: '#a78bfa' },
+  { name: 'Océano', floorA: '#0e7490', floorB: '#0891b2', wall: '#1d4ed8' },
+  { name: 'Retro', floorA: '#b45309', floorB: '#f59e0b', wall: '#7c2d12' },
+];
+
+function loadThemes(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem('oficina.skins') || '{}');
+  } catch {
+    return {};
+  }
+}
 const CHIBI_H = (CHIBI * 166) / 120;
 
 function shade(hex: string, amt: number) {
@@ -161,11 +181,22 @@ function useFit(width: number) {
   return { ref, scale };
 }
 
-function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: {
+function FloorView({ f: base, number, walkers, agents, onSelect, night, me, onTile }: {
   f: FloorDef; number: string; walkers: Record<string, Walker>; agents: Agent[]; onSelect: (a: Agent) => void; night: boolean;
   me: Agent; onTile: (floor: string, i: number, j: number) => void;
 }) {
   const { live, tasks } = useOffice();
+  const [theme, setTheme] = useState(() => loadThemes()[base.id] || 0);
+  const f = useMemo(() => (THEMES[theme] ? { ...base, ...THEMES[theme]!, name: base.name } : base), [base, theme]);
+  const cycle = () => {
+    const next = (theme + 1) % THEMES.length;
+    setTheme(next);
+    try {
+      localStorage.setItem('oficina.skins', JSON.stringify({ ...loadThemes(), [base.id]: next }));
+    } catch {
+      /* sin almacenamiento local */
+    }
+  };
   const { w: W, h: H } = roomSize(f);
   const { ref, scale } = useFit(W);
   const all = [...agents.map((a) => walkers[a.id]), walkers[ME]].filter(Boolean);
@@ -180,6 +211,7 @@ function FloorView({ f, number, walkers, agents, onSelect, night, me, onTile }: 
         <strong>{f.emoji} {f.name}</strong>
         {(f.id === 'lobby' || f.id === 'penthouse') && current && <span className="bfloor-tv" title={current.prompt}>📺 {current.title}</span>}
         <small className="muted">{here.length} aquí{working ? ` · ${working} trabajando` : ''}</small>
+        <button className="skin-btn" onClick={cycle} title={`Cambiar skin del piso (${THEMES[theme]?.name || 'original'})`}>🎨</button>
       </header>
       <div className="bfloor-stage" ref={ref} style={{ height: H * scale }}>
         <div
