@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api, type Agent } from '../api';
 import { Chibi, ACCESSORIES, HAIR_STYLES, EYE_STYLES } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
+import { Stats } from '../components/Stats';
 import { useOffice } from '../state';
 
 const COLORS = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
@@ -61,6 +62,8 @@ export function Agents() {
           <button className="btn btn--primary" onClick={() => setCreating((c) => !c)}>＋ Contratar IA</button>
         </div>
       </header>
+
+      <Stats />
 
       {creating && (
         <section className="card new-agent">
