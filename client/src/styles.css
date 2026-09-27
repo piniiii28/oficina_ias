@@ -121,7 +121,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
 .pill--done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
-.pill--working, .pill--planning, .pill--synthesizing { color: var(--accent); border-color: var(--accent); animation: pulse 1.4s infinite; }
+.pill--working, .pill--planning, .pill--synthesizing, .pill--reviewing { color: var(--accent); border-color: var(--accent); animation: pulse 1.4s infinite; }
 .pill--error { color: var(--danger); border-color: var(--danger); }
 .chip { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); }
 .chip--working { border-color: var(--accent); color: var(--accent); animation: pulse 1.2s infinite; }

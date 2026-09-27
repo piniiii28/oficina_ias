@@ -50,7 +50,7 @@ export type Task = {
   id: string;
   prompt: string;
   title: string;
-  status: 'planning' | 'working' | 'synthesizing' | 'done' | 'error';
+  status: 'planning' | 'working' | 'synthesizing' | 'reviewing' | 'done' | 'error';
   plan: { analysis: string } | null;
   steps: Step[];
   final: string;
@@ -97,6 +97,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string; at: str
 
 export type Settings = {
   demoMode: 'auto' | 'always';
+  reviewFinal?: boolean;
   maxParallel: number;
   keys: Record<string, { configured: boolean; preview: string | null }>;
   ollamaEnabled: boolean;

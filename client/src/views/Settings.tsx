@@ -90,6 +90,10 @@ export function Settings() {
             <input type="number" min={1} max={10} value={s.maxParallel} onChange={(e) => save({ maxParallel: Number(e.target.value) })} />
           </label>
         </div>
+        <label className="check" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={Boolean(s.reviewFinal)} onChange={(e) => save({ reviewFinal: e.target.checked })} />
+          Revisión de calidad final: Sonar verifica la respuesta integrada antes de entregarla (una llamada extra por tarea)
+        </label>
         <p className="muted small">El modelo del Cerebro Central se cambia desde su perfil (haz clic en Claude en la Oficina → Perfil).</p>
       </section>
 

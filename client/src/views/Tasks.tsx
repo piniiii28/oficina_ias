@@ -7,7 +7,7 @@ import { Routines } from '../components/Routines';
 import { useOffice } from '../state';
 
 export const STATUS_ES: Record<string, string> = {
-  planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', done: 'lista', error: 'error', pending: 'en espera',
+  planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', reviewing: 'revisando', done: 'lista', error: 'error', pending: 'en espera',
 };
 
 export function Tasks() {

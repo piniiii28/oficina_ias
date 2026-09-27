@@ -233,3 +233,12 @@ test('archivos adjuntos: llegan al equipo y quedan en la nota', async () => {
   assert.deepEqual(t.attachments, [{ name: 'ventas.csv', size: 19 }]);
   assert.match(notes.get(t.noteId).content, /📎 ventas\.csv/);
 });
+
+test('revisión de calidad final opcional', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  Object.assign(store.data.settings, { demoMode: 'always', reviewFinal: true });
+  const t = await runTask(store, new Notes(store), { prompt: 'Plan de marketing en instagram' });
+  assert.equal(t.review.agentId, 'sonar-check');
+  assert.match(t.final, /Revisión de calidad \(Sonar\)/);
+});

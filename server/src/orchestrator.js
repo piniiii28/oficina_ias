@@ -281,6 +281,28 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     });
     synthDelta.end();
     task.final = synth.simulated ? demoSynthesis(prompt, ok, names) : synth.text;
+
+    // Revisión de calidad opcional por un verificador antes de entregar.
+    const reviewer = settings.reviewFinal
+      ? store.data.agents.find((a) => a.id === 'sonar-check' && a.enabled) || store.data.agents.find((a) => a.id === 'sonnet-qa' && a.enabled)
+      : null;
+    if (reviewer) {
+      task.status = 'reviewing';
+      emitTask();
+      agentStatus(reviewer.id, 'working', 'Revisando la respuesta final…');
+      try {
+        const rev = await callModel(settings, {
+          provider: reviewer.provider, model: reviewer.model, agent: reviewer, effort: 'low',
+          system: buildSystem(reviewer),
+          messages: [{ role: 'user', content: `Revisa esta respuesta a la tarea "${prompt}". Señala en viñetas breves errores, datos dudosos o faltantes y cómo corregirlos. Si está bien, dilo en una línea.\n\n${task.final}` }],
+        });
+        task.review = { agentId: reviewer.id, text: rev.text, simulated: rev.simulated };
+        task.final += `\n\n---\n### ✅ Revisión de calidad (${reviewer.name})\n${rev.simulated ? '*Revisión simulada (modo demo):* la estructura es completa; verifica cifras y fuentes antes de usarla.' : rev.text}`;
+        agentStatus(reviewer.id, 'done', 'Revisión lista');
+      } catch (err) {
+        agentStatus(reviewer.id, 'error', err.message);
+      }
+    }
     task.status = 'done';
     task.finishedAt = new Date().toISOString();
     remember(store, store.data.agents.find((a) => a.id === brain.id), `Coordiné "${task.title}" con ${ok.map((s) => names(s.agentId)).join(', ')}`);

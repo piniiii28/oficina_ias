@@ -61,7 +61,7 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
   const name = (id: string) => agents.find((a) => a.id === id)?.name || id;
   const done = task.steps.filter((s) => s.status === 'done' || s.status === 'error').length;
   const pct = task.status === 'done' ? 100 : task.steps.length ? Math.round((done / task.steps.length) * 85) + 5 : 5;
-  const label = { planning: 'Planificando', working: 'El equipo trabaja', synthesizing: 'Integrando', done: 'Completada', error: 'Error' }[task.status];
+  const label = { planning: 'Planificando', working: 'El equipo trabaja', synthesizing: 'Integrando', reviewing: 'Revisando calidad', done: 'Completada', error: 'Error' }[task.status];
   return (
     <div className="task-progress">
       <div className="task-progress-head">
