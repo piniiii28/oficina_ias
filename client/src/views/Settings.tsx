@@ -4,7 +4,7 @@ import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
 
 export function Settings() {
-  const { providers, agents, reloadAgents, toast } = useOffice();
+  const { providers, agents, reloadAgents, toast, vaultPath } = useOffice();
   const [s, setS] = useState<S | null>(null);
   const [keys, setKeys] = useState<Record<string, string>>({});
 
@@ -91,6 +91,10 @@ export function Settings() {
         <p className="muted">
           Todo se guarda automáticamente en la carpeta <code>data/</code> del proyecto y sigue ahí aunque apagues el computador.
           Descarga un respaldo (sin tus claves) para llevar tu oficina a otro equipo.
+        </p>
+        <p className="muted">
+          🗂️ <b>Bóveda de Obsidian:</b> tus notas también se guardan como archivos <code>.md</code> en <code>{vaultPath}</code>. Abre esa carpeta en Obsidian («Open folder as vault») para verlas allí.
+          Para traer notas de Obsidian a la oficina, usa el botón <b>⬆️ .md</b> en Notas.
         </p>
         <div className="row">
           <a className="btn btn--primary" href="/api/export">⬇️ Descargar respaldo</a>

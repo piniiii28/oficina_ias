@@ -8,6 +8,7 @@ type Ctx = {
   agents: Agent[];
   departments: Department[];
   providers: Provider[];
+  vaultPath: string;
   live: Record<string, Live>;
   tasks: Task[];
   notesVersion: number;
@@ -34,6 +35,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [vaultPath, setVaultPath] = useState('');
   const [live, setLive] = useState<Record<string, Live>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [notesVersion, setNotesVersion] = useState(0);
@@ -71,6 +73,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     api.meta().then((m) => {
       setDepartments(m.departments);
       setProviders(m.providers);
+      setVaultPath(m.vaultPath);
     });
     reloadAgents();
     reloadTasks();
@@ -118,11 +121,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, live, tasks, notesVersion, connected,
+      agents, departments, providers, vaultPath, live, tasks, notesVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, live, tasks, notesVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, live, tasks, notesVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

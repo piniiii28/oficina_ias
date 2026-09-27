@@ -10,6 +10,7 @@ import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey } from './providers.js';
 import { bus, runTask, chatWithAgent } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
+import { Vault, parseMarkdownFile } from './vault.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
@@ -26,8 +27,14 @@ export function createApp(store) {
     store.flush();
   }
 
+  // Bóveda .md sincronizada para abrirla en Obsidian.
+  const vault = new Vault(path.join(store.dir, 'boveda'));
+  const onEvent = (e) => e.type === 'notes' && vault.schedule(store.data.notes);
+  bus.on('event', onEvent);
+  vault.schedule(store.data.notes);
+
   const app = express();
-  app.use(express.json({ limit: '5mb' }));
+  app.use(express.json({ limit: '25mb' }));
 
   const agentById = (id) => store.data.agents.find((a) => a.id === id);
   const publicSettings = () => {
@@ -45,6 +52,7 @@ export function createApp(store) {
     res.json({
       departments: DEPARTMENTS,
       providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, keyUrl: p.keyUrl, keyless: Boolean(p.keyless) })),
+      vaultPath: vault.dir,
     });
   });
 
@@ -203,6 +211,25 @@ export function createApp(store) {
     const n = notes.findByTitle(title) || notes.create({ title, content: '' });
     bus.emit('event', { type: 'notes' });
     res.json(n);
+  });
+  app.post('/api/notes/import', (req, res) => {
+    // Importa archivos .md (por ejemplo, de una bóveda de Obsidian).
+    const files = Array.isArray(req.body?.files) ? req.body.files : [];
+    let created = 0, updated = 0;
+    for (const f of files.slice(0, 2000)) {
+      if (!f?.name || typeof f.content !== 'string') continue;
+      const parsed = parseMarkdownFile(f.name, f.content);
+      const existing = notes.findByTitle(parsed.title);
+      if (existing) {
+        notes.update(existing.id, { content: parsed.content, tags: parsed.tags.length ? parsed.tags : existing.tags });
+        updated++;
+      } else {
+        notes.create(parsed);
+        created++;
+      }
+    }
+    bus.emit('event', { type: 'notes' });
+    res.json({ created, updated });
   });
   app.put('/api/notes/:id', (req, res) => {
     const n = notes.update(req.params.id, req.body || {});

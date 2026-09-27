@@ -71,6 +71,13 @@ export function Notes() {
     return () => clearTimeout(saveTimer.current);
   }, [draft, title, note, load, toast]);
 
+  async function importFiles(files: FileList) {
+    const list = await Promise.all([...files].map(async (f) => ({ name: f.name, content: await f.text() })));
+    const r = await api.importNotes(list);
+    toast(`📥 ${r.created} notas nuevas, ${r.updated} actualizadas`);
+    load();
+  }
+
   async function newNote(type: NoteType = 'nota') {
     const base = type === 'diario' ? new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Nueva nota';
     const n = await api.createNote({ title: base, type, content: '' });
@@ -94,6 +101,10 @@ export function Notes() {
             <button className="btn btn--primary small" onClick={() => newNote()}>＋ Nota</button>
             <button className="btn btn--ghost small" onClick={() => newNote('idea')}>💡 Idea</button>
             <button className="btn btn--ghost small" onClick={() => newNote('diario')}>📅 Hoy</button>
+            <label className="btn btn--ghost small" title="Importar archivos .md (por ejemplo, de Obsidian)">
+              ⬆️ .md
+              <input type="file" accept=".md,.markdown,.txt" multiple hidden onChange={(e) => e.target.files && importFiles(e.target.files)} />
+            </label>
           </div>
           <div className="type-filter">
             <button className={!typeFilter ? 'on' : ''} onClick={() => setTypeFilter('')}>Todas</button>

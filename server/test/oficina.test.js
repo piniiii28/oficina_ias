@@ -102,3 +102,23 @@ test('runGraph respeta dependencias y el límite de paralelismo', async () => {
   assert.equal(peak, 1);
   assert.equal(order.at(-1), 'c');
 });
+
+test('bóveda: escribe .md con frontmatter e importa de vuelta', async () => {
+  const { Vault, parseMarkdownFile } = await import('../src/vault.js');
+  const dir = tmp();
+  const store = new Store(dir);
+  const notes = new Notes(store);
+  notes.create({ title: 'Mi idea: con / raros', content: 'Hola [[Otra]]', tags: ['x'], type: 'idea' });
+  const vault = new Vault(path.join(dir, 'boveda'));
+  vault.sync(notes.all);
+  const files = fs.readdirSync(vault.dir);
+  assert.deepEqual(files, ['Mi idea- con - raros.md']);
+  const text = fs.readFileSync(path.join(vault.dir, files[0]), 'utf8');
+  const parsed = parseMarkdownFile(files[0], text);
+  assert.equal(parsed.content, 'Hola [[Otra]]');
+  assert.deepEqual(parsed.tags, ['x']);
+  assert.equal(parsed.type, 'idea');
+  notes.remove(notes.all[0].id);
+  vault.sync(notes.all);
+  assert.deepEqual(fs.readdirSync(vault.dir), []);
+});
