@@ -1966,3 +1966,61 @@ test('imágenes: la IA escribe <<imagen …>>, la oficina la genera, la guarda y
     delete process.env.CLOUDFLARE_AI_BASE;
   }
 });
+
+test('modelos retirados o saturados: la oficina se recupera sola y nunca pasa a uno de pago', async () => {
+  const http = await import('node:http');
+  const { callModel, PROVIDERS } = await import('../src/providers.js');
+  const { healAgents, RETIRED_MODELS } = await import('../src/freeModels.js');
+  process.env.OFICINA_RETRY_MS = '10';
+  const calls = [];
+  let busy = 0;
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      const { model } = JSON.parse(b);
+      calls.push(model);
+      const fail = (status, message) => {
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message } }));
+      };
+      if (model === 'llama-3.3-70b-versatile') return fail(404, 'The model `llama-3.3-70b-versatile` does not exist or you do not have access to it.');
+      if (model === 'openai/gpt-oss-120b' && busy-- > 0) return fail(503, 'This model is currently experiencing high demand. Please try again later.');
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `ok con ${model}` } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const oldBase = PROVIDERS.groq.baseUrl;
+  PROVIDERS.groq.baseUrl = `http://127.0.0.1:${fake.address().port}`;
+  const settings = { apiKeys: { groq: 'gk' } };
+  const ask = (agent) => callModel(settings, { provider: 'groq', model: agent.model, agent, system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+  try {
+    // Retirado: pasa a su reemplazo y la IA se queda con él.
+    const a = { id: 'x', provider: 'groq', model: 'llama-3.3-70b-versatile' };
+    assert.equal((await ask(a)).text, 'ok con openai/gpt-oss-120b');
+    assert.equal(a.model, 'openai/gpt-oss-120b');
+    // Saturado una vez: reintenta el mismo modelo.
+    busy = 1;
+    calls.length = 0;
+    assert.equal((await ask(a)).text, 'ok con openai/gpt-oss-120b');
+    assert.deepEqual(calls, ['openai/gpt-oss-120b', 'openai/gpt-oss-120b']);
+    // Sigue saturado: usa otro gratis del mismo proveedor solo esta vez.
+    busy = 2;
+    calls.length = 0;
+    assert.equal((await ask(a)).text, 'ok con qwen/qwen3.8-27b');
+    assert.equal(a.model, 'openai/gpt-oss-120b', 'no cambia su modelo por una saturación');
+  } finally {
+    fake.close();
+    PROVIDERS.groq.baseUrl = oldBase;
+    delete process.env.OFICINA_RETRY_MS;
+  }
+  // Al abrir, las IAs y sus asistentes pasan a los reemplazos; ningún reemplazo es de pago.
+  const agents = [{ provider: 'groq', model: 'qwen/qwen3-32b', assistants: [{ provider: 'openrouter', model: 'qwen/qwen3-coder:free' }] }, { provider: 'cerebras', model: 'llama-3.3-70b' }];
+  assert.equal(healAgents(agents), 3);
+  assert.equal(agents[0].model, 'qwen/qwen3.8-27b');
+  assert.equal(agents[0].assistants[0].model, 'qwen/qwen3.8-27b:free');
+  for (const next of Object.values(RETIRED_MODELS.openrouter)) assert.match(next, /:free$/);
+  for (const a of DEFAULT_AGENTS) assert.ok(!RETIRED_MODELS[a.provider]?.[a.model], `${a.id} usa un modelo retirado`);
+});

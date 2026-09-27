@@ -43,7 +43,7 @@ export function normalizeAssistants(list) {
       name: String(a?.name || '').trim().slice(0, 30) || `Asistente de ${focus || 'apoyo'}`,
       focus: focus || 'apoyo general',
       provider: String(a?.provider || 'groq'),
-      model: String(a?.model || 'llama-3.3-70b-versatile').slice(0, 120),
+      model: String(a?.model || 'openai/gpt-oss-120b').slice(0, 120),
     };
   });
 }

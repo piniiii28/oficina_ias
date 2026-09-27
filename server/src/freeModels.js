@@ -2,16 +2,13 @@
 // deja de existir, se puede escribir el nuevo desde el perfil de cada IA.
 export const FREE_MODELS = {
   groq: [
-    { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', for: 'general' },
-    { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', for: 'razonamiento' },
-    { id: 'qwen/qwen3-32b', label: 'Qwen3 32B', for: 'código' },
-    { id: 'moonshotai/kimi-k2-instruct', label: 'Kimi K2', for: 'documentos largos' },
-    { id: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout', for: 'general' },
+    { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
+    { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', for: 'código' },
+    { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (más rápido)', for: 'rápido' },
   ],
   cerebras: [
-    { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', for: 'general' },
-    { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', for: 'razonamiento' },
-    { id: 'qwen-3-32b', label: 'Qwen3 32B', for: 'código' },
+    { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
+    { id: 'qwen-3.8-27b', label: 'Qwen 3.8 27B', for: 'código' },
   ],
   google: [
     { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (el más capaz gratis)', for: 'razonamiento' },
@@ -20,15 +17,13 @@ export const FREE_MODELS = {
     // gemini-3.1-pro-preview no tiene plan gratis (solo de pago).
   ],
   openrouter: [
-    { id: 'qwen/qwen3-coder:free', label: 'Qwen3 Coder', for: 'código' },
-    { id: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek V3.1', for: 'general' },
-    { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1', for: 'razonamiento' },
-    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B', for: 'general' },
-    { id: 'moonshotai/kimi-k2:free', label: 'Kimi K2', for: 'documentos largos' },
-    { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B', for: 'general' },
-    { id: 'mistralai/mistral-small-3.2-24b-instruct:free', label: 'Mistral Small 3.2', for: 'redacción' },
-    { id: 'openai/gpt-oss-20b:free', label: 'GPT-OSS 20B', for: 'razonamiento' },
-    { id: 'z-ai/glm-4.5-air:free', label: 'GLM 4.5 Air (Z.ai)', for: 'código' },
+    { id: 'qwen/qwen3.8-27b:free', label: 'Qwen 3.8 27B', for: 'código' },
+    { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B', for: 'general' },
+    { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B', for: 'razonamiento' },
+    { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B', for: 'redacción' },
+    { id: 'thinkingmachines/inkling:free', label: 'Inkling (1M de contexto)', for: 'documentos largos' },
+    { id: 'cohere/north-mini-code:free', label: 'North Mini Code', for: 'código' },
+    { id: 'openrouter/free', label: 'Automático (el gratis disponible)', for: 'general' },
   ],
   github: [
     { id: 'openai/gpt-4.1-mini', label: 'GPT-4.1 mini', for: 'general' },
@@ -82,12 +77,49 @@ const NEED = {
   creatividad: 'redacción', negocios: 'general', personas: 'general', direccion: 'razonamiento',
 };
 
+/**
+ * Modelos que los proveedores retiraron (o dejaron de dar gratis) y su
+ * reemplazo gratis. Se aplican solos al abrir la oficina y cuando una llamada
+ * falla porque el modelo ya no existe.
+ */
+export const RETIRED_MODELS = {
+  groq: {
+    'llama-3.3-70b-versatile': 'openai/gpt-oss-120b', 'llama-3.1-8b-instant': 'openai/gpt-oss-20b', 'qwen/qwen3-32b': 'qwen/qwen3.8-27b', 'qwen/qwen3.6-27b': 'qwen/qwen3.8-27b',
+    'meta-llama/llama-4-scout-17b-16e-instruct': 'openai/gpt-oss-120b', 'moonshotai/kimi-k2-instruct': 'openai/gpt-oss-120b', 'deepseek-r1-distill-llama-70b': 'openai/gpt-oss-120b',
+  },
+  cerebras: { 'llama-3.3-70b': 'gpt-oss-120b', 'qwen-3-32b': 'qwen-3.8-27b', 'llama3.1-8b': 'gpt-oss-120b' },
+  openrouter: {
+    'qwen/qwen3-coder:free': 'qwen/qwen3.8-27b:free', 'deepseek/deepseek-chat-v3.1:free': 'nvidia/nemotron-3-super-120b-a12b:free', 'deepseek/deepseek-r1:free': 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'meta-llama/llama-3.3-70b-instruct:free': 'nvidia/nemotron-3-super-120b-a12b:free', 'moonshotai/kimi-k2:free': 'thinkingmachines/inkling:free', 'google/gemma-3-27b-it:free': 'google/gemma-4-31b-it:free',
+    'mistralai/mistral-small-3.2-24b-instruct:free': 'google/gemma-4-31b-it:free', 'openai/gpt-oss-20b:free': 'nvidia/nemotron-3-super-120b-a12b:free', 'z-ai/glm-4.5-air:free': 'qwen/qwen3.8-27b:free',
+  },
+  google: { 'gemini-2.5-pro': 'gemini-3.8-flash', 'gemini-2.5-flash': 'gemini-3.7-flash', 'gemini-2.5-flash-lite': 'gemini-3.5-flash-lite', 'gemini-2.0-flash': 'gemini-3.7-flash', 'gemini-1.5-pro': 'gemini-3.8-flash', 'gemini-1.5-flash': 'gemini-3.7-flash' },
+};
+
+/** Cambia en las IAs (y sus asistentes) los modelos retirados. Devuelve cuántos cambió. */
+export function healAgents(agents) {
+  let n = 0;
+  const fix = (x) => {
+    const next = RETIRED_MODELS[x.provider]?.[x.model];
+    if (next) {
+      x.model = next;
+      n++;
+    }
+  };
+  for (const a of agents || []) {
+    fix(a);
+    for (const s of a.assistants || []) fix(s);
+    if (a.paidBackup) fix(a.paidBackup);
+  }
+  return n;
+}
+
 // Orden de preferencia de proveedores gratis para cada necesidad.
 const ORDER = {
-  código: [['openrouter', 'qwen/qwen3-coder:free'], ['groq', 'qwen/qwen3-32b'], ['cerebras', 'qwen-3-32b'], ['mistral', 'codestral-latest'], ['google', 'gemini-3.7-flash'], ['ollama', 'qwen2.5-coder']],
-  razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'deepseek/deepseek-r1:free'], ['google', 'gemini-3.8-flash'], ['ollama', 'deepseek-r1']],
-  redacción: [['google', 'gemini-3.7-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free'], ['groq', 'llama-3.3-70b-versatile'], ['ollama', 'gemma3']],
-  general: [['groq', 'llama-3.3-70b-versatile'], ['google', 'gemini-3.7-flash'], ['cerebras', 'llama-3.3-70b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'deepseek/deepseek-chat-v3.1:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
+  código: [['openrouter', 'qwen/qwen3.8-27b:free'], ['groq', 'qwen/qwen3.8-27b'], ['cerebras', 'qwen-3.8-27b'], ['mistral', 'codestral-latest'], ['google', 'gemini-3.7-flash'], ['ollama', 'qwen2.5-coder']],
+  razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free'], ['google', 'gemini-3.8-flash'], ['ollama', 'deepseek-r1']],
+  redacción: [['google', 'gemini-3.7-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'google/gemma-4-31b-it:free'], ['groq', 'openai/gpt-oss-120b'], ['ollama', 'gemma3']],
+  general: [['groq', 'openai/gpt-oss-120b'], ['google', 'gemini-3.7-flash'], ['cerebras', 'gpt-oss-120b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
 };
 
 const PAID = new Set(['anthropic', 'openai', 'xai', 'perplexity', 'together', 'deepseek']);

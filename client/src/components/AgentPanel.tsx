@@ -367,7 +367,7 @@ function AssistantsTab({ agent }: { agent: Agent }) {
   };
   const add = (f: string) => {
     if (!f.trim() || list.length >= 2) return;
-    save([...list, { id: '', name: '', focus: f.trim(), provider: 'groq', model: 'llama-3.3-70b-versatile' }], `👥 ${agent.name} tiene un asistente de ${f.trim()}`);
+    save([...list, { id: '', name: '', focus: f.trim(), provider: 'groq', model: 'openai/gpt-oss-120b' }], `👥 ${agent.name} tiene un asistente de ${f.trim()}`);
     setFocus('');
   };
   const edit = (i: number, patch: Partial<AssistantDef>) => setList(list.map((x, k) => (k === i ? { ...x, ...patch } : x)));

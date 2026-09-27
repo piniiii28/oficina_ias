@@ -52,7 +52,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'opencode', name: 'OpenCode', role: 'Programador full-stack', department: 'codigo',
-    provider: 'openrouter', model: 'qwen/qwen3-coder:free',
+    provider: 'openrouter', model: 'qwen/qwen3.8-27b:free',
     skills: ['código', 'programar', 'python', 'javascript', 'typescript', 'react', 'html', 'css', 'función', 'script', 'web', 'frontend', 'implementar'],
     system: P('Eres OpenCode, programador full-stack. Escribes código completo, funcional y comentado, con instrucciones para ejecutarlo.'),
     avatar: { skin: '#e0ac69', hair: '#111827', hairStyle: 'hoodie', eyes: 'happy', outfit: '#374151', accessory: 'none', prop: '⌨️' },
@@ -66,7 +66,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'deepseek-coder', name: 'DeepSeek', role: 'Algoritmos y depuración', department: 'codigo',
-    provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free',
+    provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free',
     skills: ['algoritmo', 'depurar', 'debug', 'complejidad', 'estructura de datos', 'leetcode', 'optimización'],
     system: P('Eres DeepSeek, experto en algoritmos. Explicas la solución paso a paso, su complejidad y casos límite.'),
     avatar: { skin: '#f5d0b0', hair: '#1e3a8a', hairStyle: 'bob', eyes: 'focused', outfit: '#4d6bfe', accessory: 'antenna', prop: '🐋' },
@@ -80,14 +80,14 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'llama-devops', name: 'Llama Ops', role: 'DevOps y nube', department: 'codigo',
-    provider: 'groq', model: 'llama-3.3-70b-versatile',
+    provider: 'groq', model: 'openai/gpt-oss-120b',
     skills: ['devops', 'docker', 'kubernetes', 'despliegue', 'deploy', 'servidor', 'nube', 'aws', 'ci', 'linux'],
     system: P('Eres Llama Ops, ingeniero DevOps. Das comandos, Dockerfiles y pipelines listos para copiar, con buenas prácticas de seguridad.'),
     avatar: { skin: '#d8a47f', hair: '#78350f', hairStyle: 'cap', eyes: 'cool', outfit: '#f55036', accessory: 'none', prop: '🐳', costume: 'astronauta' },
   }),
   base({
     id: 'guardian', name: 'Guardián', role: 'Ciberseguridad defensiva', department: 'codigo',
-    provider: 'groq', model: 'llama-3.3-70b-versatile',
+    provider: 'groq', model: 'openai/gpt-oss-120b',
     skills: ['seguridad', 'ciberseguridad', 'vulnerabilidad', 'contraseña', 'cifrado', 'privacidad', 'owasp', 'auditoría'],
     system: P('Eres Guardián, experto en ciberseguridad defensiva. Identificas riesgos y propones mitigaciones y buenas prácticas. No ayudas a atacar sistemas ajenos.'),
     avatar: { skin: '#c68642', hair: '#0f172a', hairStyle: 'short', eyes: 'cool', outfit: '#1e293b', accessory: 'shades', prop: '🛡️', costume: 'capa' },
@@ -103,14 +103,14 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'deepseek-r', name: 'DeepSeek R', role: 'Matemático / razonamiento', department: 'datos',
-    provider: 'openrouter', model: 'deepseek/deepseek-r1:free',
+    provider: 'openrouter', model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     skills: ['matemática', 'cálculo', 'lógica', 'demostración', 'ecuación', 'física', 'probabilidad', 'razonar'],
     system: P('Eres DeepSeek R, especialista en razonamiento matemático. Resuelves problemas con pasos verificables y compruebas el resultado.'),
     avatar: { skin: '#f3c9a8', hair: '#312e81', hairStyle: 'messy', eyes: 'glasses', outfit: '#6366f1', accessory: 'none', prop: '🧮', costume: 'mago' },
   }),
   base({
     id: 'qwen-sql', name: 'Qwen', role: 'SQL y analítica', department: 'datos',
-    provider: 'groq', model: 'qwen/qwen3-32b',
+    provider: 'groq', model: 'qwen/qwen3.8-27b',
     skills: ['sql', 'base de datos', 'consulta', 'excel', 'dashboard', 'kpi', 'métricas', 'postgres'],
     system: P('Eres Qwen, analista de datos. Escribes SQL correcto, diseñas esquemas de bases de datos y defines KPIs.'),
     avatar: { skin: '#f9d5b5', hair: '#6d28d9', hairStyle: 'bun', eyes: 'happy', outfit: '#615ced', accessory: 'none', prop: '🗄️', costume: 'vaquero' },
@@ -163,7 +163,7 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'kimi', name: 'Kimi', role: 'Lectora de documentos largos', department: 'investigacion',
-    provider: 'groq', model: 'moonshotai/kimi-k2-instruct',
+    provider: 'groq', model: 'openai/gpt-oss-120b',
     skills: ['documento', 'pdf', 'leer', 'resumen largo', 'paper', 'libro', 'contrato largo', 'extraer'],
     system: P('Eres Kimi, lectora experta. Extraes lo esencial de textos largos: estructura, argumentos, datos y citas.'),
     avatar: { skin: '#fde7d6', hair: '#1f2937', hairStyle: 'long', eyes: 'dreamy', outfit: '#0ea5e9', accessory: 'book', prop: '📖' },
@@ -186,14 +186,14 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'llama-fin', name: 'Llama Finanzas', role: 'Finanzas y números', department: 'negocios',
-    provider: 'cerebras', model: 'llama-3.3-70b',
+    provider: 'cerebras', model: 'gpt-oss-120b',
     skills: ['finanzas', 'dinero', 'presupuesto', 'inversión', 'costos', 'precio', 'flujo de caja', 'ahorro', 'impuestos'],
     system: P('Eres Llama Finanzas, analista financiero. Haces presupuestos, proyecciones y cálculos claros. Aclaras que no es asesoría financiera profesional.'),
     avatar: { skin: '#e9b98f', hair: '#166534', hairStyle: 'short', eyes: 'glasses', outfit: '#16a34a', accessory: 'none', prop: '💰' },
   }),
   base({
     id: 'nemotron-pm', name: 'Nemo PM', role: 'Project manager', department: 'negocios',
-    provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free',
+    provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free',
     skills: ['proyecto', 'plan', 'cronograma', 'tareas', 'scrum', 'sprint', 'organizar', 'prioridad', 'roadmap'],
     system: P('Eres Nemo PM, gestor de proyectos. Conviertes objetivos en planes con fases, tareas, responsables y fechas.'),
     avatar: { skin: '#f6cfa9', hair: '#65a30d', hairStyle: 'bun', eyes: 'happy', outfit: '#76b900', accessory: 'clipboard', prop: '📋' },
@@ -202,7 +202,7 @@ export const DEFAULT_AGENTS = [
   // Personas y conocimiento
   base({
     id: 'lexi', name: 'Lexi', role: 'Asesora legal', department: 'personas',
-    provider: 'openrouter', model: 'mistralai/mistral-small-3.2-24b-instruct:free',
+    provider: 'openrouter', model: 'google/gemma-4-31b-it:free',
     skills: ['legal', 'ley', 'contrato', 'términos', 'derechos', 'licencia', 'jurídico', 'normativa'],
     system: P('Eres Lexi, orientadora legal. Explicas conceptos legales en lenguaje sencillo y redactas borradores. Siempre aclaras que no sustituyes a un abogado.'),
     avatar: { skin: '#f5cdb0', hair: '#44403c', hairStyle: 'bun', eyes: 'glasses', outfit: '#78350f', accessory: 'none', prop: '⚖️' },
@@ -310,7 +310,7 @@ export const DEFAULT_AGENTS = [
   // Blender, OpenSCAD o FreeCAD instalados en tu computador.
   base({
     id: 'blender-3d', isHead: true, name: 'Blendi', role: 'Modeladora en Blender', department: 'impresion3d',
-    provider: 'openrouter', model: 'qwen/qwen3-coder:free',
+    provider: 'openrouter', model: 'qwen/qwen3.8-27b:free',
     skills: ['blender', '3d', 'modelo 3d', 'modelar', 'figura', 'escultura', 'personaje', 'malla', 'render', 'stl', 'impresión 3d', 'imprimir'],
     system: P(`Eres Blendi, modeladora 3D experta en Blender y su API de Python (bpy). ${CAD_RULES}\nEscribe el script en un bloque \`\`\`python que empiece con "import bpy". Borra la escena inicial, construye el modelo con primitivas y modificadores (booleanos, bevel, solidify, array) y deja cada pieza lista para imprimir (malla cerrada, sin caras sueltas).`),
     avatar: { skin: '#f6d7c3', hair: '#ea7600', hairStyle: 'bun', eyes: 'sparkle', outfit: '#f59e0b', accessory: 'headphones', prop: '🧊' },
@@ -324,14 +324,14 @@ export const DEFAULT_AGENTS = [
   }),
   base({
     id: 'freecad-3d', name: 'Fredi', role: 'Ingeniero CAD (FreeCAD)', department: 'impresion3d',
-    provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free',
+    provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free',
     skills: ['freecad', 'cad', 'ingeniería', 'mecánica', 'tolerancias', 'ensamble', 'bisagra', 'rosca', 'pieza técnica', 'step'],
     system: P(`Eres Fredi, ingeniero mecánico experto en FreeCAD y su API de Python (FreeCAD, Part, Mesh). ${CAD_RULES}\nEscribe el script en un bloque \`\`\`python que empiece con "import FreeCAD". Crea un documento, construye las piezas con Part y expórtalas a STL con Mesh.export. Cuida tolerancias de encaje (0,2–0,4 mm).`),
     avatar: { skin: '#f1c7a5', hair: '#57534e', hairStyle: 'cap', eyes: 'focused', outfit: '#4d7c0f', accessory: 'clipboard', prop: '⚙️' },
   }),
   base({
     id: 'slicer-3d', name: 'Capa', role: 'Laminado e impresión', department: 'impresion3d',
-    provider: 'groq', model: 'llama-3.3-70b-versatile',
+    provider: 'groq', model: 'openai/gpt-oss-120b',
     skills: ['cura', 'prusaslicer', 'orcaslicer', 'laminar', 'slicer', 'gcode', 'filamento', 'pla', 'petg', 'soportes', 'relleno', 'impresora', 'bambu', 'ender'],
     system: P('Eres Capa, experta en impresión 3D FDM y resina. Revisas si un modelo se puede imprimir (voladizos, grosor de pared, orientación, soportes) y das la configuración del laminador: material, temperaturas, altura de capa, relleno, velocidad y tiempo estimado.'),
     avatar: { skin: '#fde2cf', hair: '#84cc16', hairStyle: 'ponytail', eyes: 'happy', outfit: '#a3e635', accessory: 'glasses', prop: '🖨️' },
@@ -340,7 +340,7 @@ export const DEFAULT_AGENTS = [
   // Especialistas nuevos (todos con planes gratis).
   base({
     id: 'voltio', name: 'Voltio', role: 'Electrónica y Arduino', department: 'impresion3d',
-    provider: 'groq', model: 'qwen/qwen3-32b',
+    provider: 'groq', model: 'qwen/qwen3.8-27b',
     skills: ['arduino', 'electrónica', 'esp32', 'raspberry', 'sensor', 'circuito', 'motor', 'led', 'soldar', 'placa', 'iot'],
     system: P('Eres Voltio, experto en electrónica y Arduino/ESP32. Das el esquema de conexiones (pin por pin), la lista de componentes con valores, el código completo y cómo probarlo con seguridad.'),
     avatar: { skin: '#e0ac69', hair: '#1f2937', hairStyle: 'messy', eyes: 'focused', outfit: '#0ea5e9', accessory: 'glasses', prop: '🔌' },

@@ -20,7 +20,7 @@ import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
 import { COOKIE, cookieOf, createUser, hashPassword, hostAllowed, login, logout, needsAdmin, publicUser, tailscaleAddresses, userFromSession } from './auth.js';
 import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
-import { FREE_MODELS, freePlan } from './freeModels.js';
+import { FREE_MODELS, freePlan, healAgents } from './freeModels.js';
 import { CAD_TOOLS, detectCad, runCad, openInApp, openInBambu, sliceJob, extractCadBlocks, listFiles } from './cad.js';
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
 import { openTerminal, manualCommand, runLogged, openPath } from './system.js';
@@ -91,6 +91,13 @@ export function createApp(store) {
       for (const s of a.assistants || []) if (s.provider === 'google' && NEW[s.model]) s.model = NEW[s.model];
     }
     store.data.settings.gemini3Seeded = true;
+    store.save();
+  }
+
+  // Modelos que los proveedores retiraron: se pasan a su reemplazo gratis (cada vez que abre).
+  const healed = healAgents(store.data.agents);
+  if (healed) {
+    console.log(`  🔧 Actualicé ${healed} modelos que los proveedores retiraron.`);
     store.save();
   }
 

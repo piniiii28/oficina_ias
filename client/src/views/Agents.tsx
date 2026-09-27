@@ -31,7 +31,7 @@ export function Agents() {
   const [browsing, setBrowsing] = useState(false);
   const [q, setQ] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
-  const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'groq', model: 'llama-3.3-70b-versatile', skills: '', system: '' });
+  const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'groq', model: 'openai/gpt-oss-120b', skills: '', system: '' });
   const [avatar, setAvatar] = useState(randomAvatar);
   const dept = (id: string) => departments.find((d) => d.id === id);
 

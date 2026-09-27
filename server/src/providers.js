@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { simulate } from './demo.js';
+import { FREE_MODELS, RETIRED_MODELS } from './freeModels.js';
 import { ollamaOrder, ensureUp, markDown, markUp, track, isDownError } from './ollama.js';
 
 // tier: 'gratis' (tiene plan gratis), 'mixto' (modelos gratis y de pago),
@@ -101,10 +102,83 @@ export function credentials(settings, provider, accountId = null) {
   return all;
 }
 
-/** Modelo gratis de Gemini que se usa si el elegido fue retirado. */
-export const GEMINI_FALLBACK = 'gemini-3.8-flash';
-/** ¿El error dice que el modelo ya no existe o no está disponible? */
-export const isRetiredModel = (msg) => /no longer available|is not found|not found for API|not supported for generateContent|has been (deprecated|retired|shut ?down)/i.test(String(msg));
+/** ¿El error dice que el modelo ya no existe o dejó de ser gratis? */
+export const isRetiredModel = (msg) => /no longer available|does not exist|model_not_found|is not found|not found for API|not supported for generateContent|unavailable for free|decommissioned|has been (deprecated|retired|shut ?down)|not a valid model|invalid model/i.test(String(msg));
+/** ¿El modelo está saturado en este momento (se arregla solo en un rato)? */
+export const isOverloaded = (msg) => /high demand|overloaded|temporarily unavailable|try again later|\b503\b|\bUNAVAILABLE\b|server is busy/i.test(String(msg));
+
+const modelLists = new Map();
+/** Modelos que ofrece hoy un proveedor compatible con OpenAI (se guarda 10 minutos). */
+async function listModels(provider, cred) {
+  const hit = modelLists.get(provider);
+  if (hit && Date.now() - hit.at < 600000) return hit.ids;
+  const base = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : PROVIDERS[provider]?.baseUrl;
+  if (!base) return [];
+  try {
+    const r = await fetch(`${base}/models`, { headers: cred?.key ? { Authorization: `Bearer ${cred.key}` } : {}, signal: AbortSignal.timeout(8000) });
+    const data = await r.json();
+    let items = data.data || data.models || [];
+    // En OpenRouter solo sirven los gratis.
+    if (provider === 'openrouter') items = items.filter((m) => m.id?.endsWith(':free') || (+m.pricing?.prompt === 0 && +m.pricing?.completion === 0));
+    const ids = items.map((m) => m.id || m.name).filter(Boolean);
+    modelLists.set(provider, { at: Date.now(), ids });
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
+/** Reemplazo gratis para un modelo retirado: el conocido, o uno recomendado que siga existiendo. */
+export async function replacementModel(provider, model, cred) {
+  const known = RETIRED_MODELS[provider]?.[model];
+  if (known && known !== model) return known;
+  const recommended = (FREE_MODELS[provider] || []).map((m) => m.id).filter((id) => id !== model);
+  if (provider === 'google') return recommended[0] || null;
+  const available = await listModels(provider, cred);
+  if (!available.length) return null;
+  return recommended.find((id) => available.includes(id)) || (provider === 'openrouter' ? available.find((id) => id !== model) : null) || null;
+}
+
+const retryWait = () => Number(process.env.OFICINA_RETRY_MS ?? 2500);
+
+/**
+ * Llama al modelo y, si falla antes de escribir algo:
+ * - saturado («high demand», 503): espera un momento y reintenta; si sigue
+ *   saturado, usa por esta vez otro modelo gratis del mismo proveedor;
+ * - retirado o ya no gratis: pasa a su reemplazo gratis y la IA se queda con él.
+ * No cambia nunca a un modelo de pago.
+ */
+async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
+  const heals = !PROVIDERS[provider]?.cli && !PROVIDERS[provider]?.keyless && provider !== 'anthropic';
+  try {
+    return await run(model);
+  } catch (err) {
+    if (!heals || wrote()) throw err;
+    if (isOverloaded(err.message)) {
+      await new Promise((r) => setTimeout(r, retryWait()));
+      let last = err;
+      try {
+        return await run(model);
+      } catch (e2) {
+        if (wrote() || !isOverloaded(e2.message)) throw e2;
+        last = e2;
+      }
+      const alt = (FREE_MODELS[provider] || []).map((m) => m.id).find((id) => id !== model);
+      if (!alt) throw last;
+      console.warn(`[modelos] ${PROVIDERS[provider].label}: «${model}» saturado, uso «${alt}» esta vez`);
+      onSwitch(alt, false);
+      return run(alt);
+    }
+    if (isRetiredModel(err.message)) {
+      const next = await replacementModel(provider, model, cred);
+      if (!next) throw new Error(`${err.message} (Cambia el modelo en el perfil de la IA.)`);
+      console.warn(`[modelos] ${PROVIDERS[provider].label}: «${model}» ya no está disponible, la IA pasa a «${next}»`);
+      onSwitch(next, true);
+      return run(next);
+    }
+    throw err;
+  }
+}
 
 /** ¿El error indica que la cuenta se quedó sin cupo? */
 export const isQuotaError = (msg) => /\b429\b|quota|rate.?limit|l[ií]mite de uso|usage limit|limit reached|exhausted|too many requests|insufficient/i.test(String(msg));
@@ -181,23 +255,17 @@ async function callModelInner(settings, { provider, model, system, messages, age
     const done = ollama ? track(ollama.id) : null;
     try {
       if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar
-      if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home, agent?.mcp ? [agent.mcp] : [], model);
-      else if (provider === 'anthropic') text = await callAnthropic(cred.key, model, system, messages, effort, tap, sig, Boolean(settings.webSearch));
-      else if (provider === 'google') {
-        try {
-          text = await callGemini(cred.key, model, system, messages, tap, sig);
-        } catch (err) {
-          // Google retira modelos seguido: si este ya no está, se usa el gratis recomendado
-          // y la IA queda con ese modelo (se puede cambiar en su perfil).
-          const next = GEMINI_FALLBACK;
-          if (wrote || model === next || !isRetiredModel(err.message)) throw err;
-          console.warn(`[gemini] «${model}» ya no está disponible; uso «${next}»`);
-          if (agent && agent.model === model) agent.model = next;
-          model = next;
-          text = await callGemini(cred.key, model, system, messages, tap, sig);
-        }
-      }
-      else text = await callOpenAICompatible(provider, cred, model, system, messages, tap, sig);
+      const once = (m) => {
+        if (PROVIDERS[provider]?.cli) return callCli(settings, provider, system, messages, tap, sig, cred.home, agent?.mcp ? [agent.mcp] : [], m);
+        if (provider === 'anthropic') return callAnthropic(cred.key, m, system, messages, effort, tap, sig, Boolean(settings.webSearch));
+        if (provider === 'google') return callGemini(cred.key, m, system, messages, tap, sig);
+        return callOpenAICompatible(provider, cred, m, system, messages, tap, sig);
+      };
+      // Si el modelo está saturado o lo retiraron, se recupera solo (ver withRecovery).
+      text = await withRecovery(provider, cred, model, once, () => wrote, (next, keep) => {
+        if (keep && agent && agent.model === model) agent.model = next;
+        model = next;
+      });
       if (ollama) markUp(ollama.id);
       used = cred;
       break;
