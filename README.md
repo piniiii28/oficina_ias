@@ -16,7 +16,7 @@ Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs
 
 | Sección | Qué hace |
 |---|---|
-| 🏢 **Oficina** | Le escribes una tarea a Claude (o se la dictas por voz, con archivos adjuntos o enlaces). Él la divide, elige a los especialistas, los pone a trabajar **en paralelo o en relevos** e integra todo en una respuesta final. Abajo está el **edificio estilo Habbo**: 9 pisos isométricos por donde las IAs caminan, trabajan, se reúnen y descansan. |
+| 🏢 **Oficina** | Le escribes una tarea a Claude (o se la dictas por voz, con archivos adjuntos o enlaces). Él la divide, elige a los especialistas, los pone a trabajar **en paralelo o en relevos** e integra todo en una respuesta final. Abajo está el **edificio estilo Habbo**: 10 pisos isométricos por donde las IAs caminan, trabajan, se reúnen y descansan. |
 | 📋 **Tablero** | Kanban por proyectos (Por hacer, En curso, Hecho). Envía una tarjeta al equipo con un clic; pasa sola a «Hecho» con el enlace al resultado. |
 | ⛓️ **Flujos** | Equipos con relevos listos (Crear una app, Lanzar un producto, Contenido para redes, Aprender un tema, Plan de negocio, Analizar datos): cada IA trabaja sobre la entrega de la anterior. |
 | 🗣️ **Reuniones** | Eliges varias IAs y un tema: conversan por turnos respondiéndose entre ellas y Claude resume acuerdos y próximos pasos. |
@@ -72,6 +72,7 @@ También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `G
 - **Penthouse**: la oficina de Claude, el cerebro central.
 - **Pisos 6 a 1**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, y Personas y Conocimiento.
 - **Planta baja**: lobby, cafetería y la mesa de reuniones.
+- **Sótano**: sala de juegos (arcades, ping-pong, puffs) y servidores.
 
 Las IAs caminan casilla por casilla, se detienen a conversar cuando se cruzan y usan el ascensor (su puerta se abre al llegar alguien). Tú también tienes un avatar: haz clic en cualquier baldosa para caminar o en un mueble (cafetera, arcade, piano, piscina, telescopio…) para usarlo, y personalízalo en **Ajustes**. Las IAs tienen energía: se cansan trabajando y recargan con café o en la azotea. Hay mascotas (Michi, Firulais y Kiwi) y cada piso tiene skins (botón 🎨). Si prefieres la vista clásica, usa el botón **▦ Escritorios**.
 

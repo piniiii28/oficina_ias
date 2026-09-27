@@ -53,6 +53,8 @@ const up = (p: { x: number; y: number }, z: number) => ({ x: p.x, y: p.y - z });
 
 const LOOK: Record<Furniture['kind'], { z: number; color: string; emoji?: string; size?: number }> = {
   rug: { z: 1, color: '#b91c1c' },
+  pingpong: { z: 16, color: '#15803d', emoji: '🏓', size: 18 },
+  beanbag: { z: 10, color: '#f97316' },
   pool: { z: 4, color: '#22d3ee', emoji: '🏊', size: 22 },
   bench: { z: 12, color: '#a16207' },
   gym: { z: 8, color: '#52525b', emoji: '🏋️', size: 24 },
@@ -355,7 +357,7 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
   const walkers = useSim(active, live, meetings, hidden);
   const hour = new Date().getHours();
   const night = hour < 6 || hour >= 19;
-  const numbers = FLOORS.map((f, k) => (f.id === 'lobby' ? 'PB' : f.id === 'penthouse' ? 'PH' : f.id === 'azotea' ? 'AZ' : String(FLOORS.length - 1 - k)));
+  const numbers = FLOORS.map((f, k) => (f.id === 'lobby' ? 'PB' : f.id === 'penthouse' ? 'PH' : f.id === 'azotea' ? 'AZ' : f.id === 'sotano' ? 'S1' : String(FLOORS.length - 2 - k)));
   const inElevator = active.filter((a) => walkers[a.id]?.inElevator);
 
   const wrap = useRef<HTMLDivElement>(null);
@@ -390,12 +392,17 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
           <div className="roof-sign">🧠 OFICINA DE IAS</div>
         </div>
         {FLOORS.map((f, k) => (
-          <FloorView key={f.id} f={f} number={numbers[k]} walkers={walkers} agents={active} onSelect={onSelect} night={night} me={me}
-            onTile={(floor, i, j, emote) => { walkers[ME].goal = { floor, i, j }; walkers[ME].onArrive = emote; }} />
+          <div key={f.id}>
+            {f.id === 'sotano' && (
+              <div className="street">
+                <span>🌳</span><span>🚲</span><span className="street-door">🚪 Entrada</span><span>🚕</span><span>🌳</span>
+              </div>
+            )}
+            <FloorView f={f} number={numbers[k]} walkers={walkers} agents={active} onSelect={onSelect} night={night} me={me}
+              onTile={(floor, i, j, emote) => { walkers[ME].goal = { floor, i, j }; walkers[ME].onArrive = emote; }} />
+          </div>
         ))}
-        <div className="street">
-          <span>🌳</span><span>🚲</span><span className="street-door">🚪 Entrada</span><span>🚕</span><span>🌳</span>
-        </div>
+        <div className="ground" />
       </div>
     </div>
   );

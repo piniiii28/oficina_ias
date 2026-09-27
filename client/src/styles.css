@@ -635,3 +635,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .badge-item small { color: var(--muted); font-size: 11px; }
 .mentions li { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
 .mentions li .link { align-self: flex-start; }
+.ground { height: 18px; margin: 0 -14px; background: repeating-linear-gradient(90deg, #57534e 0 20px, #44403c 20px 40px); }

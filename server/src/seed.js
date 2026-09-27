@@ -10,7 +10,7 @@ export function seedWelcome(notes) {
 Soy **Claude**, el cerebro central. Coordino a más de 25 IAs especializadas.
 
 - Escríbeme una tarea en [[Cómo pedir tareas]] y reparto el trabajo.
-- Recorre el [[Edificio de la oficina]]: 9 pisos donde el equipo vive y trabaja.
+- Recorre el [[Edificio de la oficina]]: 10 pisos donde el equipo vive y trabaja.
 - Organiza proyectos en el **Tablero** y reúne a varias IAs en **Reuniones**.
 - Todo lo que hacemos se guarda como notas conectadas: mira el [[Grafo de ideas]].
 - Cada IA puede aprender: revisa [[Entrenar a una IA]].
@@ -28,6 +28,7 @@ Soy **Claude**, el cerebro central. Coordino a más de 25 IAs especializadas.
 - **Penthouse**: la oficina de Claude.
 - **Pisos 6 a 1**: Ingeniería, Datos, Estudio Creativo, Investigación, Negocios, Personas.
 - **Planta baja**: lobby, cafetería y la mesa de reuniones.
+- **Sótano**: sala de juegos y servidores.
 
 Haz clic en una baldosa para mover tu avatar o en un mueble para usarlo. Pasa el mouse sobre una IA para ver qué hace y su energía; haz clic para hablar con ella. Usa el botón 🎨 de cada piso para cambiar su skin y 📹 para la cámara automática.
 

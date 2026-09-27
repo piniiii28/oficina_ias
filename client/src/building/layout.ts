@@ -4,7 +4,7 @@
 export type Furniture = {
   i: number;
   j: number;
-  kind: 'rug' | 'pool' | 'bench' | 'gym' | 'telescope' | 'grill' | 'umbrella' | 'desk' | 'plant' | 'coffee' | 'sofa' | 'shelf' | 'board' | 'server' | 'easel' | 'table' | 'vending' | 'reception' | 'arcade' | 'globe' | 'cabinet' | 'bigtable' | 'piano' | 'aquarium';
+  kind: 'pingpong' | 'beanbag' | 'rug' | 'pool' | 'bench' | 'gym' | 'telescope' | 'grill' | 'umbrella' | 'desk' | 'plant' | 'coffee' | 'sofa' | 'shelf' | 'board' | 'server' | 'easel' | 'table' | 'vending' | 'reception' | 'arcade' | 'globe' | 'cabinet' | 'bigtable' | 'piano' | 'aquarium';
   w?: number; // ancho en casillas (eje i)
   h?: number; // fondo en casillas (eje j)
   label?: string;
@@ -168,6 +168,22 @@ export const FLOORS: FloorDef[] = [
     elevator: { i: 0, j: 3 },
     hangouts: [{ i: 1, j: 1 }, { i: 2, j: 1 }, { i: 3, j: 1 }, { i: 1, j: 3 }, { i: 3, j: 3 }, { i: 3, j: 5 }, { i: 5, j: 5 }, { i: 12, j: 1 }, { i: 12, j: 4 }],
   },
+  {
+    id: 'sotano', name: 'Sótano · Sala de juegos y servidores', emoji: '🎮',
+    cols: 12, rows: 6, floorA: '#262b3a', floorB: '#2f3547', wall: '#6366f1',
+    desks: [],
+    furniture: [
+      { i: 1, j: 1, kind: 'rug', w: 4, h: 3 },
+      { i: 2, j: 2, kind: 'pingpong', w: 2 },
+      { i: 0, j: 0, kind: 'arcade' }, { i: 1, j: 0, kind: 'arcade' }, { i: 5, j: 0, kind: 'vending' },
+      { i: 7, j: 4, kind: 'beanbag' }, { i: 9, j: 4, kind: 'beanbag' }, { i: 8, j: 5, kind: 'beanbag' },
+      { i: 9, j: 0, kind: 'server' }, { i: 10, j: 0, kind: 'server' }, { i: 11, j: 0, kind: 'server' }, { i: 11, j: 1, kind: 'server' },
+      { i: 11, j: 5, kind: 'plant' },
+    ],
+    art: ['👾'],
+    elevator: { i: 0, j: 3 },
+    hangouts: [{ i: 2, j: 1 }, { i: 3, j: 3 }, { i: 8, j: 4 }, { i: 7, j: 5 }, { i: 1, j: 1 }, { i: 10, j: 2 }],
+  },
 ];
 
 /** Asientos alrededor de la mesa de reuniones del lobby. */
@@ -250,7 +266,7 @@ export function tileCenter(f: FloorDef, i: number, j: number) {
 
 // Qué pasa cuando tu avatar usa un mueble.
 export const USE: Partial<Record<Furniture['kind'], string>> = {
-  coffee: '☕ ¡Café!', vending: '🥤 ¡Refresco!', arcade: '🕹️ ¡Nuevo récord!', piano: '🎹 ♪♫', pool: '🏊 ¡Al agua!', gym: '🏋️ ¡Fuerza!',
+  pingpong: '🏓 ¡Punto!', beanbag: '😌 Relajado', coffee: '☕ ¡Café!', vending: '🥤 ¡Refresco!', arcade: '🕹️ ¡Nuevo récord!', piano: '🎹 ♪♫', pool: '🏊 ¡Al agua!', gym: '🏋️ ¡Fuerza!',
   telescope: '🔭 ¡Se ve la luna!', aquarium: '🐠 ¡Hola, peces!', shelf: '📖 Leyendo…', grill: '🍖 ¡Asado!', table: '🍩 ¡Rico!', sofa: '🛋️ Descansando', easel: '🎨 Pintando', globe: '🌍 ¿A dónde viajo?', board: '📝 Anotando ideas', reception: '🛎️ ¡Ding!',
 };
 

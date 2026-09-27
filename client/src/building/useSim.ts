@@ -41,7 +41,7 @@ const CHATS = ['¡Hola!', '¿Café?', 'Buen trabajo 👏', 'Jaja 😂', '¿Viste
 const EMOTES = ['☕', '💭', '🎵', '💡', '😄', '📱', '🍪', '👋', '✨', '📚'];
 
 function homeFloor(a: Agent): FloorDef {
-  return FLOORS.find((f) => f.department === a.department) || FLOORS[FLOORS.length - 1];
+  return FLOORS.find((f) => f.department === a.department) || floorById.get('lobby')!;
 }
 
 /** Escritorio asignado: por orden dentro de su departamento. */
@@ -99,7 +99,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
         const busy = status === 'working' || status === 'thinking';
         const seat = seatOf(a.id);
         w.energy ??= 60 + Math.random() * 40;
-        const resting = !w.goal && (w.floor === 'lobby' || w.floor === 'azotea') && w.reason === 'cafe';
+        const resting = !w.goal && ['lobby', 'azotea', 'sotano'].includes(w.floor) && w.reason === 'cafe';
         if (busy) w.energy -= 0.5;
         else if (w.moving) w.energy -= 0.12;
         else if (resting) w.energy += 2.5;
@@ -141,7 +141,7 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
             w.goal = { floor: tf.id, ...(near || randomWalkable(tf)) };
             w.reason = 'pasear';
             w.onArrive = '👀 ¿Cómo vamos?';
-          } else if ((w.energy ?? 100) < 25 && w.floor !== 'lobby' && w.floor !== 'azotea') {
+          } else if ((w.energy ?? 100) < 25 && !['lobby', 'azotea', 'sotano'].includes(w.floor)) {
             const dest = floorById.get(Math.random() < 0.7 || weatherNow() === 'lluvia' ? 'lobby' : 'azotea')!;
             const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
             w.goal = { floor: dest.id, ...spot };
@@ -151,8 +151,9 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
             w.goal = desk || { floor: home.id, ...randomWalkable(home) };
             w.reason = 'volver';
           } else if (w.floor === home.id && r < 0.14) {
-            // Descanso: cafetería del lobby o la azotea.
-            const dest = floorById.get(Math.random() < 0.6 || weatherNow() === 'lluvia' ? 'lobby' : 'azotea')!;
+            // Descanso: cafetería del lobby, la azotea o la sala de juegos del sótano.
+            const pick = Math.random();
+            const dest = floorById.get(pick < 0.45 ? 'lobby' : pick < 0.75 && weatherNow() !== 'lluvia' ? 'azotea' : 'sotano')!;
             const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
             w.goal = { floor: dest.id, ...spot };
             w.reason = 'cafe';
