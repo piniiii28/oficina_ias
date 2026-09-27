@@ -7,6 +7,7 @@ import { Flights } from '../components/Flights';
 import { Building } from '../building/Building';
 import { Feed } from '../components/Feed';
 import { MicButton } from '../components/Voice';
+import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice, type Live } from '../state';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -71,6 +72,7 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
       </div>
       <div className="progress"><div style={{ width: `${pct}%` }} /></div>
       {task.plan && <p className="muted small">{task.plan.analysis}</p>}
+      {task.status !== 'done' && task.steps.some((s) => s.dependsOn?.length) && <PlanDiagram task={task} agents={agents} />}
       <div className="step-chips">
         {task.steps.map((s) => (
           <span key={s.agentId} className={`chip chip--${s.status}`} title={s.dependsOn?.length ? `Trabaja sobre la entrega de ${s.dependsOn.map(name).join(', ')}` : 'Trabaja en paralelo'}>
