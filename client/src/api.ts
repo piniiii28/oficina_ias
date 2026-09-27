@@ -38,6 +38,7 @@ export type Provider = { id: string; label: string; keyUrl: string; keyless: boo
 export type Step = {
   agentId: string;
   instruction: string;
+  dependsOn?: string[];
   status: 'pending' | 'working' | 'done' | 'error';
   output: string;
   simulated: boolean;

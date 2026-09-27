@@ -48,11 +48,17 @@ export async function simulate({ agent, messages }) {
     ...angles.map((a, i) => `${i + 1}. **${cap(a)}:** ${sentence(a, kw, i)}`),
     '',
     agent?.knowledge?.length ? `> Apliqué ${agent.knowledge.length} elemento(s) de mi entrenamiento personalizado.` : '',
+    teammates(raw),
     '',
     '### Ideas clave',
     ...angles.slice(0, 3).map((a) => `- ${cap(a)} para ${kw[0] || 'el proyecto'}`),
   ];
   return lines.filter((l, i, arr) => !(l === '' && arr[i - 1] === '')).join('\n');
+}
+
+function teammates(raw) {
+  const names = [...raw.matchAll(/### Entrega de ([^\n]+)/g)].map((m) => m[1]);
+  return names.length ? `> Partí del trabajo de ${names.join(', ')} y lo complementé desde mi especialidad.` : '';
 }
 
 function sentence(angle, kw, i) {
@@ -92,11 +98,29 @@ export function demoPlan(task, agents, max = 5) {
     const pick = ['perplexity', 'estratega', 'chatgpt'];
     chosen = agents.filter((a) => pick.includes(a.id) && a.enabled);
   }
-  return {
-    analysis: `Reparto la tarea entre ${chosen.map((a) => a.name).join(', ')} según sus especialidades.`,
-    subtasks: chosen.map((a) => ({
+  // Orden natural de trabajo: investigar → crear → revisar.
+  const rank = (a) => (REVIEWERS.has(a.id) ? 2 : RESEARCH.has(a.id) ? 0 : 1);
+  chosen.sort((x, y) => rank(x) - rank(y));
+  const ids = new Set(chosen.map((a) => a.id));
+  const subtasks = chosen.map((a) => {
+    let dependsOn = [];
+    if (REVIEWERS.has(a.id)) dependsOn = chosen.filter((b) => !REVIEWERS.has(b.id)).map((b) => b.id);
+    else if (!RESEARCH.has(a.id)) dependsOn = [...RESEARCH].filter((r) => ids.has(r));
+    return {
       agentId: a.id,
-      instruction: `Desde tu rol de ${a.role}, aporta tu parte a esta tarea: "${task}"`,
-    })),
+      dependsOn,
+      instruction: REVIEWERS.has(a.id)
+        ? `Revisa y mejora lo que entregó el equipo para esta tarea: "${task}"`
+        : `Desde tu rol de ${a.role}, aporta tu parte a esta tarea: "${task}"`,
+    };
+  });
+  const waits = subtasks.filter((s) => s.dependsOn.length).length;
+  return {
+    analysis: `Reparto la tarea entre ${chosen.map((a) => a.name).join(', ')} según sus especialidades` +
+      (waits ? `; ${waits} de ellos trabajan sobre lo que entreguen los demás.` : '.'),
+    subtasks,
   };
 }
+
+const RESEARCH = new Set(['perplexity', 'kimi', 'estratega']);
+const REVIEWERS = new Set(['sonnet-qa', 'codestral', 'sonar-check', 'guardian']);

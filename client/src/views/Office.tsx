@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { api, type Agent, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
+import { Flights } from '../components/Flights';
 import { useOffice, type Live } from '../state';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,7 +31,7 @@ function Bubble({ live, full = false }: { live?: Live; full?: boolean }) {
 function Desk({ agent, live, index, onClick, dim }: { agent: Agent; live?: Live; index: number; onClick: () => void; dim: boolean }) {
   const state = live?.status || 'idle';
   return (
-    <button className={`desk desk--${state} ${dim ? 'desk--dim' : ''} ${agent.enabled ? '' : 'desk--off'}`} onClick={onClick} title={live?.message && state !== 'idle' ? `${agent.name}: ${live.message}` : `${agent.name} · ${agent.role}`}>
+    <button data-agent={agent.id} className={`desk desk--${state} ${dim ? 'desk--dim' : ''} ${agent.enabled ? '' : 'desk--off'}`} onClick={onClick} title={live?.message && state !== 'idle' ? `${agent.name}: ${live.message}` : `${agent.name} · ${agent.role}`}>
       <Bubble live={live} />
       <div className="desk-chibi">
         <Chibi avatar={agent.avatar} state={state} size={78} seed={index} />
@@ -69,7 +70,9 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
       {task.plan && <p className="muted small">{task.plan.analysis}</p>}
       <div className="step-chips">
         {task.steps.map((s) => (
-          <span key={s.agentId} className={`chip chip--${s.status}`}>{name(s.agentId)}</span>
+          <span key={s.agentId} className={`chip chip--${s.status}`} title={s.dependsOn?.length ? `Trabaja sobre la entrega de ${s.dependsOn.map(name).join(', ')}` : 'Trabaja en paralelo'}>
+            {s.dependsOn?.length ? '↳ ' : ''}{name(s.agentId)}
+          </span>
         ))}
       </div>
       {task.status === 'done' && task.noteId && (
@@ -122,7 +125,7 @@ export function Office() {
   return (
     <div className="office">
       <section className="hq">
-        <div className="hq-brain" onClick={() => brain && setSelected(brain)}>
+        <div className="hq-brain" data-agent={brain?.id} onClick={() => brain && setSelected(brain)}>
           {brain && (
             <>
               <div className={`brain-aura brain-aura--${live[brain.id]?.status || 'idle'}`} />
@@ -216,6 +219,7 @@ export function Office() {
         <span>Haz clic en una IA para hablar con ella, entrenarla o editarla.</span>
       </div>
 
+      <Flights live={live} brainId={brain?.id} task={active[0]} />
       {selected && <AgentPanel agent={agents.find((a) => a.id === selected.id) || selected} onClose={() => setSelected(null)} status={STATUS_LABEL[live[selected.id]?.status || 'idle']} />}
     </div>
   );

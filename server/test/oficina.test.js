@@ -82,3 +82,23 @@ test('la memoria persiste en disco entre reinicios', () => {
   assert.equal(s2.data.agents[1].knowledge[0].content, 'Usa emojis');
   assert.ok(s2.data.notes.length >= 5);
 });
+
+test('runGraph respeta dependencias y el límite de paralelismo', async () => {
+  const { runGraph, sanitizeDeps } = await import('../src/orchestrator.js');
+  const plan = sanitizeDeps({ subtasks: [
+    { agentId: 'a', dependsOn: ['c'] }, // dependencia hacia adelante: se descarta
+    { agentId: 'b', dependsOn: [] },
+    { agentId: 'c', dependsOn: ['a', 'b', 'zzz'] },
+  ] });
+  assert.deepEqual(plan.subtasks.map((s) => s.dependsOn), [[], [], ['a', 'b']]);
+  const order = [];
+  let running = 0, peak = 0;
+  await runGraph(plan.subtasks, 1, async (s) => {
+    running++; peak = Math.max(peak, running);
+    await new Promise((r) => setTimeout(r, 5));
+    order.push(s.agentId);
+    running--;
+  });
+  assert.equal(peak, 1);
+  assert.equal(order.at(-1), 'c');
+});

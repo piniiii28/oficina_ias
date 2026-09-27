@@ -413,3 +413,5 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
   .key-row input { width: 100%; }
   .key-row .row { flex-wrap: wrap; }
 }
+
+.flight { position: fixed; left: 0; top: 0; z-index: 90; font-size: 22px; pointer-events: none; margin: -12px 0 0 -12px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3)); }

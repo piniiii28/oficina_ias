@@ -64,6 +64,7 @@ function TaskDetail({ task, agent, onDelete, openNote }: {
               <div>
                 <strong>{a?.name || s.agentId}</strong> <small className="muted">{a?.role}</small>
                 <div className="small muted">{s.instruction}</div>
+                {s.dependsOn?.length ? <div className="small">↳ Trabajó sobre la entrega de {s.dependsOn.map((d) => agent(d)?.name || d).join(', ')}</div> : null}
               </div>
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : s.status}</span>
             </summary>

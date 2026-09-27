@@ -58,7 +58,9 @@ async function makePlan(store, task, forced) {
   const prompt =
     `Tarea del usuario:\n"""${task}"""\n\nEquipo disponible:\n${roster}\n\n` +
     'Elige entre 2 y 6 especialistas (solo los necesarios) y escribe una instrucción concreta para cada uno. ' +
-    'Responde SOLO con JSON: {"analysis": "una frase", "subtasks": [{"agentId": "...", "instruction": "..."}]}';
+    'Si alguien necesita el trabajo de otro (p. ej. el tester necesita el código, el redactor necesita la investigación), ' +
+    'indícalo en "dependsOn" con los agentId de los que depende; los demás trabajan en paralelo. ' +
+    'Responde SOLO con JSON: {"analysis": "una frase", "subtasks": [{"agentId": "...", "instruction": "...", "dependsOn": []}]}';
   try {
     const { text } = await callModel(settings, {
       provider: brain.provider, model: brain.model, agent: brain, effort: 'low',
@@ -68,24 +70,48 @@ async function makePlan(store, task, forced) {
     const plan = parseJson(text);
     plan.subtasks = (plan.subtasks || []).filter((s) => pool.some((a) => a.id === s.agentId)).slice(0, 8);
     if (!plan.subtasks.length) throw new Error('Plan vacío');
-    return plan;
+    return sanitizeDeps(plan);
   } catch (err) {
     console.warn('[cerebro] Plan en vivo falló, uso planificador local:', err.message);
     return demoPlan(task, pool);
   }
 }
 
-async function runLimited(items, limit, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i], i);
-    }
+/** Deja solo dependencias válidas y sin ciclos (un paso solo depende de pasos anteriores). */
+export function sanitizeDeps(plan) {
+  const seen = new Set();
+  for (const s of plan.subtasks) {
+    s.dependsOn = [...new Set((s.dependsOn || []).filter((d) => seen.has(d) && d !== s.agentId))];
+    seen.add(s.agentId);
+  }
+  return plan;
+}
+
+/**
+ * Ejecuta pasos respetando dependencias: cada paso arranca en cuanto terminan
+ * aquellos de los que depende, con un máximo de `limit` en paralelo.
+ */
+export async function runGraph(steps, limit, fn) {
+  const done = new Set();
+  const started = new Set();
+  let running = 0;
+  return new Promise((resolve) => {
+    const pump = () => {
+      if (done.size === steps.length) return resolve();
+      for (const s of steps) {
+        if (running >= limit) break;
+        if (started.has(s) || !(s.dependsOn || []).every((d) => steps.some((x) => x.agentId === d && done.has(x)))) continue;
+        started.add(s);
+        running++;
+        Promise.resolve(fn(s)).catch(() => {}).finally(() => {
+          running--;
+          done.add(s);
+          pump();
+        });
+      }
+    };
+    pump();
   });
-  await Promise.all(workers);
-  return results;
 }
 
 function remember(store, agent, text) {
@@ -128,16 +154,28 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     emitTask();
     agentStatus(brain.id, 'talking', task.plan.analysis);
 
-    await runLimited(task.steps, settings.maxParallel || 4, async (step) => {
+    const nameOf = (id) => store.data.agents.find((a) => a.id === id)?.name || id;
+    for (const s of task.steps) if (s.dependsOn?.length) agentStatus(s.agentId, 'thinking', `Esperando a ${s.dependsOn.map(nameOf).join(', ')}`);
+
+    await runGraph(task.steps, settings.maxParallel || 4, async (step) => {
       const agent = store.data.agents.find((a) => a.id === step.agentId);
       step.status = 'working';
       emitTask();
       agentStatus(agent.id, 'working', step.instruction);
+      // Trabajo en conjunto: recibe lo que ya entregaron sus compañeros.
+      const inputs = (step.dependsOn || [])
+        .map((d) => task.steps.find((x) => x.agentId === d))
+        .filter((x) => x?.status === 'done')
+        .map((x) => `### Entrega de ${nameOf(x.agentId)}\n${x.output}`)
+        .join('\n\n');
       try {
         const res = await callModel(settings, {
           provider: agent.provider, model: agent.model, agent,
           system: buildSystem(agent),
-          messages: [{ role: 'user', content: `${step.instruction}\n\nContexto completo de la tarea: ${prompt}` }],
+          messages: [{
+            role: 'user',
+            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${prompt}`,
+          }],
         });
         step.output = res.text;
         step.simulated = res.simulated;
