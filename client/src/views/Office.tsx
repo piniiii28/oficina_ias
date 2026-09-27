@@ -86,6 +86,7 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
 export function Office() {
   const { agents, departments, live, tasks, toast, setView } = useOffice();
   const [prompt, setPrompt] = useState('');
+  const [files, setFiles] = useState<{ name: string; content: string }[]>([]);
   const [selected, setSelected] = useState<Agent | null>(null);
   const [pick, setPick] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
@@ -132,8 +133,9 @@ export function Office() {
     const p = prompt.trim();
     if (!p) return;
     try {
-      await api.runTask(p, picking && pick.length ? pick : undefined);
+      await api.runTask(p, picking && pick.length ? pick : undefined, undefined, files.length ? files : undefined);
       setPrompt('');
+      setFiles([]);
       toast('🧠 Claude recibió la tarea y está armando el equipo');
     } catch (err) {
       toast(`Error: ${(err as Error).message}`);
@@ -174,6 +176,19 @@ export function Office() {
             rows={3}
           />
           <div className="hq-actions">
+            <label className="btn btn--ghost small" title="Adjunta textos, datos o código para que el equipo los use">
+              📎 Adjuntar
+              <input type="file" multiple hidden accept=".txt,.md,.csv,.json,.html,.css,.js,.ts,.tsx,.py,.java,.sql,.xml,.yml,.yaml,.log"
+                onChange={async (e) => {
+                  const list = [...(e.target.files || [])].filter((f) => f.size < 2_000_000);
+                  const read = await Promise.all(list.map(async (f) => ({ name: f.name, content: await f.text() })));
+                  setFiles((x) => [...x, ...read].slice(0, 10));
+                  e.target.value = '';
+                }} />
+            </label>
+            {files.map((f) => (
+              <span key={f.name} className="chip">📎 {f.name} <button className="link" onClick={() => setFiles((x) => x.filter((y) => y.name !== f.name))}>✕</button></span>
+            ))}
             <label className="check">
               <input type="checkbox" checked={picking} onChange={(e) => setPicking(e.target.checked)} />
               Elegir el equipo yo mismo {picking && pick.length ? `(${pick.length})` : ''}

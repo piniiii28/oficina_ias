@@ -223,3 +223,13 @@ test('rutinas: se ejecutan una sola vez en su hora y día', async () => {
   assert.equal(isDue({ ...r, enabled: false, lastRun: null }, lunes), false);
   assert.deepEqual(normalizeRoutine({ prompt: 'x', time: 'mal', days: [9] }).time, '08:00');
 });
+
+test('archivos adjuntos: llegan al equipo y quedan en la nota', async () => {
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  const t = await runTask(store, notes, { prompt: 'Analiza estos datos de ventas', attachments: [{ name: 'ventas.csv', content: 'mes,total\nenero,100' }] });
+  assert.deepEqual(t.attachments, [{ name: 'ventas.csv', size: 19 }]);
+  assert.match(notes.get(t.noteId).content, /📎 ventas\.csv/);
+});

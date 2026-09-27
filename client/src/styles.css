@@ -549,3 +549,5 @@ details.card summary { cursor: pointer; display: flex; gap: 10px; align-items: c
 .rank-bar i { display: block; height: 100%; min-width: 4px; background: var(--accent); border-radius: 0 4px 4px 0; }
 .rank-value { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) { .stats { grid-template-columns: 1fr; } }
+.hq-actions { justify-content: flex-start; }
+.hq-actions .btn--primary { margin-left: auto; }

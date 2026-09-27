@@ -57,6 +57,7 @@ export type Task = {
   noteId: string | null;
   parentId?: string | null;
   contextNotes?: string[];
+  attachments?: { name: string; size: number }[];
   createdAt: string;
   finishedAt: string | null;
 };
@@ -153,7 +154,8 @@ export const api = {
   clearChat: (id: string) => req('DELETE', `/api/agents/${id}/chat`),
 
   tasks: () => req<Task[]>('GET', '/api/tasks'),
-  runTask: (prompt: string, agentIds?: string[], parentId?: string) => req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId }),
+  runTask: (prompt: string, agentIds?: string[], parentId?: string, attachments?: { name: string; content: string }[]) =>
+    req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
 
   meetings: () => req<Meeting[]>('GET', '/api/meetings'),

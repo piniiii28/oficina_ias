@@ -155,21 +155,32 @@ function remember(store, agent, text) {
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
 /** Ejecuta una tarea completa en la oficina. */
-export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null }) {
+export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [] }) {
   // Continuación: el equipo recibe el resultado de la tarea anterior.
   const parent = parentId ? store.data.tasks.find((t) => t.id === parentId) : null;
   const background = parent
     ? `Esta es una continuación de la tarea "${parent.prompt}". Resultado anterior del equipo:\n\n${parent.final.slice(0, 6000)}\n\nNuevo pedido: `
     : '';
   if (parent && !agentIds?.length) agentIds = parent.steps.map((s) => s.agentId);
+  // Archivos adjuntos: se pasan completos (con un tope) a todo el equipo.
+  const files = (attachments || []).filter((f) => f?.name && typeof f.content === 'string').slice(0, 10);
+  let budget = 120000;
+  const filesText = files.length
+    ? `\n\nArchivos adjuntos por el usuario:\n${files.map((f) => {
+      const body = f.content.slice(0, Math.max(0, budget));
+      budget -= body.length;
+      return `--- ${f.name} ---\n${body}${body.length < f.content.length ? '\n[…recortado]' : ''}`;
+    }).join('\n\n')}\n`
+    : '';
   // Memoria compartida: notas del grafo relacionadas con la tarea.
   const related = relatedNotes(store.data.notes, prompt + ' ' + (parent?.prompt || ''), 4);
-  const knowledge = related.length
+  const knowledge = filesText + (related.length
     ? `\n\nNotas relevantes de la base de conocimiento de la oficina:\n${related.map((n) => `### ${n.title}\n${n.content.slice(0, 900)}`).join('\n\n')}\n`
-    : '';
+    : '');
   const task = {
     parentId: parent?.id || null,
     contextNotes: related.map((n) => n.title),
+    attachments: files.map((f) => ({ name: f.name, size: f.content.length })),
     id: Store.id('t_'),
     prompt,
     title: shortTitle(prompt),
@@ -305,6 +316,10 @@ function saveTaskNotes(store, notes, task, names) {
       .join('\n')}`,
   });
   task.noteId = main.id;
+  if (task.attachments?.length) {
+    main.content += `\n\n## Archivos adjuntos\n${task.attachments.map((f) => `- 📎 ${f.name} (${Math.ceil(f.size / 1000)} mil caracteres)`).join('\n')}`;
+    store.save();
+  }
   if (task.contextNotes?.length) {
     main.content += `\n\n## Contexto usado\n${task.contextNotes.map((t) => `- [[${t}]]`).join('\n')}`;
     store.save();

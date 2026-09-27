@@ -67,6 +67,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       {parent && <p className="small">↩ Continúa <a href="#" onClick={(e) => { e.preventDefault(); onOpen(parent.id); }}>{parent.title}</a></p>}
       <blockquote>{task.prompt}</blockquote>
       {task.plan && <p className="muted">🧠 {task.plan.analysis}</p>}
+      {task.attachments?.length ? <p className="small">📎 Adjuntos: {task.attachments.map((f) => f.name).join(', ')}</p> : null}
       {task.contextNotes?.length ? (
         <p className="small">📚 Usó de tu grafo:{' '}
           {task.contextNotes.map((t) => <a key={t} href="#" className="wikilink" onClick={(e) => { e.preventDefault(); openNote({ title: t }); }}>{t}</a>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' ', el] : [el]), [])}
