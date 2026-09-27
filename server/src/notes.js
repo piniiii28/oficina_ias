@@ -11,7 +11,7 @@ const stripCode = (s) => s.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, 
 
 export function parseLinks(content) {
   const out = new Set();
-  for (const m of stripCode(content).matchAll(/\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g)) out.add(m[1].trim());
+  for (const m of stripCode(content).matchAll(/\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g)) if (m[1].trim()) out.add(m[1].trim());
   return [...out];
 }
 

@@ -275,3 +275,7 @@ test('autoentrenamiento: la IA convierte su experiencia en una lección', async 
   assert.match(item.title, /Lecciones aprendidas/);
   assert.equal(store.data.agents.find((a) => a.id === 'opencode').knowledge.length, before + 1);
 });
+
+test('los enlaces vacíos [[ ]] de las plantillas no crean nodos', () => {
+  assert.deepEqual(parseLinks('Conecta con [[ ]] y [[Real]]'), ['Real']);
+});

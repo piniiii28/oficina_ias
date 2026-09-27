@@ -4,6 +4,14 @@ import { api, type Note, type NoteSummary, type NoteType } from '../api';
 import { Markdown } from '../components/Markdown';
 import { useOffice } from '../state';
 
+const TEMPLATES: { label: string; type: NoteType; title: string; body: string }[] = [
+  { label: '🚀 Proyecto', type: 'nota', title: 'Proyecto: ', body: '## Objetivo\n\n## Entregables\n- [ ] \n\n## Equipo\n\n## Riesgos\n\n## Relacionado\n- [[ ]]\n\n#proyecto' },
+  { label: '🗓️ Reunión', type: 'nota', title: 'Reunión: ', body: '**Fecha:** \n**Participantes:** \n\n## Temas\n\n## Acuerdos\n\n## Próximos pasos\n- [ ] \n\n#reunion' },
+  { label: '📅 Diario', type: 'diario', title: '', body: '## Hoy quiero lograr\n- [ ] \n\n## Notas\n\n## Aprendí\n\n#diario' },
+  { label: '💡 Idea', type: 'idea', title: 'Idea: ', body: '## La idea en una frase\n\n## Por qué importa\n\n## Cómo probarla\n- [ ] \n\n## Conecta con\n- [[ ]]\n\n#idea' },
+  { label: '✅ Lista', type: 'nota', title: 'Lista: ', body: '- [ ] \n- [ ] \n- [ ] ' },
+];
+
 export const TYPE_META: Record<NoteType, { label: string; emoji: string; color: string }> = {
   nota: { label: 'Nota', emoji: '📝', color: '#94a3b8' },
   idea: { label: 'Idea', emoji: '💡', color: '#fbbf24' },
@@ -78,9 +86,10 @@ export function Notes() {
     load();
   }
 
-  async function newNote(type: NoteType = 'nota') {
-    const base = type === 'diario' ? new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Nueva nota';
-    const n = await api.createNote({ title: base, type, content: '' });
+  async function newNote(type: NoteType = 'nota', content = '', titlePrefix = '') {
+    const today = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+    const base = type === 'diario' ? today : titlePrefix ? `${titlePrefix}${today}` : 'Nueva nota';
+    const n = await api.createNote({ title: base, type, content });
     await load();
     await open(n.id);
     setEditing(true);
@@ -106,6 +115,13 @@ export function Notes() {
               <input type="file" accept=".md,.markdown,.txt" multiple hidden onChange={(e) => e.target.files && importFiles(e.target.files)} />
             </label>
           </div>
+          <select value="" onChange={(e) => {
+            const t = TEMPLATES[Number(e.target.value)];
+            if (t) newNote(t.type, t.body, t.title);
+          }}>
+            <option value="">📄 Desde plantilla…</option>
+            {TEMPLATES.map((t, i) => <option key={t.label} value={i}>{t.label}</option>)}
+          </select>
           <div className="type-filter">
             <button className={!typeFilter ? 'on' : ''} onClick={() => setTypeFilter('')}>Todas</button>
             {(Object.keys(TYPE_META) as NoteType[]).map((t) => (
@@ -161,7 +177,10 @@ export function Notes() {
               <textarea className="note-textarea" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Escribe en Markdown…" autoFocus />
             ) : (
               <div className="note-preview" onDoubleClick={() => setEditing(true)}>
-                {draft ? <Markdown text={draft} onLink={openByTitle} /> : <p className="muted">Nota vacía. Doble clic para editar.</p>}
+                {draft ? <Markdown text={draft} onLink={openByTitle} onToggle={(k) => {
+                  let n = -1;
+                  setDraft((d) => d.replace(/^(\s*[-*] \[)( |x|X)(\])/gm, (m, a, c, b) => (++n === k ? `${a}${c === ' ' ? 'x' : ' '}${b}` : m)));
+                }} /> : <p className="muted">Nota vacía. Doble clic para editar.</p>}
               </div>
             )}
           </>

@@ -76,7 +76,12 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       ) : null}
 
       <section className="card final">
-        <div className="row between"><h3>Respuesta integrada</h3>{task.final && <SpeakButton text={task.final} />}</div>
+        <div className="row between"><h3>Respuesta integrada</h3>
+          <div className="row">
+            {task.status === 'done' && <CardsButton task={task} />}
+            {task.final && <SpeakButton text={task.final} />}
+          </div>
+        </div>
         {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : liveFinal ? <div className="streaming"><Markdown text={liveFinal} /></div> : <p className="muted">El equipo sigue trabajando…</p>}
       </section>
 
@@ -121,5 +126,23 @@ function FollowUp({ task, onSent }: { task: Task; onSent: (id: string) => void }
         }}>Continuar</button>
       </div>
     </section>
+  );
+}
+
+/** Convierte las ideas clave y próximos pasos de la respuesta en tarjetas del tablero. */
+function CardsButton({ task }: { task: Task }) {
+  const { toast, setView } = useOffice();
+  const items = (() => {
+    const m = task.final.match(/#+\s*(ideas clave|próximos pasos|proximos pasos)[^\n]*\n([\s\S]*?)(?:\n#+\s|\n---|$)/i);
+    if (!m) return [];
+    return m[2].split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+\.)\s*(\[[ x]\]\s*)?/, '').replace(/\*\(de [^)]*\)\*/, '').replace(/\*\*/g, '').trim()).filter((l) => l.length > 3).slice(0, 8);
+  })();
+  if (!items.length) return null;
+  return (
+    <button className="btn btn--ghost small" title={items.join('\n')} onClick={async () => {
+      await Promise.all(items.map((title) => api.createCard({ title, details: `Surge de la tarea: ${task.title}`, project: task.title.slice(0, 40) })));
+      toast(`📋 ${items.length} tarjetas nuevas en el tablero`);
+      setView('tablero');
+    }}>📋 Pasar {items.length} al tablero</button>
   );
 }
