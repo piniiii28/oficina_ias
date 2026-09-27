@@ -1,6 +1,6 @@
 // Estado compartido de la app: agentes, estados animados, tareas y eventos.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, type Agent, type AgentState, type Department, type OfficeEvent, type Provider, type Task } from './api';
+import { api, type Agent, type AgentState, type Department, type Meeting, type OfficeEvent, type Provider, type Task } from './api';
 
 export type Live = { status: AgentState; message: string; at: number };
 
@@ -11,6 +11,8 @@ type Ctx = {
   vaultPath: string;
   live: Record<string, Live>;
   tasks: Task[];
+  meetings: Meeting[];
+  setMeetings: (m: Meeting[]) => void;
   notesVersion: number;
   connected: boolean;
   reloadAgents: () => Promise<void>;
@@ -24,7 +26,7 @@ type Ctx = {
   setView: (v: View) => void;
 };
 
-export type View = 'oficina' | 'tareas' | 'notas' | 'grafo' | 'agentes' | 'ajustes';
+export type View = 'oficina' | 'tareas' | 'reuniones' | 'notas' | 'grafo' | 'agentes' | 'ajustes';
 
 const OfficeCtx = createContext<Ctx | null>(null);
 
@@ -38,6 +40,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [vaultPath, setVaultPath] = useState('');
   const [live, setLive] = useState<Record<string, Live>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notesVersion, setNotesVersion] = useState(0);
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
@@ -77,6 +80,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     });
     reloadAgents();
     reloadTasks();
+    api.meetings().then(setMeetings);
   }, [reloadAgents, reloadTasks]);
 
   useEffect(() => {
@@ -104,6 +108,14 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
           copy[i] = e.task;
           return copy;
         });
+      } else if (e.type === 'meeting') {
+        setMeetings((ms) => {
+          const i = ms.findIndex((m) => m.id === e.meeting.id);
+          if (i === -1) return [e.meeting, ...ms];
+          const copy = ms.slice();
+          copy[i] = e.meeting;
+          return copy;
+        });
       } else if (e.type === 'notes') {
         setNotesVersion((v) => v + 1);
       }
@@ -121,11 +133,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, live, tasks, notesVersion, connected,
+      agents, departments, providers, vaultPath, live, tasks, meetings, setMeetings, notesVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, live, tasks, notesVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, live, tasks, meetings, notesVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

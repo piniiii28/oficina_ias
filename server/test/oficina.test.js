@@ -151,3 +151,16 @@ test('continuar una tarea reutiliza el equipo y enlaza con la anterior', async (
   assert.deepEqual(next.steps.map((s) => s.agentId), first.steps.map((s) => s.agentId));
   assert.ok(notes.backlinks(first.noteId).some((b) => b.id === next.noteId));
 });
+
+test('reunión: las IAs hablan por turnos y el cerebro resume en una nota', async () => {
+  const { runMeeting } = await import('../src/meetings.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  const m = await runMeeting(store, notes, { topic: 'Lanzamiento de una app de recetas', agentIds: ['estratega', 'grok'], rounds: 2 });
+  assert.equal(m.status, 'done');
+  assert.deepEqual(m.transcript.map((t) => t.agentId), ['estratega', 'grok', 'estratega', 'grok']);
+  assert.match(m.transcript[1].text, /O-Estratega/, 'responde a quien habló antes');
+  assert.equal(notes.get(m.noteId).tags[0], 'reunion');
+});

@@ -5,10 +5,12 @@ import { Graph } from './views/Graph';
 import { Tasks } from './views/Tasks';
 import { Agents } from './views/Agents';
 import { Settings } from './views/Settings';
+import { Meetings } from './views/Meetings';
 
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'oficina', label: 'Oficina', icon: '🏢' },
   { id: 'tareas', label: 'Tareas', icon: '🎯' },
+  { id: 'reuniones', label: 'Reuniones', icon: '🗣️' },
   { id: 'notas', label: 'Notas', icon: '📝' },
   { id: 'grafo', label: 'Grafo', icon: '🕸️' },
   { id: 'agentes', label: 'Equipo', icon: '👥' },
@@ -42,6 +44,7 @@ function Shell() {
       <main className={`content content--${view}`}>
         {view === 'oficina' && <Office />}
         {view === 'tareas' && <Tasks />}
+        {view === 'reuniones' && <Meetings />}
         {view === 'notas' && <Notes />}
         {view === 'grafo' && <Graph />}
         {view === 'agentes' && <Agents />}

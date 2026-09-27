@@ -15,6 +15,7 @@ const EMPTY = () => ({
   agents: [],
   notes: [],
   tasks: [],
+  meetings: [],
   chats: {}, // agentId -> [{role, content, at}]
 });
 

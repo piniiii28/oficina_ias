@@ -99,8 +99,22 @@ export type Settings = {
   ollamaUrl: string;
 };
 
+export type Meeting = {
+  id: string;
+  topic: string;
+  agentIds: string[];
+  rounds: number;
+  status: 'running' | 'done' | 'error';
+  speaking: string | null;
+  transcript: { agentId: string; name: string; text: string; round: number; simulated: boolean; at: string }[];
+  summary: string;
+  noteId: string | null;
+  createdAt: string;
+};
+
 export type OfficeEvent =
   | { type: 'agent'; agentId: string; status: AgentState; message: string; at: number }
+  | { type: 'meeting'; meeting: Meeting }
   | { type: 'task'; task: Task }
   | { type: 'notes' };
 
@@ -137,6 +151,10 @@ export const api = {
   tasks: () => req<Task[]>('GET', '/api/tasks'),
   runTask: (prompt: string, agentIds?: string[], parentId?: string) => req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
+
+  meetings: () => req<Meeting[]>('GET', '/api/meetings'),
+  startMeeting: (topic: string, agentIds: string[], rounds: number) => req<{ id: string }>('POST', '/api/meetings', { topic, agentIds, rounds }),
+  deleteMeeting: (id: string) => req('DELETE', `/api/meetings/${id}`),
 
   notes: (q = '') => req<NoteSummary[]>('GET', `/api/notes?q=${encodeURIComponent(q)}`),
   note: (id: string) => req<Note>('GET', `/api/notes/${id}`),

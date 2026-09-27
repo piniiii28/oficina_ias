@@ -12,6 +12,7 @@ import { bus, runTask, chatWithAgent } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
+import { runMeeting } from './meetings.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
@@ -186,6 +187,21 @@ export function createApp(store) {
   });
   app.delete('/api/tasks/:id', (req, res) => {
     store.data.tasks = store.data.tasks.filter((t) => t.id !== req.params.id);
+    store.save();
+    res.json({ ok: true });
+  });
+
+  // --- Sala de reuniones ---
+  app.get('/api/meetings', (_req, res) => res.json((store.data.meetings || []).slice(0, 50)));
+  app.post('/api/meetings', (req, res) => {
+    const topic = String(req.body?.topic || '').trim();
+    const agentIds = Array.isArray(req.body?.agentIds) ? req.body.agentIds.slice(0, 6) : [];
+    if (!topic || agentIds.length < 2) return res.status(400).json({ error: 'Escribe un tema y elige al menos 2 IAs' });
+    runMeeting(store, notes, { topic, agentIds, rounds: Number(req.body.rounds) || 2 }).catch((err) => console.error('[reunión]', err));
+    res.status(202).json({ id: store.data.meetings[0].id });
+  });
+  app.delete('/api/meetings/:id', (req, res) => {
+    store.data.meetings = (store.data.meetings || []).filter((m) => m.id !== req.params.id);
     store.save();
     res.json({ ok: true });
   });
