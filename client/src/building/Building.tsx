@@ -290,9 +290,11 @@ export function Building({ onSelect }: { onSelect: (a: Agent) => void }) {
   const numbers = FLOORS.map((f, k) => (f.id === 'lobby' ? 'PB' : f.id === 'penthouse' ? 'PH' : f.id === 'azotea' ? 'AZ' : String(FLOORS.length - 1 - k)));
   const inElevator = active.filter((a) => walkers[a.id]?.inElevator);
 
+  const wrap = useRef<HTMLDivElement>(null);
   return (
-    <div className="building-wrap">
+    <div className="building-wrap" ref={wrap}>
       <nav className="elevator-panel" aria-label="Ir a un piso">
+        <button title="Pantalla completa" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : wrap.current?.requestFullscreen?.())}>⛶</button>
         <span>🛗</span>
         {FLOORS.map((f, k) => (
           <button key={f.id} title={f.name} onClick={() => document.getElementById(`piso-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>

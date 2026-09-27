@@ -603,3 +603,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .mic-on { border-color: var(--danger) !important; color: var(--danger) !important; animation: pulse 1s infinite; }
 .meeting-sign { position: absolute; left: 0; top: 0; z-index: 400; pointer-events: none; font: 800 11px system-ui, sans-serif; color: #111; background: #fde047; border: 2px solid #111; border-radius: 8px; padding: 2px 8px; white-space: nowrap; box-shadow: 0 3px 0 #111; animation: floaty 2s ease-in-out infinite; }
 @keyframes floaty { 50% { translate: 0 -4px; } }
+.building-wrap:fullscreen { background: var(--bg); padding: 16px; overflow: auto; }

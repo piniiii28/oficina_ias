@@ -280,6 +280,15 @@ function ProfileTab({ agent, onDeleted }: { agent: Agent; onDeleted: () => void 
       {agent.isBrain && <p className="muted small">El modelo del cerebro también se puede cambiar en Ajustes.</p>}
       <div className="row">
         <button className="btn btn--primary" onClick={save}>Guardar</button>
+        <button className="btn btn--ghost" title="Descarga esta IA (perfil, avatar y lecciones) para compartirla" onClick={() => {
+          const { id: _id, memory: _m, stats: _s, live: _l, isBrain: _b, ...shareable } = agent;
+          const url = URL.createObjectURL(new Blob([JSON.stringify({ oficinaIA: 1, agent: shareable }, null, 2)], { type: 'application/json' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `IA-${agent.name}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }}>⬇️ Exportar IA</button>
         {!agent.isBrain && (
           <button className="btn btn--danger" onClick={async () => {
             if (!confirm(`¿Despedir a ${agent.name}? Se borran su entrenamiento y memoria.`)) return;

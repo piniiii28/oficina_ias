@@ -61,6 +61,25 @@ export function Agents() {
             await api.resetAgents();
             reloadAgents();
           }}>Restaurar plantilla</button>
+          <label className="btn btn--ghost" title="Importa una IA exportada por otra persona">
+            ⬆️ Importar IA
+            <input type="file" accept=".json" hidden onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              try {
+                const data = JSON.parse(await f.text());
+                const a = data?.agent;
+                if (!data?.oficinaIA || !a?.name) throw new Error('No es una IA exportada de la oficina');
+                const created = await api.createAgent({ name: a.name, role: a.role, department: a.department, provider: a.provider, model: a.model, skills: a.skills, system: a.system, avatar: a.avatar });
+                for (const k of (a.knowledge || []).slice(0, 50)) await api.addKnowledge(created.id, { title: String(k.title || 'Lección'), content: String(k.content || '') });
+                await reloadAgents();
+                toast(`🎉 ${a.name} se unió con ${(a.knowledge || []).length} lecciones`);
+              } catch (err) {
+                toast(`No se pudo importar: ${(err as Error).message}`);
+              }
+            }} />
+          </label>
           <button className="btn btn--ghost" onClick={() => setBrowsing((c) => !c)}>📇 Catálogo</button>
           <button className="btn btn--primary" onClick={() => setCreating((c) => !c)}>＋ Crear IA</button>
         </div>
