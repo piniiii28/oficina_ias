@@ -262,3 +262,16 @@ test('tablero: una tarjeta enviada al equipo pasa a «Hecho» al terminar', asyn
     server.close();
   }
 });
+
+test('autoentrenamiento: la IA convierte su experiencia en una lección', async () => {
+  const { selfTrain } = await import('../src/orchestrator.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.demoMode = 'always';
+  await assert.rejects(selfTrain(store, 'opencode'), /todavía no tiene experiencia/);
+  await runTask(store, new Notes(store), { prompt: 'app web en react', agentIds: ['opencode'] });
+  const before = store.data.agents.find((a) => a.id === 'opencode').knowledge.length;
+  const item = await selfTrain(store, 'opencode');
+  assert.match(item.title, /Lecciones aprendidas/);
+  assert.equal(store.data.agents.find((a) => a.id === 'opencode').knowledge.length, before + 1);
+});

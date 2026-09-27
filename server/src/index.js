@@ -8,7 +8,7 @@ import { Store } from './store.js';
 import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, hasKey, detectClis, cliCommand, callModel } from './providers.js';
-import { bus, runTask, chatWithAgent } from './orchestrator.js';
+import { bus, runTask, chatWithAgent, selfTrain } from './orchestrator.js';
 import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
@@ -207,6 +207,13 @@ export function createApp(store) {
     a.knowledge = (a.knowledge || []).filter((k) => k.id !== req.params.kid);
     store.save();
     res.json({ ok: true });
+  });
+  app.post('/api/agents/:id/self-train', async (req, res) => {
+    try {
+      res.status(201).json(await selfTrain(store, req.params.id));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
   app.delete('/api/agents/:id/memory', (req, res) => {
     const a = agentById(req.params.id);

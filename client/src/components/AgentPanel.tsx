@@ -137,6 +137,7 @@ function TrainingTab({ agent }: { agent: Agent }) {
   const { reloadAgents, toast } = useOffice();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [learning, setLearning] = useState(false);
 
   async function add() {
     if (!content.trim()) return;
@@ -166,6 +167,22 @@ function TrainingTab({ agent }: { agent: Agent }) {
           <input type="file" accept=".txt,.md,.csv,.json" hidden onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])} />
         </label>
         <button className="btn btn--primary" onClick={add} disabled={!content.trim()}>Añadir lección</button>
+      </div>
+      <div className="card self-train">
+        <strong>🔁 Aprender de mi experiencia</strong>
+        <p className="muted small">{agent.name} repasa su memoria y sus últimos trabajos y escribe sus lecciones aprendidas. Así se especializa sola con el uso.</p>
+        <button className="btn btn--ghost small" disabled={learning} onClick={async () => {
+          setLearning(true);
+          try {
+            await api.selfTrain(agent.id);
+            await reloadAgents();
+            toast(`🎓 ${agent.name} escribió sus lecciones aprendidas`);
+          } catch (err) {
+            toast((err as Error).message);
+          } finally {
+            setLearning(false);
+          }
+        }}>{learning ? 'Repasando…' : 'Aprender ahora'}</button>
       </div>
       <h3>Lecciones ({agent.knowledge?.length || 0})</h3>
       {(agent.knowledge || []).map((k) => (

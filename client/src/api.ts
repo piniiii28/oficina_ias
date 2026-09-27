@@ -152,6 +152,7 @@ export const api = {
   addKnowledge: (id: string, k: { title: string; content: string }) => req<Knowledge>('POST', `/api/agents/${id}/knowledge`, k),
   deleteKnowledge: (id: string, kid: string) => req('DELETE', `/api/agents/${id}/knowledge/${kid}`),
   clearMemory: (id: string) => req('DELETE', `/api/agents/${id}/memory`),
+  selfTrain: (id: string) => req<Knowledge>('POST', `/api/agents/${id}/self-train`),
 
   chat: (id: string) => req<ChatMessage[]>('GET', `/api/agents/${id}/chat`),
   sendChat: (id: string, message: string) =>

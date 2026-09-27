@@ -417,3 +417,37 @@ export async function chatWithAgent(store, agentId, message) {
     throw err;
   }
 }
+
+/**
+ * Autoentrenamiento: la IA repasa su memoria y sus últimos trabajos y escribe
+ * una lección de "lecciones aprendidas" que se suma a su entrenamiento.
+ */
+export async function selfTrain(store, agentId) {
+  const agent = store.data.agents.find((a) => a.id === agentId);
+  if (!agent) throw new Error('Agente no encontrado');
+  const outputs = store.data.tasks
+    .flatMap((t) => t.steps.filter((s) => s.agentId === agentId && s.status === 'done').map((s) => ({ task: t.title, output: s.output })))
+    .slice(0, 6);
+  const memory = (agent.memory || []).slice(-20);
+  if (!memory.length && !outputs.length) throw new Error(`${agent.name} todavía no tiene experiencia: asígnale algunas tareas primero.`);
+  agentStatus(agent.id, 'thinking', 'Repasando mi experiencia…');
+  const res = await callModel(store.data.settings, {
+    provider: agent.provider, model: agent.model, agent, effort: 'low',
+    system: buildSystem(agent),
+    messages: [{
+      role: 'user',
+      content: `Repasa tu experiencia y escribe tus "lecciones aprendidas": 4 a 8 viñetas concretas sobre qué funciona, qué prefiere el usuario y qué evitar la próxima vez. Sin introducción.\n\nMemoria:\n${memory.map((m) => `- ${m.text}`).join('\n')}\n\nTrabajos recientes:\n${outputs.map((o) => `### ${o.task}\n${o.output.slice(0, 1200)}`).join('\n\n')}`,
+    }],
+  });
+  const text = res.simulated
+    ? ['- Trabajé en: ' + [...new Set(memory.map((m) => m.text.replace(/^Tarea "([^"]+)".*/, '$1').slice(0, 60)))].slice(0, 5).join('; '),
+      '- Entregar primero un borrador corto y luego ampliarlo.',
+      '- Enlazar mis aportes con las notas existentes del grafo.',
+      '- Revisar las entregas de mis compañeros antes de empezar.'].join('\n') + '\n\n*(Lección simulada en modo demo.)*'
+    : res.text;
+  const item = { id: Store.id('k_'), title: `Lecciones aprendidas · ${new Date().toLocaleDateString('es-CO')}`, content: text.slice(0, 6000), at: new Date().toISOString() };
+  (agent.knowledge ||= []).push(item);
+  store.save();
+  agentStatus(agent.id, 'done', '¡Aprendí algo nuevo!');
+  return item;
+}

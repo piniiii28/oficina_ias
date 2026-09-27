@@ -72,6 +72,8 @@ Los modelos de las empresas no se pueden reentrenar desde aquí. Lo que hace la 
 2. **Entrenamiento:** lecciones que tú le enseñas (texto o archivos `.txt`, `.md`, `.csv`, `.json`) y que se incluyen en cada petición.
 3. **Memoria:** se llena sola con cada trabajo que hace, para que mantenga el contexto de tus proyectos.
 
+Con el botón **Aprender de mi experiencia** (pestaña Entrenamiento), cada IA repasa su memoria y sus trabajos y escribe sus propias «lecciones aprendidas»: se especializa sola con el uso.
+
 Además, la oficina tiene una **memoria compartida**: antes de cada tarea, el cerebro busca en tu grafo las notas relacionadas y se las pasa al equipo. La nota del resultado las enlaza en «Contexto usado».
 
 ## Seguridad
