@@ -1,6 +1,6 @@
 # 🧠 Oficina de IAs
 
-Una oficina virtual donde **Claude es el cerebro central** y coordina a **31 IAs especializadas** (más 16 en el catálogo), la mayoría con **modelos gratis** (ChatGPT, Codex, OpenCode, Gemini, DeepSeek, Grok, Mistral, Perplexity, Llama, Qwen, Kimi y más). Cada IA tiene su **avatar chibi animado**, su escritorio, su memoria y su propio entrenamiento. Todo lo que hace el equipo se guarda como **notas conectadas en un grafo de ideas**, al estilo Obsidian.
+Una oficina virtual donde **Claude es el cerebro central** y coordina a **37 IAs especializadas** (más 16 en el catálogo), 30 de ellas con **modelos gratis** (ChatGPT, Codex, OpenCode, Gemini, DeepSeek, Grok, Mistral, Perplexity, Llama, Qwen, Kimi y más). Cada IA tiene su **avatar chibi animado**, su escritorio, su memoria y su propio entrenamiento. Todo lo que hace el equipo se guarda como **notas conectadas en un grafo de ideas**, al estilo Obsidian.
 
 ![El edificio de la oficina](docs/edificio.png)
 
@@ -61,10 +61,15 @@ Proveedores y las IAs de la plantilla que los usan:
 
 | Proveedor | IAs de la oficina que lo usan |
 |---|---|
-| **Groq** (gratis) | Llama Ops, Guardián, Qwen, Kimi, O-Estratega, Capa |
-| **Google Gemini** (gratis) | Gemini, Pixel, Command, Coach, Scad |
+| **Groq** (gratis) | Llama Ops, Guardián, Qwen, Kimi, O-Estratega, Capa, Voltio (electrónica y Arduino) |
+| **Google Gemini** (gratis) | Gemini, Pixel, Command, Coach, Scad, Láser (corte láser y CNC) |
 | **OpenRouter** (modelos `:free`) | OpenCode, DeepSeek, DeepSeek R, Nemo PM, Lexi, Blendi, Fredi |
 | **Cerebras** (gratis) | Llama Finanzas |
+| **GitHub Models** (gratis con tu cuenta) | Celda (Excel) |
+| **SambaNova** (gratis) | Clip (video) |
+| **NVIDIA NIM** (créditos gratis) | Newton (tutor de matemáticas y física) |
+| **Cohere** (clave de prueba gratis) | Forma (diseño de producto) |
+| **Hugging Face** (créditos gratis) | Disponible para cualquier IA |
 | **Mistral** (gratis) | Codestral, Mistral, Babel |
 | **Ollama** (local, gratis) | Gemma, Phi |
 | **Anthropic** (de pago, o tu plan con Claude Code) | Claude (cerebro), Sonnet (QA), Haiku (bibliotecaria del grafo) |
@@ -77,7 +82,7 @@ Si tienes instaladas y con sesión iniciada **Codex CLI**, **Claude Code**, **Op
 
 Puedes cambiar el proveedor y el modelo de cualquier IA desde su perfil. Los modelos se actualizan seguido, así que si uno deja de existir escribe el id nuevo. Por ejemplo, puedes pasar todas las IAs a OpenRouter y usar una sola clave.
 
-También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `TOGETHER_API_KEY`.
+También se leen variables de entorno: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `GITHUB_MODELS_TOKEN`, `SAMBANOVA_API_KEY`, `HF_TOKEN`, `NVIDIA_API_KEY`, `COHERE_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `TOGETHER_API_KEY`.
 
 Los planes gratis y los ids de modelos cambian seguido; si un modelo deja de existir, escribe el nuevo en el perfil de la IA.
 

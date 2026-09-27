@@ -6,6 +6,7 @@ export const FREE_MODELS = {
     { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', for: 'razonamiento' },
     { id: 'qwen/qwen3-32b', label: 'Qwen3 32B', for: 'código' },
     { id: 'moonshotai/kimi-k2-instruct', label: 'Kimi K2', for: 'documentos largos' },
+    { id: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout', for: 'general' },
   ],
   cerebras: [
     { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', for: 'general' },
@@ -26,6 +27,33 @@ export const FREE_MODELS = {
     { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B', for: 'general' },
     { id: 'mistralai/mistral-small-3.2-24b-instruct:free', label: 'Mistral Small 3.2', for: 'redacción' },
     { id: 'openai/gpt-oss-20b:free', label: 'GPT-OSS 20B', for: 'razonamiento' },
+    { id: 'z-ai/glm-4.5-air:free', label: 'GLM 4.5 Air (Z.ai)', for: 'código' },
+  ],
+  github: [
+    { id: 'openai/gpt-4.1-mini', label: 'GPT-4.1 mini', for: 'general' },
+    { id: 'openai/gpt-4.1', label: 'GPT-4.1 (pocos usos al día)', for: 'razonamiento' },
+    { id: 'meta/Llama-4-Scout-17B-16E-Instruct', label: 'Llama 4 Scout', for: 'general' },
+    { id: 'deepseek/DeepSeek-V3-0324', label: 'DeepSeek V3', for: 'código' },
+    { id: 'mistral-ai/mistral-small-2503', label: 'Mistral Small', for: 'redacción' },
+  ],
+  sambanova: [
+    { id: 'Meta-Llama-3.3-70B-Instruct', label: 'Llama 3.3 70B', for: 'general' },
+    { id: 'DeepSeek-V3-0324', label: 'DeepSeek V3', for: 'código' },
+    { id: 'Qwen3-32B', label: 'Qwen3 32B', for: 'razonamiento' },
+  ],
+  huggingface: [
+    { id: 'meta-llama/Llama-3.3-70B-Instruct', label: 'Llama 3.3 70B', for: 'general' },
+    { id: 'Qwen/Qwen3-32B', label: 'Qwen3 32B', for: 'razonamiento' },
+    { id: 'deepseek-ai/DeepSeek-V3-0324', label: 'DeepSeek V3', for: 'código' },
+  ],
+  nvidia: [
+    { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B', for: 'general' },
+    { id: 'deepseek-ai/deepseek-r1', label: 'DeepSeek R1', for: 'razonamiento' },
+    { id: 'qwen/qwen2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder', for: 'código' },
+  ],
+  cohere: [
+    { id: 'command-a-03-2025', label: 'Command A', for: 'redacción' },
+    { id: 'command-r7b-12-2024', label: 'Command R7B (rápido)', for: 'rápido' },
   ],
   mistral: [
     { id: 'mistral-small-latest', label: 'Mistral Small', for: 'general' },
@@ -38,6 +66,8 @@ export const FREE_MODELS = {
     { id: 'llama3.2', label: 'Llama 3.2 (liviano)', for: 'rápido' },
     { id: 'deepseek-r1', label: 'DeepSeek R1', for: 'razonamiento' },
     { id: 'phi4', label: 'Phi-4', for: 'explicar' },
+    { id: 'granite3.3', label: 'Granite 3.3 (IBM)', for: 'general' },
+    { id: 'hermes3', label: 'Hermes 3', for: 'redacción' },
   ],
 };
 
@@ -52,7 +82,7 @@ const ORDER = {
   código: [['openrouter', 'qwen/qwen3-coder:free'], ['groq', 'qwen/qwen3-32b'], ['cerebras', 'qwen-3-32b'], ['mistral', 'codestral-latest'], ['google', 'gemini-2.5-flash'], ['ollama', 'qwen2.5-coder']],
   razonamiento: [['groq', 'openai/gpt-oss-120b'], ['cerebras', 'gpt-oss-120b'], ['openrouter', 'deepseek/deepseek-r1:free'], ['google', 'gemini-2.5-flash'], ['ollama', 'deepseek-r1']],
   redacción: [['google', 'gemini-2.5-flash'], ['mistral', 'mistral-small-latest'], ['openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free'], ['groq', 'llama-3.3-70b-versatile'], ['ollama', 'gemma3']],
-  general: [['groq', 'llama-3.3-70b-versatile'], ['google', 'gemini-2.5-flash'], ['cerebras', 'llama-3.3-70b'], ['openrouter', 'deepseek/deepseek-chat-v3.1:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
+  general: [['groq', 'llama-3.3-70b-versatile'], ['google', 'gemini-2.5-flash'], ['cerebras', 'llama-3.3-70b'], ['github', 'openai/gpt-4.1-mini'], ['sambanova', 'Meta-Llama-3.3-70B-Instruct'], ['openrouter', 'deepseek/deepseek-chat-v3.1:free'], ['mistral', 'mistral-small-latest'], ['ollama', 'gemma3']],
 };
 
 const PAID = new Set(['anthropic', 'openai', 'xai', 'perplexity', 'together', 'deepseek']);

@@ -153,10 +153,11 @@ export const FLOORS: FloorDef[] = [
   {
     id: 'impresion3d', name: 'Taller de Impresión 3D', emoji: '🖨️', department: 'impresion3d',
     cols: 11, rows: 6, floorA: '#2f3d1c', floorB: '#384922', wall: '#84cc16',
-    desks: deskRow(3, 1, 4),
+    desks: [...deskRow(3, 1, 4), { i: 1, j: 5 }, { i: 3, j: 5 }],
     furniture: [
       { i: 6, j: 5, kind: 'rug', w: 3, h: 1 },
       ...deskRow(3, 1, 4).map((d, k) => ({ ...d, kind: 'desk' as const, label: ['🧊', '📐', '⚙️', '🧅'][k] })),
+      { i: 1, j: 5, kind: 'desk', label: '🔌' }, { i: 3, j: 5, kind: 'desk', label: '⚡' },
       { i: 5, j: 0, kind: 'printer' }, { i: 6, j: 0, kind: 'printer' }, { i: 7, j: 0, kind: 'printer' },
       { i: 10, j: 1, kind: 'filament' }, { i: 10, j: 2, kind: 'filament' },
       { i: 1, j: 0, kind: 'board', w: 2, h: 0.3 }, { i: 10, j: 5, kind: 'plant' }, { i: 9, j: 0, kind: 'cabinet' },

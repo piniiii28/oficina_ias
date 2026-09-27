@@ -779,7 +779,7 @@ test('oficinas antiguas reciben las IAs del Taller 3D una sola vez', () => {
   s1.flush();
   const s2 = new Store(dir);
   createApp(s2);
-  assert.equal(s2.data.agents.filter((a) => a.department === 'impresion3d').length, 4);
+  for (const id of ['blender-3d', 'openscad-3d', 'freecad-3d', 'slicer-3d']) assert.ok(s2.data.agents.some((a) => a.id === id), id);
   s2.data.agents = s2.data.agents.filter((a) => a.id !== 'slicer-3d');
   s2.flush();
   const s3 = new Store(dir);
@@ -1018,4 +1018,29 @@ test('asistentes en modo demo y jefes de departamento que revisan a su equipo', 
     assert.equal(head.status, 'done');
     assert.match(task.final, /.+/);
   });
+});
+
+test('IAs nuevas con proveedores gratis llegan una sola vez a oficinas existentes', async () => {
+  const { PROVIDERS } = await import('../src/providers.js');
+  const ids = ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'];
+  for (const id of ids) {
+    const a = DEFAULT_AGENTS.find((x) => x.id === id);
+    assert.ok(a, id);
+    assert.equal(PROVIDERS[a.provider].tier, 'gratis', `${id} usa un proveedor gratis`);
+  }
+  for (const p of ['github', 'sambanova', 'huggingface', 'nvidia', 'cohere']) assert.ok(PROVIDERS[p].baseUrl.startsWith('https://'), p);
+  const dir = tmp();
+  const s1 = new Store(dir);
+  createApp(s1);
+  s1.data.agents = s1.data.agents.filter((a) => !ids.includes(a.id));
+  delete s1.data.settings.agentsV3Seeded;
+  s1.flush();
+  const s2 = new Store(dir);
+  createApp(s2);
+  assert.ok(ids.every((id) => s2.data.agents.some((a) => a.id === id)));
+  s2.data.agents = s2.data.agents.filter((a) => a.id !== 'clip');
+  s2.flush();
+  const s3 = new Store(dir);
+  createApp(s3);
+  assert.ok(!s3.data.agents.some((a) => a.id === 'clip'), 'si la despides no vuelve');
 });

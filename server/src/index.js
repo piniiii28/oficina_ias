@@ -61,6 +61,15 @@ export function createApp(store) {
     store.save();
   }
 
+  // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'] };
+  for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
+    if (store.data.settings[flag]) continue;
+    for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
+    store.data.settings[flag] = true;
+    store.save();
+  }
+
   // Oficinas anteriores a los jefes de departamento: se nombran una sola vez.
   if (!store.data.settings.headsSeeded) {
     for (const d of DEFAULT_AGENTS.filter((a) => a.isHead)) {

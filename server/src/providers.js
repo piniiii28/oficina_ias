@@ -25,6 +25,11 @@ export const PROVIDERS = {
   xai: { label: 'xAI (Grok)', tier: 'pago', hint: 'Grok por API.', baseUrl: 'https://api.x.ai/v1', keyUrl: 'https://console.x.ai' },
   perplexity: { label: 'Perplexity (búsqueda web)', tier: 'pago', hint: 'Respuestas con búsqueda web.', baseUrl: 'https://api.perplexity.ai', keyUrl: 'https://www.perplexity.ai/settings/api' },
   together: { label: 'Together AI (open source)', tier: 'pago', hint: 'Modelos abiertos; suele regalar créditos al empezar.', baseUrl: 'https://api.together.xyz/v1', keyUrl: 'https://api.together.xyz/settings/api-keys' },
+  github: { label: 'GitHub Models (gratis con tu cuenta)', tier: 'gratis', hint: 'Gratis con tu cuenta de GitHub: GPT-4.1, Llama, DeepSeek, Mistral (con límites diarios). La clave es un token de GitHub.', baseUrl: 'https://models.github.ai/inference', keyUrl: 'https://github.com/settings/personal-access-tokens' },
+  sambanova: { label: 'SambaNova (gratis, rápido)', tier: 'gratis', hint: 'Plan gratis con Llama, DeepSeek y Qwen.', baseUrl: 'https://api.sambanova.ai/v1', keyUrl: 'https://cloud.sambanova.ai/apis' },
+  huggingface: { label: 'Hugging Face', tier: 'gratis', hint: 'Créditos gratis cada mes para miles de modelos abiertos.', baseUrl: 'https://router.huggingface.co/v1', keyUrl: 'https://huggingface.co/settings/tokens' },
+  nvidia: { label: 'NVIDIA NIM', tier: 'gratis', hint: 'Créditos gratis para probar Llama, DeepSeek, Qwen y más.', baseUrl: 'https://integrate.api.nvidia.com/v1', keyUrl: 'https://build.nvidia.com' },
+  cohere: { label: 'Cohere (Command)', tier: 'gratis', hint: 'Clave de prueba gratis con límites (modelos Command).', baseUrl: 'https://api.cohere.ai/compatibility/v1', keyUrl: 'https://dashboard.cohere.com/api-keys' },
   ollama: { label: 'Ollama (local, gratis)', tier: 'gratis', hint: 'Modelos en tu propio computador, gratis y sin límite.', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
   // Herramientas de línea de comandos instaladas en tu computador: usan tu
   // sesión ya iniciada (suscripción), sin clave de API.
@@ -86,7 +91,8 @@ function envKey(provider) {
     anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', google: 'GEMINI_API_KEY',
     openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY', mistral: 'MISTRAL_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY', xai: 'XAI_API_KEY', perplexity: 'PERPLEXITY_API_KEY',
-    together: 'TOGETHER_API_KEY', cerebras: 'CEREBRAS_API_KEY',
+    together: 'TOGETHER_API_KEY', cerebras: 'CEREBRAS_API_KEY', github: 'GITHUB_MODELS_TOKEN',
+    sambanova: 'SAMBANOVA_API_KEY', huggingface: 'HF_TOKEN', nvidia: 'NVIDIA_API_KEY', cohere: 'COHERE_API_KEY',
   };
   return names[provider] ? process.env[names[provider]] : undefined;
 }
