@@ -8,6 +8,7 @@ import { Settings } from './views/Settings';
 import { Meetings } from './views/Meetings';
 import { Palette } from './components/Palette';
 import { Board } from './views/Board';
+import { Welcome } from './components/Welcome';
 
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'oficina', label: 'Oficina', icon: '🏢' },
@@ -58,6 +59,7 @@ function Shell() {
         {view === 'ajustes' && <Settings />}
       </main>
       <Palette />
+      <Welcome />
       <div className="toasts">
         {toasts.map((t) => <div key={t.id} className="toast">{t.msg}</div>)}
       </div>

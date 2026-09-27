@@ -592,3 +592,11 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .kcard p { margin: 0; }
 .kcard .pill { align-self: flex-start; }
 @media (max-width: 900px) { .board-cols { grid-template-columns: 1fr; } .board { padding: 12px 16px 30px; } }
+
+.welcome { width: min(460px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: var(--shadow); text-align: center; animation: pop-in-plain 0.2s ease-out; }
+.welcome-emoji { font-size: 56px; animation: float 3s ease-in-out infinite; }
+.welcome p { color: var(--muted); line-height: 1.6; }
+.welcome .row.between { text-align: left; margin-top: 14px; }
+.welcome-dots { display: flex; gap: 6px; justify-content: center; }
+.welcome-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.welcome-dots span.on { background: var(--accent); width: 20px; border-radius: 4px; }
