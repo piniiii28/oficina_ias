@@ -18,6 +18,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '../..');
 const DATA_DIR = process.env.OFICINA_DATA || path.join(ROOT, 'data');
 const PORT = Number(process.env.PORT || 4747);
+// Solo tu computador puede usar la oficina (tiene tus claves y puede ejecutar CLIs).
+const HOST = process.env.HOST || '127.0.0.1';
 
 export function createApp(store) {
   const notes = new Notes(store);
@@ -36,6 +38,14 @@ export function createApp(store) {
   vault.schedule(store.data.notes);
 
   const app = express();
+  // Evita que otras páginas web abiertas en tu navegador usen la API (DNS rebinding).
+  app.use((req, res, next) => {
+    const host = (req.headers.host || '').replace(/:\d+$/, '');
+    const origin = req.headers.origin;
+    const localOrigin = !origin || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+    if (process.env.HOST || (['localhost', '127.0.0.1', '[::1]'].includes(host) && localOrigin)) return next();
+    res.status(403).json({ error: 'Acceso solo desde este computador' });
+  });
   app.use(express.json({ limit: '25mb' }));
 
   const agentById = (id) => store.data.agents.find((a) => a.id === id);
@@ -344,7 +354,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  app.listen(PORT, () => {
+  app.listen(PORT, HOST, () => {
     console.log(`\n  🧠 Oficina de IAs lista en http://localhost:${PORT}`);
     console.log(`  📁 Datos guardados en ${DATA_DIR}\n`);
   });

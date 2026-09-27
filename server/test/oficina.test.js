@@ -180,3 +180,21 @@ test('CLIs: el prompt va por stdin o como un solo argumento, sin pasar por la co
   const off = await callModel({ apiKeys: {}, cli: {} }, { provider: 'cli-codex', model: '', system: 'S', messages: [{ role: 'user', content: 'x' }] });
   assert.equal(off.simulated, true, 'sin activar, responde en modo demo');
 });
+
+test('la API rechaza peticiones de otros sitios', async () => {
+  const app = createApp(new Store(tmp()));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const url = `http://127.0.0.1:${server.address().port}/api/settings`;
+  try {
+    assert.equal((await fetch(url)).status, 200);
+    assert.equal((await fetch(url, { headers: { Origin: 'https://sitio-malo.com' } })).status, 403);
+    const { request } = await import('node:http');
+    const status = await new Promise((resolve) => {
+      request(url, { headers: { Host: 'evil.example' } }, (res) => { res.resume(); resolve(res.statusCode); }).end();
+    });
+    assert.equal(status, 403);
+  } finally {
+    server.close();
+  }
+});

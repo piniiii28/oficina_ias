@@ -58,6 +58,10 @@ Los modelos de las empresas no se pueden reentrenar desde aquí. Lo que hace la 
 2. **Entrenamiento:** lecciones que tú le enseñas (texto o archivos `.txt`, `.md`, `.csv`, `.json`) y que se incluyen en cada petición.
 3. **Memoria:** se llena sola con cada trabajo que hace, para que mantenga el contexto de tus proyectos.
 
+## Seguridad
+
+La oficina solo escucha en tu propio computador (`127.0.0.1`) y rechaza peticiones que vengan de otras páginas web, porque guarda tus claves y puede ejecutar herramientas de línea de comandos. Si de verdad quieres abrirla a tu red, inicia con la variable `HOST=0.0.0.0`, bajo tu responsabilidad.
+
 ## ¿Dónde se guarda todo?
 
 En `data/oficina.json`, dentro de la carpeta del proyecto, con una copia de seguridad automática en `oficina.json.bak`. **Nada se pierde al apagar el computador.** Desde Ajustes puedes descargar un respaldo (sin tus claves) y restaurarlo en otro equipo.
