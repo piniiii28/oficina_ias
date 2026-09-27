@@ -2,6 +2,16 @@
 
 Una oficina virtual donde **Claude es el cerebro central** y coordina a **27 IAs especializadas** (ChatGPT, Codex, OpenCode, Gemini, DeepSeek, Grok, Mistral, Perplexity, Llama, Qwen, Kimi y más). Cada IA tiene su **avatar chibi animado**, su escritorio, su memoria y su propio entrenamiento. Todo lo que hace el equipo se guarda como **notas conectadas en un grafo de ideas**, al estilo Obsidian.
 
+![El edificio de la oficina](docs/edificio.png)
+
+| Lobby con reunión en curso | Grafo de ideas |
+|---|---|
+| ![Lobby](docs/lobby.png) | ![Grafo](docs/grafo.png) |
+
+| Oficina y consola del cerebro | Sala de reuniones |
+|---|---|
+| ![Oficina](docs/oficina.png) | ![Reuniones](docs/reuniones.png) |
+
 ## Qué puedes hacer
 
 | Sección | Qué hace |

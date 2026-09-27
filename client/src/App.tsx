@@ -48,7 +48,7 @@ function Shell() {
           <span>🔍</span><span className="nav-label">Buscar <kbd>Ctrl K</kbd></span>
         </button>
         <button className="nav-item search-hint" onClick={() => { setSounds(!sound); setSound(!sound); if (!sound) setTimeout(() => play('ding'), 50); }}>
-          <span>{sound ? '🔊' : '🔈'}</span><span className="nav-label">Sonidos {sound ? 'activos' : 'apagados'}</span>
+          <span>{sound ? '🔊' : '🔈'}</span><span className="nav-label">{sound ? 'Sonido: sí' : 'Sonido: no'}</span>
         </button>
         <div className="sidebar-foot">
           <span className={`dot ${connected ? 'dot--live' : 'dot--off'}`} /> {connected ? 'En vivo' : 'Reconectando…'}
