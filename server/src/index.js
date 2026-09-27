@@ -12,6 +12,7 @@ import { recordCall, accuracyOf, loadOf, juryReport, juryStep } from './metrics.
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
 import { addNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { MCP_SERVICES, mcpAdd, mcpLoginCommand, mcpRemove, mcpStatus } from './mcpServices.js';
 import { busyNow, ollamaModelsFor, ollamaPull, ollamaServer, ollamaServers, ollamaTags, hasModel, syncModels } from './ollama.js';
 import { requestAccess } from './access.js';
 import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
@@ -73,7 +74,7 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
@@ -1158,6 +1159,48 @@ export function createApp(store) {
     if (!req.user?.local) return res.status(403).json({ error: 'Solo desde este computador' });
     const cmd = process.platform === 'win32' ? `cd /d "${ROOT}" && git pull` : `cd "${ROOT}" && git pull`;
     res.json({ opened: openTerminal(cmd), command: cmd });
+  });
+
+  // --- Servicios por MCP en tu Claude Code (Undermind…) ---
+  const mcpSvc = (req, res) => MCP_SERVICES[req.params.name] || (res.status(404).json({ error: 'Servicio desconocido' }), null);
+  app.get('/api/mcp/:name', async (req, res) => {
+    const svc = mcpSvc(req, res);
+    if (!svc) return;
+    const st = await mcpStatus(req.params.name);
+    const saved = (store.data.settings.mcp ||= {});
+    // Si lo agregaste a mano en Claude Code, la oficina también lo reconoce.
+    const added = st.status === 'conectado' || st.status === 'falta-sesion';
+    if (added !== Boolean(saved[req.params.name]?.added) && st.status !== 'sin-claude') {
+      saved[req.params.name] = { added };
+      store.save();
+    }
+    res.json({ ...svc, name: req.params.name, ...st, claudeEnabled: Boolean(store.data.settings.cli?.['cli-claude']?.enabled), login: mcpLoginCommand(req.params.name) });
+  });
+  app.post('/api/mcp/:name/connect', async (req, res) => {
+    if (!req.user?.local) return res.status(403).json({ error: 'Se conecta desde el computador principal' });
+    const svc = mcpSvc(req, res);
+    if (!svc) return;
+    try {
+      const st = await mcpStatus(req.params.name);
+      if (st.status === 'sin-claude') return res.status(409).json({ error: st.detail });
+      if (st.status === 'no-agregado') await mcpAdd(req.params.name);
+      (store.data.settings.mcp ||= {})[req.params.name] = { added: true };
+      store.save();
+      // Iniciar sesión se hace en el navegador desde una terminal (una sola vez).
+      const login = mcpLoginCommand(req.params.name);
+      const opened = st.status === 'conectado' ? false : openTerminal(login);
+      res.json({ ok: true, opened, login, already: st.status === 'conectado' });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  app.delete('/api/mcp/:name', async (req, res) => {
+    const svc = mcpSvc(req, res);
+    if (!svc) return;
+    await mcpRemove(req.params.name);
+    (store.data.settings.mcp ||= {})[req.params.name] = { added: false };
+    store.save();
+    res.json({ ok: true });
   });
 
   // --- Claude Desktop (servidor MCP de la oficina) ---

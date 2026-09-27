@@ -1783,3 +1783,54 @@ test('Gemini: los modelos retirados pasan a los 3.x gratis, y llegan las IAs nue
   assert.ok(store.data.agents.some((a) => a.id === 'coda-local'));
   assert.ok(!DEFAULT_AGENTS.some((a) => a.provider === 'google' && /gemini-2/.test(a.model)));
 });
+
+test('Undermind: se conecta a tu Claude Code y la IA lo usa con permiso solo para sus herramientas', async () => {
+  const bin = tmp();
+  const state = path.join(bin, 'estado.txt');
+  // Claude Code falso: guarda si Undermind está agregado y muestra con qué argumentos lo llamaron.
+  fs.writeFileSync(path.join(bin, 'claude'), `#!/usr/bin/env node
+const fs = require('fs');
+const a = process.argv.slice(2);
+const st = fs.existsSync(${JSON.stringify(state)}) ? fs.readFileSync(${JSON.stringify(state)}, 'utf8') : '';
+if (a[0] === 'mcp' && a[1] === 'list') console.log(st ? 'undermind: https://mcp.undermind.ai/mcp (HTTP) - ' + (st === 'sesion' ? '✓ Connected' : '⚠ Needs authentication') : 'No MCP servers configured.');
+else if (a[0] === 'mcp' && a[1] === 'add') { fs.writeFileSync(${JSON.stringify(state)}, 'agregado'); console.log('Added HTTP MCP server ' + a[a.length - 2]); }
+else if (a[0] === 'mcp' && a[1] === 'remove') fs.rmSync(${JSON.stringify(state)}, { force: true });
+else { process.stdin.resume(); process.stdin.on('end', () => console.log('ARGS ' + JSON.stringify(a))); }
+`, { mode: 0o755 });
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${oldPath}`;
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      store.data.settings.cli = { 'cli-claude': { enabled: true } };
+      let s = (await call('GET', '/api/mcp/undermind')).data;
+      assert.equal(s.status, 'no-agregado');
+      assert.equal((await call('GET', '/api/agents')).data.find((a) => a.id === 'undermind').live, false, 'sin Undermind agregado sigue en demo');
+
+      const c = await call('POST', '/api/mcp/undermind/connect');
+      assert.equal(c.status, 200);
+      assert.equal(c.data.login, 'claude mcp login undermind');
+      assert.equal(fs.readFileSync(state, 'utf8'), 'agregado');
+      s = (await call('GET', '/api/mcp/undermind')).data;
+      assert.equal(s.status, 'falta-sesion');
+      fs.writeFileSync(state, 'sesion');
+      assert.equal((await call('GET', '/api/mcp/undermind')).data.status, 'conectado');
+      assert.equal((await call('GET', '/api/agents')).data.find((a) => a.id === 'undermind').live, true);
+
+      // La IA llama a Claude Code con permiso solo para las herramientas de Undermind.
+      const chat = await call('POST', '/api/agents/undermind/chat', { message: '¿qué dice la literatura sobre el sueño y la memoria?' });
+      const args = JSON.parse(chat.data.reply.replace(/^ARGS /, ''));
+      assert.deepEqual(args.slice(args.indexOf('--allowedTools')), ['--allowedTools', 'mcp__undermind']);
+      // Las demás IAs de Claude Code no reciben ese permiso.
+      await call('PUT', '/api/agents/sonnet-qa', { provider: 'cli-claude', model: '' });
+      assert.ok(!(await call('POST', '/api/agents/sonnet-qa/chat', { message: 'hola' })).data.reply.includes('allowedTools'));
+
+      // Quitarlo: la IA vuelve a demo.
+      await call('DELETE', '/api/mcp/undermind');
+      assert.equal((await call('GET', '/api/agents')).data.find((a) => a.id === 'undermind').live, false);
+      assert.equal((await call('GET', '/api/mcp/nada')).status, 404);
+    });
+  } finally {
+    process.env.PATH = oldPath;
+  }
+});

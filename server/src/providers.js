@@ -66,7 +66,7 @@ export function hasKey(settings, provider) {
 }
 
 /** ¿Esta IA responde de verdad (no en modo demo)? */
-export const isLive = (settings, agent) => Boolean(agent) && settings.demoMode !== 'always' && hasKey(settings, agent.provider);
+export const isLive = (settings, agent) => Boolean(agent) && settings.demoMode !== 'always' && hasKey(settings, agent.provider) && (!agent.mcp || agent.provider !== 'cli-claude' || Boolean(settings.mcp?.[agent.mcp]?.added));
 
 /**
  * «Solo IAs conectadas» (activado por defecto): las IAs en modo demo no
@@ -180,7 +180,7 @@ async function callModelInner(settings, { provider, model, system, messages, age
     const done = ollama ? track(ollama.id) : null;
     try {
       if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar
-      if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home);
+      if (PROVIDERS[provider]?.cli) text = await callCli(settings, provider, system, messages, tap, sig, cred.home, agent?.mcp ? [agent.mcp] : []);
       else if (provider === 'anthropic') text = await callAnthropic(cred.key, model, system, messages, effort, tap, sig, Boolean(settings.webSearch));
       else if (provider === 'google') {
         try {
@@ -406,7 +406,7 @@ export function cliEnv(provider, home) {
  * como un único prompt. Se ejecuta en una carpeta temporal vacía para que no
  * toque tus proyectos.
  */
-function callCli(settings, provider, system, messages, onDelta, signal, home = null) {
+function callCli(settings, provider, system, messages, onDelta, signal, home = null, mcp = []) {
   const convo = messages.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
   const prompt = `${system}\n\n---\n\n${convo}\n\nAsistente:`;
   const command = cliCommand(settings, provider);
@@ -431,6 +431,8 @@ function callCli(settings, provider, system, messages, onDelta, signal, home = n
     if (provider === 'cli-claude') for (const d of dirs) args.push('--add-dir', q(d));
     if (provider === 'cli-gemini') args.push('--include-directories', q(dirs.join(',')));
   }
+  // Servicios MCP (p. ej. Undermind): permiso solo para las herramientas de ese servicio.
+  if (provider === 'cli-claude' && mcp.length) args.push('--allowedTools', ...mcp.map((n) => `mcp__${n}`));
   return new Promise((resolve, reject) => {
     // En Windows las CLIs de npm son .cmd y requieren la consola.
     const child = spawn(cmd, args, { cwd: CLI_DIR, shell: win, env: cliEnv(provider, home) });

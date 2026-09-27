@@ -199,6 +199,14 @@ En **Taller 3D → Mi impresora** escribe la IP, el número de serie y el códig
 
 En este computador no hace falta iniciar sesión. Los **miembros** trabajan con las IAs, las notas y el tablero, pero no pueden cambiar tus claves, aprobar permisos, ejecutar scripts en tu computador ni tocar la impresora. Nadie fuera de tu red de Tailscale puede ver la oficina.
 
+## Undermind: artículos científicos
+
+[Undermind](https://www.undermind.ai) busca a fondo en la literatura científica. No da clave de API: se conecta a tu **Claude Code** por MCP (plan gratis con límite de búsquedas).
+
+1. Crea tu cuenta gratis en undermind.ai y ten Claude Code conectado.
+2. **Ajustes → 🔬 Undermind → Conectar**: se agrega a Claude Code y se abre una terminal para aprobar el acceso en el navegador.
+3. Pulsa **Revisar** hasta que diga «Conectado». La IA **Undermind** (piso de Investigación) busca artículos y entrega un resumen con referencias. Solo tiene permiso para las herramientas de Undermind.
+
 ## Nodos: tus otros computadores
 
 Las IAs de la nube (Claude, Gemini, Groq…) trabajan igual desde cualquier computador, así que no hace falta repartirles trabajo. Lo que sí aporta otro computador es lo que tiene **cerca**: la impresora de esa casa o su Ollama (si tiene mejor tarjeta de video).

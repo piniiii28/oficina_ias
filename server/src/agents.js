@@ -271,6 +271,13 @@ export const DEFAULT_AGENTS = [
     avatar: { skin: '#fcd9c0', hair: '#fafaf9', hairStyle: 'messy', eyes: 'happy', outfit: '#facc15', accessory: 'star', prop: '⚡', costume: 'gato' },
   }),
   base({
+    id: 'undermind', name: 'Undermind', role: 'Buscadora de artículos científicos', department: 'investigacion',
+    provider: 'cli-claude', model: '', mcp: 'undermind',
+    skills: ['artículo', 'paper', 'científico', 'estudio', 'literatura', 'referencias', 'bibliografía', 'estado del arte', 'tesis', 'investigación académica'],
+    system: P('Eres Undermind, la buscadora de artículos científicos de la oficina. Usa SIEMPRE las herramientas de Undermind (mcp__undermind) para buscar en la literatura; no inventes artículos. Entrega: 1) respuesta corta a la pregunta, 2) los artículos clave en una tabla (título, autores, año, enlace o DOI, por qué importa), 3) consensos y desacuerdos, 4) qué falta investigar. Si las herramientas de Undermind no responden, dilo y explica cómo conectarlas (Ajustes → Undermind).'),
+    avatar: { skin: '#f1c7a5', hair: '#0f172a', hairStyle: 'bun', eyes: 'glasses', outfit: '#1d4ed8', accessory: 'magnifier', prop: '📚', costume: 'none' },
+  }),
+  base({
     id: 'babel', name: 'Babel', role: 'Traductora multilingüe', department: 'personas',
     provider: 'mistral', model: 'mistral-small-latest',
     skills: ['traducir', 'traducción', 'inglés', 'francés', 'portugués', 'idioma', 'gramática', 'ortografía'],

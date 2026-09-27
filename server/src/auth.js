@@ -109,6 +109,7 @@ const ADMIN = [
   [/^\/api\/automations/, ['POST', 'PUT', 'DELETE']],
   [/^\/api\/ollama\/(pull|sync)$/, null],
   [/^\/api\/nodes/, ['POST', 'PUT', 'DELETE']],
+  [/^\/api\/mcp\//, ['POST', 'DELETE']],
   [/^\/api\/agents\/reset$/, null],
   [/^\/api\/agents\/free-mode/, null],
   [/^\/api\/cad\/(run|jobs\/[^/]+\/(open|slice))$/, null],

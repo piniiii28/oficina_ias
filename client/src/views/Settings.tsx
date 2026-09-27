@@ -1,6 +1,6 @@
 // Ajustes: claves de API, modelo del cerebro, modo demo y respaldo.
 import { useEffect, useState } from 'react';
-import type { AvatarConfig, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
+import type { AvatarConfig, McpService, ModelSync, NodeInfo, OllamaServer, RemoteInfo, Settings as SettingsT, UpdateStatus, User } from '../api';
 import { Chibi, COSTUMES, HAIR_STYLES, EYE_STYLES, ACCESSORIES, avatarStyle } from '../components/Chibi';
 import { api, type Settings as S } from '../api';
 import { useOffice } from '../state';
@@ -35,6 +35,7 @@ export function Settings() {
     <div className="settings">
       <ConnectCenter s={s} setS={setS} />
       <CliSection s={s} save={save} />
+      <McpSection name="undermind" />
       <AccessSection s={s} setS={setS} />
       <RemoteSection />
       <NodesSection />
@@ -160,6 +161,55 @@ function CliSection({ s, save }: { s: SettingsT; save: (patch: Record<string, un
         })}
       </div>
     </details>
+  );
+}
+
+/** Servicios que se conectan por MCP a tu Claude Code (Undermind…). */
+function McpSection({ name }: { name: string }) {
+  const { toast, reloadAgents } = useOffice();
+  const [svc, setSvc] = useState<McpService | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [login, setLogin] = useState('');
+  const load = () => api.mcpService(name).then(setSvc).catch(() => {});
+  useEffect(() => {
+    load();
+  }, [name]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!svc) return null;
+  const pill = { conectado: ['pill--done', '● Conectado'], 'falta-sesion': ['pill--error', 'Falta iniciar sesión'], 'no-agregado': ['', 'Sin conectar'], 'sin-claude': ['pill--error', 'Falta Claude Code'] }[svc.status];
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>🔬 {svc.label}</h2>
+        <span className={`pill ${pill[0]}`}>{pill[1]}</span>
+      </div>
+      <p className="muted small">{svc.what}. No usa clave de API: se conecta a tu <b>Claude Code</b> y la IA «{svc.label}» (piso de Investigación) lo usa con permiso solo para sus herramientas. {svc.plan} <a href={svc.site} target="_blank" rel="noreferrer">{svc.site.replace('https://', '')} ↗</a></p>
+      {!svc.claudeEnabled && <p className="small warn">Primero conecta Claude Code en «Conectar las IAs».</p>}
+      <ol className="steps small">
+        <li>Crea tu cuenta gratis en {svc.label}.</li>
+        <li>Pulsa <b>Conectar</b>: se agrega a Claude Code y se abre una terminal; aprueba el acceso en el navegador.</li>
+        <li>Vuelve y pulsa <b>Revisar</b>. Cuando diga «Conectado», pídele a la IA {svc.label} que busque artículos.</li>
+      </ol>
+      <div className="row">
+        {svc.status !== 'conectado' && (
+          <button className="btn btn--primary small" disabled={busy || svc.status === 'sin-claude'} onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await api.mcpConnect(name);
+              setLogin(r.opened ? '' : r.login);
+              toast(r.already ? `✅ ${svc.label} ya estaba conectado` : r.opened ? '🔑 Aprueba el acceso en el navegador que se abrió' : '🔑 Copia el comando en una terminal para iniciar sesión');
+              await reloadAgents();
+            } catch (err) {
+              toast(`❌ ${(err as Error).message}`);
+            }
+            setBusy(false);
+            load();
+          }}>{busy ? 'Conectando…' : '🔌 Conectar'}</button>
+        )}
+        <button className="btn btn--ghost small" onClick={() => { load(); reloadAgents(); }}>🔄 Revisar</button>
+        {svc.status !== 'no-agregado' && svc.status !== 'sin-claude' && <button className="link" onClick={async () => { if (confirm(`¿Quitar ${svc.label} de Claude Code?`)) { await api.mcpRemove(name); await reloadAgents(); load(); } }}>quitar</button>}
+      </div>
+      {(login || svc.status === 'falta-sesion') && <p className="small">Si no se abrió nada, escribe en una terminal: <code>{login || svc.login}</code>. Si ese comando no existe en tu versión, abre <code>claude</code>, escribe <code>/mcp</code> y elige {svc.label}.</p>}
+    </section>
   );
 }
 
