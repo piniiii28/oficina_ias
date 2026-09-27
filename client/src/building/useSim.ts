@@ -132,7 +132,16 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           // Decide qué hacer en su tiempo libre.
           const r = Math.random();
           const cur = floorById.get(w.floor)!;
-          if ((w.energy ?? 100) < 25 && w.floor !== 'lobby' && w.floor !== 'azotea') {
+          const workers = a.isBrain ? agents.filter((x) => x.id !== a.id && live[x.id]?.status === 'working' && ws[x.id] && !ws[x.id].inElevator) : [];
+          if (workers.length && r < 0.6) {
+            // El cerebro supervisa: visita a alguien que está trabajando.
+            const target = ws[workers[Math.floor(Math.random() * workers.length)].id];
+            const tf = floorById.get(target.floor)!;
+            const near = [[1, 0], [-1, 0], [0, 1], [1, 1]].map(([di, dj]) => ({ i: target.i + di, j: target.j + dj })).find((p) => walkable(tf, p.i, p.j));
+            w.goal = { floor: tf.id, ...(near || randomWalkable(tf)) };
+            w.reason = 'pasear';
+            w.onArrive = '👀 ¿Cómo vamos?';
+          } else if ((w.energy ?? 100) < 25 && w.floor !== 'lobby' && w.floor !== 'azotea') {
             const dest = floorById.get(Math.random() < 0.7 || weatherNow() === 'lluvia' ? 'lobby' : 'azotea')!;
             const spot = dest.hangouts![Math.floor(Math.random() * dest.hangouts!.length)];
             w.goal = { floor: dest.id, ...spot };
