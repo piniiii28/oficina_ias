@@ -138,6 +138,14 @@ export function Notes() {
               </select>
               <button className="btn btn--ghost small" onClick={() => setEditing((e) => !e)}>{editing ? '👁 Ver' : '✏️ Editar'}</button>
               <button className="btn btn--ghost small" onClick={async () => { setNote(await api.updateNote(note.id, { pinned: !note.pinned })); load(); }}>{note.pinned ? 'Desfijar' : '📌 Fijar'}</button>
+              <button className="btn btn--ghost small" title="Descargar como Markdown" onClick={() => {
+                const url = URL.createObjectURL(new Blob([`# ${note.title}\n\n${draft}`], { type: 'text/markdown' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${note.title.replace(/[\\/:*?"<>|]/g, '-')}.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}>⬇️ .md</button>
               <button className="btn btn--danger small" onClick={async () => {
                 if (!confirm(`¿Borrar "${note.title}"?`)) return;
                 await api.deleteNote(note.id);

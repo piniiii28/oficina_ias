@@ -181,3 +181,8 @@ export const api = {
   saveSettings: (s: Record<string, unknown>) => req<Settings>('PUT', '/api/settings', s),
   importBackup: (data: unknown) => req('POST', '/api/import', data),
 };
+
+/** Nivel de experiencia según trabajos completados (1, 4, 9, 16… para subir). */
+export function levelOf(a: { stats?: { tasks: number } }) {
+  return Math.floor(Math.sqrt(a.stats?.tasks || 0)) + 1;
+}

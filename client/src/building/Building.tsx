@@ -1,7 +1,7 @@
 // El edificio de la oficina (estilo Habbo): pisos isométricos apilados, con
 // muebles, ventanas, ascensor y las IAs caminando libremente.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type { Agent } from '../api';
+import { levelOf, type Agent } from '../api';
 import { Chibi } from '../components/Chibi';
 import { useOffice } from '../state';
 import { FLOORS, TH, TW, WALL, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
@@ -142,7 +142,7 @@ function Person({ f, a, w, onClick, idx, me = false }: { f: FloorDef; a: Agent; 
       <span className="walker-body" style={{ transform: `scaleX(${w.dir})` }}>
         <Chibi avatar={a.avatar} size={CHIBI} legs walking={w.moving} seed={idx} state={w.moving ? 'idle' : state} />
       </span>
-      <span className="walker-name">{a.name}</span>
+      <span className="walker-name">{a.name}{!me && <em> · Nv {levelOf(a)}</em>}</span>
     </button>
   );
 }

@@ -1,6 +1,6 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
-import { api, type Agent, type ChatMessage } from '../api';
+import { api, levelOf, type Agent, type ChatMessage } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { useOffice } from '../state';
@@ -22,7 +22,7 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
         <header className="drawer-head">
           <Chibi avatar={agent.avatar} state={live[agent.id]?.status || 'idle'} size={84} />
           <div>
-            <h2>{agent.name}</h2>
+            <h2>{agent.name} <span className="level" title="Sube de nivel al completar trabajos">Nv {levelOf(agent)}</span></h2>
             <p className="muted">{agent.role}</p>
             <p className="small">
               <span className={`dot ${agent.live ? 'dot--live' : 'dot--demo'}`} /> {agent.live ? 'Conectada' : 'Modo demo'} · {agent.provider} / <code>{agent.model || '—'}</code>
