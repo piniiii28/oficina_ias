@@ -4,13 +4,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { levelOf, type Agent } from '../api';
 import { Chibi } from '../components/Chibi';
 import { useOffice } from '../state';
-import { FLOORS, TH, TW, WALL, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
+import { FLOORS, TH, TW, WALL, USE, roomSize, tileCenter, walkable, type FloorDef, type Furniture } from './layout';
 
-// Qué pasa cuando tu avatar usa un mueble.
-const USE: Partial<Record<Furniture['kind'], string>> = {
-  coffee: '☕ ¡Café!', vending: '🥤 ¡Refresco!', arcade: '🕹️ ¡Nuevo récord!', piano: '🎹 ♪♫', pool: '🏊 ¡Al agua!', gym: '🏋️ ¡Fuerza!',
-  telescope: '🔭 ¡Se ve la luna!', aquarium: '🐠 ¡Hola, peces!', shelf: '📖 Leyendo…', grill: '🍖 ¡Asado!', table: '🍩 ¡Rico!', sofa: '🛋️ Descansando', easel: '🎨 Pintando', globe: '🌍 ¿A dónde viajo?', board: '📝 Anotando ideas', reception: '🛎️ ¡Ding!',
-};
 import { ME, PETS, TICK_MS, useSim, type Walker } from './useSim';
 import type { AvatarConfig } from '../api';
 

@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Agent, Meeting } from '../api';
 import type { Live } from '../state';
-import { FLOORS, MEETING_SEATS, floorById, nextStep, randomWalkable, walkable, type FloorDef } from './layout';
+import { FLOORS, MEETING_SEATS, USE, besideFurniture, floorById, nextStep, randomWalkable, walkable, type FloorDef } from './layout';
 
 export type Walker = {
   floor: string;
@@ -101,9 +101,9 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
         if (resting && w.energy > 95) w.wait = 0; // recargado: vuelve a sus cosas
 
         // Prioridades: reunión > trabajo > tiempo libre.
-        if (seat && w.reason !== 'reunion') w.goal = seat, w.reason = 'reunion';
+        if (seat && w.reason !== 'reunion') w.goal = seat, w.reason = 'reunion', w.onArrive = undefined;
         else if (!seat && w.reason === 'reunion') w.goal = null, w.wait = 0;
-        if (!seat && busy && desk && w.reason !== 'escritorio') w.goal = desk, w.reason = 'escritorio';
+        if (!seat && busy && desk && w.reason !== 'escritorio') w.goal = desk, w.reason = 'escritorio', w.onArrive = undefined;
 
         if (w.inElevator > 0) {
           w.inElevator--;
@@ -143,6 +143,14 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           } else if (r < 0.35 && desk && w.floor === home.id) {
             w.goal = desk;
             w.reason = 'escritorio';
+          } else if (Math.random() < 0.3) {
+            // Usar un mueble de su piso en el tiempo libre.
+            const usable = cur.furniture.filter((m) => USE[m.kind] && m.kind !== 'desk');
+            const m = usable[Math.floor(Math.random() * usable.length)];
+            const spot = m && besideFurniture(cur, m);
+            w.goal = { floor: cur.id, ...(spot || randomWalkable(cur)) };
+            w.reason = 'pasear';
+            w.onArrive = m && spot ? USE[m.kind] : undefined;
           } else {
             const spots = cur.hangouts || [];
             const spot = spots.length && Math.random() < 0.4 ? spots[Math.floor(Math.random() * spots.length)] : randomWalkable(cur);
@@ -163,6 +171,10 @@ export function useSim(agents: Agent[], live: Record<string, Live>, meetings: Me
           }
           w.moving = false;
           const stay = w.reason === 'escritorio' || w.reason === 'reunion';
+          if (w.onArrive) {
+            w.emote = w.onArrive;
+            w.onArrive = undefined;
+          }
           if (!stay || (!busy && !seat && w.reason === 'escritorio')) {
             w.goal = null;
             const tired = w.reason === 'cafe' && (w.energy ?? 100) < 60;

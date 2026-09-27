@@ -228,3 +228,22 @@ export function tileCenter(f: FloorDef, i: number, j: number) {
   const ox = (f.rows * TW) / 2;
   return { x: ox + ((i - j) * TW) / 2, y: WALL + ((i + j) * TH) / 2 + TH / 2 };
 }
+
+
+// Qué pasa cuando tu avatar usa un mueble.
+export const USE: Partial<Record<Furniture['kind'], string>> = {
+  coffee: '☕ ¡Café!', vending: '🥤 ¡Refresco!', arcade: '🕹️ ¡Nuevo récord!', piano: '🎹 ♪♫', pool: '🏊 ¡Al agua!', gym: '🏋️ ¡Fuerza!',
+  telescope: '🔭 ¡Se ve la luna!', aquarium: '🐠 ¡Hola, peces!', shelf: '📖 Leyendo…', grill: '🍖 ¡Asado!', table: '🍩 ¡Rico!', sofa: '🛋️ Descansando', easel: '🎨 Pintando', globe: '🌍 ¿A dónde viajo?', board: '📝 Anotando ideas', reception: '🛎️ ¡Ding!',
+};
+
+/** Casilla libre junto a un mueble (para usarlo). */
+export function besideFurniture(f: FloorDef, m: Furniture) {
+  const w = m.w || 1, h = Math.ceil(m.h || 1);
+  const cands: [number, number][] = [];
+  for (let a = -1; a <= w; a++) for (let b = -1; b <= h; b++) {
+    const inside = a >= 0 && a < w && b >= 0 && b < h;
+    if (!inside) cands.push([m.i + a, m.j + b]);
+  }
+  const ok = cands.filter(([a, b]) => walkable(f, a, b));
+  return ok.length ? { i: ok[0][0], j: ok[0][1] } : null;
+}
