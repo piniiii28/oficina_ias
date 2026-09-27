@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/api.ts","./src/main.tsx","./src/state.tsx","./src/components/AgentPanel.tsx","./src/components/Chibi.tsx","./src/components/Markdown.tsx","./src/views/Agents.tsx","./src/views/Graph.tsx","./src/views/Notes.tsx","./src/views/Office.tsx","./src/views/Settings.tsx","./src/views/Tasks.tsx"],"version":"5.9.3"}

@@ -52,7 +52,7 @@ export function createApp(store) {
   app.get('/api/settings', (_req, res) => res.json(publicSettings()));
   app.put('/api/settings', (req, res) => {
     const s = store.data.settings;
-    const { apiKeys, brain, demoMode, maxParallel, ollamaEnabled, ollamaUrl } = req.body || {};
+    const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl } = req.body || {};
     if (apiKeys) {
       s.apiKeys ||= {};
       for (const [k, v] of Object.entries(apiKeys)) {
@@ -63,7 +63,6 @@ export function createApp(store) {
     }
     if (ollamaEnabled !== undefined) (s.apiKeys ||= {}).ollamaEnabled = Boolean(ollamaEnabled);
     if (ollamaUrl !== undefined) (s.apiKeys ||= {}).ollamaUrl = String(ollamaUrl).trim();
-    if (brain?.provider && brain?.model) s.brain = { provider: brain.provider, model: brain.model };
     if (['auto', 'always'].includes(demoMode)) s.demoMode = demoMode;
     if (maxParallel) s.maxParallel = Math.max(1, Math.min(10, Number(maxParallel)));
     store.save();

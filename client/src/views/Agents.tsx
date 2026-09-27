@@ -1,0 +1,110 @@
+// Directorio del equipo: ver todas las IAs, contratar nuevas y restaurar la plantilla.
+import { useState } from 'react';
+import { api, type Agent } from '../api';
+import { Chibi, ACCESSORIES, HAIR_STYLES, EYE_STYLES } from '../components/Chibi';
+import { AgentPanel } from '../components/AgentPanel';
+import { useOffice } from '../state';
+
+const COLORS = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
+const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+
+function randomAvatar(): Agent['avatar'] {
+  return {
+    skin: pick(['#fde7d6', '#f6d7c3', '#f1c7a5', '#e0ac69', '#c68642', '#8d5524']),
+    hair: pick(['#1f2937', '#78350f', '#f59e0b', '#ec4899', '#6366f1', '#10b981', '#e5e7eb']),
+    hairStyle: pick(HAIR_STYLES),
+    eyes: pick(EYE_STYLES),
+    outfit: pick(COLORS),
+    accessory: pick(ACCESSORIES),
+    prop: pick(['🤖', '🚀', '🧩', '🔧', '🎯', '🪄', '🧬', '🎵']),
+  };
+}
+
+export function Agents() {
+  const { agents, departments, providers, reloadAgents, toast, live } = useOffice();
+  const [selected, setSelected] = useState<Agent | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'openrouter', model: '', skills: '', system: '' });
+  const [avatar, setAvatar] = useState(randomAvatar);
+  const dept = (id: string) => departments.find((d) => d.id === id);
+
+  async function create() {
+    if (!form.name.trim()) return;
+    const a = await api.createAgent({
+      ...form,
+      skills: form.skills.split(',').map((s) => s.trim()).filter(Boolean),
+      system: form.system || `Eres ${form.name}, ${form.role}. Responde en español, de forma concreta y con Markdown.`,
+      avatar,
+    });
+    await reloadAgents();
+    setCreating(false);
+    setForm({ ...form, name: '', role: '', skills: '', system: '' });
+    setAvatar(randomAvatar());
+    toast(`🎉 ${a.name} se unió a la oficina`);
+  }
+
+  const liveCount = agents.filter((a) => a.live).length;
+
+  return (
+    <div className="agents-view">
+      <header className="row between">
+        <div>
+          <h2>El equipo · {agents.length} IAs</h2>
+          <p className="muted">{liveCount} conectadas · {agents.length - liveCount} en modo demo</p>
+        </div>
+        <div className="row">
+          <button className="btn btn--ghost" onClick={async () => {
+            if (!confirm('¿Restaurar los perfiles originales? Se conservan entrenamiento, memoria y las IAs que creaste.')) return;
+            await api.resetAgents();
+            reloadAgents();
+          }}>Restaurar plantilla</button>
+          <button className="btn btn--primary" onClick={() => setCreating((c) => !c)}>＋ Contratar IA</button>
+        </div>
+      </header>
+
+      {creating && (
+        <section className="card new-agent">
+          <div className="avatar-editor">
+            <div className="center">
+              <Chibi avatar={avatar} size={100} legs />
+              <button className="btn btn--ghost small" onClick={() => setAvatar(randomAvatar())}>🎲 Otro avatar</button>
+            </div>
+            <div className="grid2">
+              <label>Nombre<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ej.: Chef Bot" /></label>
+              <label>Rol<input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="Ej.: Experto en recetas" /></label>
+              <label>Departamento
+                <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+                  {departments.filter((d) => d.id !== 'direccion').map((d) => <option key={d.id} value={d.id}>{d.emoji} {d.name}</option>)}
+                </select>
+              </label>
+              <label>Proveedor
+                <select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })}>
+                  {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              </label>
+              <label>Modelo<input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej.: meta-llama/llama-3.3-70b-instruct" /></label>
+              <label>Habilidades<input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="cocina, recetas, nutrición" /></label>
+            </div>
+          </div>
+          <label>Instrucciones (opcional)<textarea rows={3} value={form.system} onChange={(e) => setForm({ ...form, system: e.target.value })} /></label>
+          <button className="btn btn--primary" onClick={create} disabled={!form.name.trim()}>Contratar</button>
+        </section>
+      )}
+
+      <div className="agent-cards">
+        {agents.map((a, i) => (
+          <button key={a.id} className={`agent-card ${a.enabled ? '' : 'off'}`} onClick={() => setSelected(a)} style={{ ['--room' as string]: dept(a.department)?.color }}>
+            <Chibi avatar={a.avatar} size={70} seed={i} state={live[a.id]?.status || 'idle'} />
+            <div>
+              <strong>{a.name}</strong>
+              <small>{a.role}</small>
+              <small className="muted"><span className={`dot ${a.live ? 'dot--live' : 'dot--demo'}`} /> {a.provider} · {a.model}</small>
+              <small className="muted">{dept(a.department)?.emoji} {dept(a.department)?.name} · {a.stats?.tasks || 0} trabajos · {a.knowledge?.length || 0} lecciones</small>
+            </div>
+          </button>
+        ))}
+      </div>
+      {selected && <AgentPanel agent={agents.find((a) => a.id === selected.id) || selected} onClose={() => setSelected(null)} status="" />}
+    </div>
+  );
+}

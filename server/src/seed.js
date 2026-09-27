@@ -37,7 +37,7 @@ Volver a [[Bienvenida a la Oficina]] #guia`,
     content: `El grafo funciona como Obsidian:
 
 - Escribe \`[[Nombre de nota]]\` para enlazar notas. Si la nota no existe aparece como nodo fantasma, y al abrirla se crea.
-- Usa #etiquetas para agrupar.
+- Usa \`#etiqueta\` para agrupar.
 - Los nodos morados son IAs: se conectan con las notas que escribieron.
 - Arrastra nodos, haz zoom con la rueda y doble clic para abrir.
 

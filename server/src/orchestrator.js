@@ -32,9 +32,7 @@ export function buildSystem(agent) {
 
 function brainOf(store) {
   const agents = store.data.agents;
-  const brain = agents.find((a) => a.isBrain) || agents[0];
-  const s = store.data.settings.brain;
-  return { ...brain, provider: s?.provider || brain.provider, model: s?.model || brain.model };
+  return agents.find((a) => a.isBrain) || agents[0];
 }
 
 function parseJson(text) {

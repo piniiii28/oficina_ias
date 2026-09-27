@@ -1,0 +1,222 @@
+// La oficina: el Cerebro Central al frente y los departamentos con sus IAs.
+import { useMemo, useState } from 'react';
+import { api, type Agent, type Task } from '../api';
+import { Chibi } from '../components/Chibi';
+import { AgentPanel } from '../components/AgentPanel';
+import { useOffice, type Live } from '../state';
+
+const STATUS_LABEL: Record<string, string> = {
+  idle: 'Disponible', thinking: 'Pensando…', working: 'Trabajando', talking: 'Hablando', done: '¡Listo!', error: 'Error',
+};
+
+const EXAMPLES = [
+  'Crea un plan de negocio para una cafetería con app de pedidos y campaña en Instagram',
+  'Diseña la arquitectura y el código base de una app web de tareas en React con pruebas',
+  'Explícame cálculo integral con ejemplos y arma un plan de estudio de 2 semanas',
+  'Investiga el estado del arte de la IA en salud y verifica los datos clave',
+];
+
+const SHORT: Record<string, string> = { working: '⌨️ trabajando…', done: '✅ ¡listo!', error: '💥 error' };
+
+function Bubble({ live, full = false }: { live?: Live; full?: boolean }) {
+  if (!live || live.status === 'idle' || !live.message) return null;
+  if (live.status === 'thinking') return <div className="bubble bubble--think"><span /><span /><span /></div>;
+  // En los escritorios la burbuja es corta para no taparse con las vecinas; el texto completo va en el tooltip.
+  const text = full ? live.message : SHORT[live.status] || live.message;
+  const max = full ? 110 : 40;
+  return <div className={`bubble bubble--${live.status}`} title={live.message}>{text.slice(0, max)}{text.length > max ? '…' : ''}</div>;
+}
+
+function Desk({ agent, live, index, onClick, dim }: { agent: Agent; live?: Live; index: number; onClick: () => void; dim: boolean }) {
+  const state = live?.status || 'idle';
+  return (
+    <button className={`desk desk--${state} ${dim ? 'desk--dim' : ''} ${agent.enabled ? '' : 'desk--off'}`} onClick={onClick} title={live?.message && state !== 'idle' ? `${agent.name}: ${live.message}` : `${agent.name} · ${agent.role}`}>
+      <Bubble live={live} />
+      <div className="desk-chibi">
+        <Chibi avatar={agent.avatar} state={state} size={78} seed={index} />
+      </div>
+      <div className="desk-table">
+        <div className={`laptop ${state === 'working' ? 'laptop--on' : ''}`}>
+          <div className="laptop-screen">{state === 'working' ? <span className="code-rain">{'</>'}</span> : null}</div>
+          <div className="laptop-base" />
+        </div>
+        <span className="desk-prop">{agent.avatar.prop}</span>
+        {state === 'done' && <span className="sparkles">✨</span>}
+        {state === 'error' && <span className="sparkles">💥</span>}
+      </div>
+      <div className="nameplate">
+        <strong>{agent.name}</strong>
+        <small>{agent.role}</small>
+        <span className={`dot ${agent.live ? 'dot--live' : 'dot--demo'}`} title={agent.live ? 'Conectada' : 'Modo demo'} />
+      </div>
+    </button>
+  );
+}
+
+function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
+  const { openNote } = useOffice();
+  const name = (id: string) => agents.find((a) => a.id === id)?.name || id;
+  const done = task.steps.filter((s) => s.status === 'done' || s.status === 'error').length;
+  const pct = task.status === 'done' ? 100 : task.steps.length ? Math.round((done / task.steps.length) * 85) + 5 : 5;
+  const label = { planning: 'Planificando', working: 'El equipo trabaja', synthesizing: 'Integrando', done: 'Completada', error: 'Error' }[task.status];
+  return (
+    <div className="task-progress">
+      <div className="task-progress-head">
+        <strong>{task.title}</strong>
+        <span className={`pill pill--${task.status}`}>{label}</span>
+      </div>
+      <div className="progress"><div style={{ width: `${pct}%` }} /></div>
+      {task.plan && <p className="muted small">{task.plan.analysis}</p>}
+      <div className="step-chips">
+        {task.steps.map((s) => (
+          <span key={s.agentId} className={`chip chip--${s.status}`}>{name(s.agentId)}</span>
+        ))}
+      </div>
+      {task.status === 'done' && task.noteId && (
+        <button className="btn btn--ghost small" onClick={() => openNote({ id: task.noteId! })}>Ver resultado en notas →</button>
+      )}
+    </div>
+  );
+}
+
+export function Office() {
+  const { agents, departments, live, tasks, toast, setView } = useOffice();
+  const [prompt, setPrompt] = useState('');
+  const [selected, setSelected] = useState<Agent | null>(null);
+  const [pick, setPick] = useState<string[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [filter, setFilter] = useState('');
+
+  const brain = agents.find((a) => a.isBrain);
+  const staff = agents.filter((a) => !a.isBrain);
+  const active = tasks.filter((t) => t.status !== 'done' && t.status !== 'error');
+  const latest = active[0] || tasks[0];
+  const busy = active.length > 0;
+
+  const byDept = useMemo(() => {
+    const m = new Map<string, Agent[]>();
+    for (const a of staff) m.set(a.department, [...(m.get(a.department) || []), a]);
+    return m;
+  }, [staff]);
+
+  const matches = (a: Agent) => {
+    const q = filter.trim().toLowerCase();
+    return !q || `${a.name} ${a.role} ${a.skills.join(' ')} ${a.model}`.toLowerCase().includes(q);
+  };
+
+  async function send() {
+    const p = prompt.trim();
+    if (!p) return;
+    try {
+      await api.runTask(p, picking && pick.length ? pick : undefined);
+      setPrompt('');
+      toast('🧠 Claude recibió la tarea y está armando el equipo');
+    } catch (err) {
+      toast(`Error: ${(err as Error).message}`);
+    }
+  }
+
+  const liveCount = agents.filter((a) => a.live).length;
+  let idx = 0;
+
+  return (
+    <div className="office">
+      <section className="hq">
+        <div className="hq-brain" onClick={() => brain && setSelected(brain)}>
+          {brain && (
+            <>
+              <div className={`brain-aura brain-aura--${live[brain.id]?.status || 'idle'}`} />
+              <Bubble live={live[brain.id]} full />
+              <Chibi avatar={brain.avatar} state={live[brain.id]?.status || 'idle'} size={120} legs />
+              <div className="hq-name">
+                <strong>{brain.name}</strong>
+                <small>Cerebro Central · {brain.model}</small>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="hq-console">
+          <h1>¿Qué hacemos hoy?</h1>
+          <p className="muted">
+            Describe una tarea: Claude la divide, elige a los especialistas, trabajan en paralelo y todo queda guardado en tus notas y en el grafo.
+          </p>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
+            }}
+            placeholder="Ej.: Crea una landing page para mi emprendimiento y una estrategia de lanzamiento…"
+            rows={3}
+          />
+          <div className="hq-actions">
+            <label className="check">
+              <input type="checkbox" checked={picking} onChange={(e) => setPicking(e.target.checked)} />
+              Elegir el equipo yo mismo {picking && pick.length ? `(${pick.length})` : ''}
+            </label>
+            <button className="btn btn--primary" onClick={send} disabled={!prompt.trim()}>
+              {busy ? 'Enviar otra tarea' : 'Enviar al cerebro'} ⌘↵
+            </button>
+          </div>
+          {!prompt && (
+            <div className="examples">
+              {EXAMPLES.map((e) => (
+                <button key={e} className="chip chip--example" onClick={() => setPrompt(e)}>{e}</button>
+              ))}
+            </div>
+          )}
+          {liveCount === 0 && (
+            <p className="hint">
+              🎭 Todas las IAs están en <b>modo demo</b> (respuestas simuladas). <a href="#" onClick={(e) => { e.preventDefault(); setView('ajustes'); }}>Conecta tus claves</a> para que respondan de verdad.
+            </p>
+          )}
+          {latest && <TaskProgress task={latest} agents={agents} />}
+        </div>
+      </section>
+
+      <div className="floor-toolbar">
+        <h2>La oficina <span className="muted">· {staff.length} IAs</span></h2>
+        <input className="search" placeholder="Buscar IA por nombre, rol o habilidad…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      </div>
+
+      <div className="floor">
+        {departments.filter((d) => byDept.has(d.id)).map((d) => (
+          <section key={d.id} className="room" style={{ ['--room' as string]: d.color }}>
+            <header className="room-head">
+              <span>{d.emoji}</span> {d.name}
+              <small className="muted">{byDept.get(d.id)!.length}</small>
+            </header>
+            <div className="room-floor">
+              {byDept.get(d.id)!.map((a) => {
+                const i = idx++;
+                const chosen = pick.includes(a.id);
+                return (
+                  <div key={a.id} className={`desk-wrap ${picking && chosen ? 'desk-wrap--picked' : ''}`}>
+                    <Desk
+                      agent={a}
+                      live={live[a.id]}
+                      index={i}
+                      dim={!matches(a)}
+                      onClick={() => {
+                        if (picking) setPick((p) => (chosen ? p.filter((x) => x !== a.id) : [...p, a.id]));
+                        else setSelected(a);
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="legend muted small">
+        <span><i className="dot dot--live" /> Conectada a su API</span>
+        <span><i className="dot dot--demo" /> Modo demo</span>
+        <span>Haz clic en una IA para hablar con ella, entrenarla o editarla.</span>
+      </div>
+
+      {selected && <AgentPanel agent={agents.find((a) => a.id === selected.id) || selected} onClose={() => setSelected(null)} status={STATUS_LABEL[live[selected.id]?.status || 'idle']} />}
+    </div>
+  );
+}

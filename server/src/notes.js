@@ -6,15 +6,18 @@ export const NOTE_TYPES = ['nota', 'idea', 'tarea', 'aporte', 'diario'];
 
 const norm = (s) => s.trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 
+/** Quita bloques y fragmentos de código para no leer enlaces dentro de ellos. */
+const stripCode = (s) => s.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+
 export function parseLinks(content) {
   const out = new Set();
-  for (const m of content.matchAll(/\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g)) out.add(m[1].trim());
+  for (const m of stripCode(content).matchAll(/\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g)) out.add(m[1].trim());
   return [...out];
 }
 
 export function parseTags(content) {
   const out = new Set();
-  for (const m of content.matchAll(/(?:^|\s)#([\p{L}\d_\-/]+)/gu)) out.add(m[1].toLowerCase());
+  for (const m of stripCode(content).matchAll(/(?:^|\s)#([\p{L}\d_\-/]+)/gu)) out.add(m[1].toLowerCase());
   return [...out];
 }
 

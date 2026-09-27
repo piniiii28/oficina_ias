@@ -5,7 +5,7 @@
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const STOP = new Set(
-  'el la los las un una unos unas de del al a y o u en con por para que como mi tu su sus mis es son ser se me te lo le les hay quiero necesito hacer haz dame sobre esto esta este muy mas más pero sin ya también tambien the and of to for in on with'.split(' '),
+  'el la los las un una unos unas de del al a y o u en con por para que como mi tu su sus mis es son ser se me te lo le les hay quiero necesito hacer haz dame sobre esto esta este muy mas más pero sin ya también tambien tarea tareas desde aporta parte contexto completo tu rol crea crear cómo como plan the and of to for in on with'.split(' '),
 );
 
 /** Palabras clave de un texto (para títulos de ideas y enlaces). */
@@ -31,7 +31,9 @@ const ANGLES = {
 
 export async function simulate({ agent, messages }) {
   await wait(600 + Math.random() * 1400);
-  const last = messages[messages.length - 1]?.content || '';
+  const raw = messages[messages.length - 1]?.content || '';
+  // En tareas del cerebro, el texto útil va entre comillas o tras "Contexto completo".
+  const last = raw.match(/Contexto completo de la tarea: ([\s\S]*)$/)?.[1] || raw.match(/"([^"]+)"/)?.[1] || raw;
   const kw = keywords(last, 3);
   const topic = kw.length ? kw.join(', ') : 'la tarea';
   const angles = ANGLES[agent?.department] || ANGLES.direccion;

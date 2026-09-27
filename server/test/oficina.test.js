@@ -1,0 +1,84 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { Store } from '../src/store.js';
+import { Notes, parseLinks, parseTags, extractKeyIdeas } from '../src/notes.js';
+import { demoPlan } from '../src/demo.js';
+import { DEFAULT_AGENTS } from '../src/agents.js';
+import { runTask } from '../src/orchestrator.js';
+import { createApp } from '../src/index.js';
+
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'oficina-'));
+
+test('hay más de 20 IAs especializadas y un cerebro', () => {
+  const staff = DEFAULT_AGENTS.filter((a) => !a.isBrain);
+  assert.ok(staff.length > 20, `solo hay ${staff.length}`);
+  assert.equal(DEFAULT_AGENTS.filter((a) => a.isBrain).length, 1);
+  assert.equal(new Set(DEFAULT_AGENTS.map((a) => a.id)).size, DEFAULT_AGENTS.length);
+});
+
+test('lee [[enlaces]] y #etiquetas, ignorando el código', () => {
+  const md = 'Ver [[Idea A]] y [[Idea B|alias]] #proyecto `[[No]] #no`\n```\n[[Tampoco]]\n```';
+  assert.deepEqual(parseLinks(md), ['Idea A', 'Idea B']);
+  assert.deepEqual(parseTags(md), ['proyecto']);
+});
+
+test('extrae ideas clave', () => {
+  const ideas = extractKeyIdeas('Texto\n\n### Ideas clave\n- Primera idea\n- **Segunda** idea\n');
+  assert.deepEqual(ideas, ['Primera idea', 'Segunda idea']);
+});
+
+test('grafo: enlaces, fantasmas y backlinks; renombrar actualiza enlaces', () => {
+  const store = new Store(tmp());
+  const notes = new Notes(store);
+  const a = notes.create({ title: 'Alfa', content: 'Hacia [[Beta]] y [[Gamma]] #x' });
+  const b = notes.create({ title: 'Beta', content: '' });
+  const g = notes.graph({ agents: [] });
+  assert.ok(g.nodes.some((n) => n.kind === 'ghost' && n.label === 'Gamma'));
+  assert.ok(g.links.some((l) => l.source === a.id && l.target === b.id));
+  assert.ok(g.nodes.some((n) => n.id === 'tag:x'));
+  assert.deepEqual(notes.backlinks(b.id).map((n) => n.id), [a.id]);
+  notes.update(b.id, { title: 'Beta 2' });
+  assert.match(notes.get(a.id).content, /\[\[Beta 2\]\]/);
+  // Títulos únicos
+  assert.equal(notes.create({ title: 'Alfa' }).title, 'Alfa (2)');
+});
+
+test('el planificador demo reparte según habilidades', () => {
+  const plan = demoPlan('Necesito código en react y una campaña de marketing con seo', DEFAULT_AGENTS);
+  const ids = plan.subtasks.map((s) => s.agentId);
+  assert.ok(ids.includes('opencode'));
+  assert.ok(ids.includes('command-mkt'));
+  assert.ok(!ids.includes('cerebro'));
+});
+
+test('una tarea completa en modo demo crea notas enlazadas y memoria', async () => {
+  const store = new Store(tmp());
+  createApp(store); // siembra agentes y notas de bienvenida
+  store.data.settings.demoMode = 'always';
+  const notes = new Notes(store);
+  const before = notes.all.length;
+  const task = await runTask(store, notes, { prompt: 'Diseña una app web en react con pruebas' });
+  assert.equal(task.status, 'done');
+  assert.ok(task.steps.length >= 2);
+  assert.ok(task.steps.every((s) => s.status === 'done' && s.simulated));
+  assert.ok(notes.all.length > before + task.steps.length);
+  const main = notes.get(task.noteId);
+  assert.equal(main.type, 'tarea');
+  assert.ok(notes.backlinks(main.id).length >= task.steps.length);
+  const worker = store.data.agents.find((a) => a.id === task.steps[0].agentId);
+  assert.equal(worker.memory.length, 1);
+});
+
+test('la memoria persiste en disco entre reinicios', () => {
+  const dir = tmp();
+  const s1 = new Store(dir);
+  createApp(s1);
+  s1.data.agents[1].knowledge.push({ id: 'k1', title: 'Estilo', content: 'Usa emojis', at: '' });
+  s1.flush();
+  const s2 = new Store(dir);
+  assert.equal(s2.data.agents[1].knowledge[0].content, 'Usa emojis');
+  assert.ok(s2.data.notes.length >= 5);
+});

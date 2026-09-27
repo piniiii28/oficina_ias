@@ -8,7 +8,6 @@ const EMPTY = () => ({
   version: 1,
   settings: {
     apiKeys: {},
-    brain: { provider: 'anthropic', model: 'claude-opus-5-5' },
     demoMode: 'auto', // 'auto' = simula cuando falta la clave; 'always' = siempre simula
     maxParallel: 4,
     language: 'es',
