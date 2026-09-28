@@ -893,3 +893,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .connect-extra label:not(.check) { display: grid; gap: 4px; max-width: 420px; }
 .connect-extra > button { justify-self: start; }
 .steps li .check { display: inline-flex !important; flex-direction: row !important; width: auto; align-items: center; gap: 6px; margin-right: 8px; }
+.diag { list-style: none; padding: 8px 10px; margin: 8px 0; border: 1px dashed var(--border); border-radius: 10px; display: grid; gap: 4px; }
+.diag .danger div { color: var(--text, inherit); opacity: .9; }

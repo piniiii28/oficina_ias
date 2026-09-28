@@ -14,8 +14,20 @@ export function normalizeNodeUrl(url) {
     throw new Error('Escribe la dirección del nodo, por ejemplo http://100.101.102.103:4748');
   }
   if (!/^https?:$/.test(u.protocol)) throw new Error('La dirección debe empezar por http://');
-  if (!isLanHost(u.hostname) && !/\.ts\.net$/i.test(u.hostname)) throw new Error('Usa la dirección de Tailscale del nodo (100.x.x.x o un nombre .ts.net)');
+  // IP de Tailscale (100.x), nombre .ts.net o nombre corto de MagicDNS (p. ej. «la97»).
+  const h = u.hostname.replace(/^\[|\]$/g, '');
+  if (!isLanHost(h) && !/\.ts\.net$/i.test(h) && !/^[a-z0-9-]+$/i.test(h) && !/^fd7a:115c:a1e0:/i.test(h)) throw new Error('Usa la dirección de Tailscale del nodo (100.x.x.x o su nombre en Tailscale)');
   return `${u.protocol}//${u.host}`;
+}
+
+/** Explica en palabras simples por qué no se pudo llegar a un nodo. */
+export function explainNodeError(err, node) {
+  const code = err?.cause?.code || err?.code || err?.name || '';
+  const n = `«${node.name || node.url}»`;
+  if (code === 'ECONNREFUSED') return `El computador del nodo ${n} contesta, pero nadie atiende en el puerto: abre nodo.bat en ese computador (y déjalo abierto).`;
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return `No encuentro el nombre del nodo ${n}: en ese computador abre http://localhost:4748 y usa la dirección 100.x.x.x que muestra.`;
+  if (['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'TimeoutError', 'AbortError', 'EHOSTUNREACH', 'ENETUNREACH'].includes(code)) return `No llego al nodo ${n}: revisa que Tailscale esté conectado en los DOS computadores (misma red) y que en ese computador esté la regla del firewall para el puerto 4748.`;
+  return `El nodo ${n} no responde (${code || err?.message || 'sin detalle'}). ¿Está encendido, con nodo.bat abierto y Tailscale conectado?`;
 }
 
 export async function nodeCall(node, method, url, body, { timeoutMs = 8000, raw = false } = {}) {
@@ -24,13 +36,59 @@ export async function nodeCall(node, method, url, body, { timeoutMs = 8000, raw 
     headers: { 'X-Nodo-Token': node.token, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
-  }).catch(() => {
-    throw new Error(`El nodo «${node.name}» no responde. ¿Está encendido, con nodo.bat abierto y Tailscale conectado?`);
+  }).catch((err) => {
+    throw new Error(explainNodeError(err, node));
   });
   if (raw && res.ok) return Buffer.from(await res.arrayBuffer());
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new Error('El código de enlace no coincide: cópialo de nuevo de la página del nodo (http://localhost:4748 en ese computador).');
+  if (res.status === 403) throw new Error(data.error || 'El nodo rechazó la conexión: usa su dirección 100.x.x.x de Tailscale.');
   if (!res.ok) throw new Error(data.error || `El nodo respondió ${res.status}`);
   return data;
+}
+
+/**
+ * Diagnóstico paso a paso de la conexión con un nodo (para el botón «Probar
+ * conexión»): dirección, llegada, código de enlace, Ollama e impresora.
+ */
+export async function diagnoseNode({ url, token, name = '' }) {
+  const steps = [];
+  const add = (ok, text, fix = '') => steps.push({ ok, text, fix });
+  let node;
+  try {
+    node = { url: normalizeNodeUrl(url), token: String(token || '').trim(), name: name || url };
+    add(true, `Dirección válida: ${node.url}`);
+  } catch (err) {
+    add(false, 'La dirección no es válida', err.message);
+    return { ok: false, steps };
+  }
+  const t0 = Date.now();
+  try {
+    const r = await fetch(`${node.url}/nodo/info`, { signal: AbortSignal.timeout(6000) });
+    add(true, `Llego al computador del nodo (${Date.now() - t0} ms)`);
+    if (r.status === 403) {
+      add(false, 'El nodo rechazó esta dirección', 'Usa exactamente la dirección 100.x.x.x que muestra la página del nodo, o actualiza el nodo (cierra y abre nodo.bat).');
+      return { ok: false, steps };
+    }
+  } catch (err) {
+    add(false, 'No llego al computador del nodo', explainNodeError(err, node));
+    return { ok: false, steps };
+  }
+  if (!node.token) {
+    add(false, 'Falta el código de enlace', 'Cópialo de la página del nodo (http://localhost:4748 en ese computador).');
+    return { ok: false, steps };
+  }
+  let info;
+  try {
+    info = await nodeCall(node, 'GET', '/nodo/info', undefined, { timeoutMs: 6000 });
+    add(true, `Código de enlace correcto: nodo «${info.name}» (${info.cpus} núcleos, ${info.memGB} GB)`);
+  } catch (err) {
+    add(false, 'El nodo no aceptó el código', err.message);
+    return { ok: false, steps };
+  }
+  add(Boolean(info.ollama?.running), info.ollama?.running ? `Ollama funciona en el nodo (${info.ollama.models.length} modelos)` : 'Ollama no está abierto en el nodo', info.ollama?.running ? '' : 'nodo.bat lo instala y lo enciende: ciérralo y ábrelo de nuevo, o abre Ollama en ese computador.');
+  if (info.printer?.configured) add(Boolean(info.printer.connected), info.printer.connected ? 'La impresora del nodo está conectada' : `La impresora del nodo no conecta: ${info.printer.error || ''}`);
+  return { ok: steps.every((s) => s.ok), steps, info };
 }
 
 export const nodeById = (settings, id) => (settings.nodes || []).find((n) => n.id === id);

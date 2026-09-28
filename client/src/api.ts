@@ -388,6 +388,7 @@ export const api = {
   addNode: (n: { url: string; token: string; name?: string }) => req<NodeInfo>('POST', '/api/nodes', n),
   deleteNode: (id: string) => req('DELETE', `/api/nodes/${id}`),
   updateNodeSettings: (id: string, b: { name?: string; ollama?: boolean; syncModels?: boolean }) => req<NodeInfo>('PUT', `/api/nodes/${id}`, b),
+  testNode: (b: { id?: string; url?: string; token?: string; name?: string }) => req<{ ok: boolean; steps: { ok: boolean; text: string; fix: string }[] }>('POST', '/api/nodes/test', b),
   nodeModels: (id: string) => req<{ wanted: string[]; sync: ModelSync }>('POST', `/api/nodes/${id}/models`),
   nodeUpdate: (id: string) => req<{ ok: boolean; restart: boolean }>('POST', `/api/nodes/${id}/update`),
   system: () => req<{ dataDir: string; appDir: string; canRestart: boolean }>('GET', '/api/system'),

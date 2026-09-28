@@ -150,7 +150,11 @@ export function createNodeApp(cfg, { remoteHosts = [], syncer = modelSyncer(cfg)
   connectPrinter(settings());
   const app = express();
   // Solo este computador, Tailscale y los nombres de Tailscale (protege contra páginas maliciosas).
-  app.use((req, res, next) => (hostAllowed(settings(), req.headers.host) && !req.headers.origin ? next() : res.status(403).json({ error: 'No permitido' })));
+  app.use((req, res, next) => {
+    if (req.headers.origin) return res.status(403).json({ error: 'No permitido desde una página web' });
+    if (!hostAllowed(settings(), req.headers.host)) return res.status(403).json({ error: `El nodo no reconoce la dirección «${req.headers.host}»: usa la 100.x.x.x que muestra su página (http://localhost:${NODE_PORT} en ese computador).` });
+    next();
+  });
   const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
   // La página del nodo (solo en este computador) muestra el código de enlace.
   app.get('/', (req, res) => {
@@ -162,7 +166,7 @@ export function createNodeApp(cfg, { remoteHosts = [], syncer = modelSyncer(cfg)
 <main><h1>🛰️ Nodo «${escape(cfg.data.name)}»</h1>
 <p>Este computador le presta a tu oficina principal lo que tiene cerca (impresora y Ollama). Déjalo abierto.</p>
 <ol><li>En la oficina principal ve a <b>Ajustes → Nodos</b> y pulsa <b>Agregar nodo</b>.</li>
-<li>Dirección del nodo: ${urls.length ? urls.map((u) => `<code>${u}</code>`).join(' ') : '<span class="warn">todavía no detecto Tailscale en este computador</span>'}</li>
+<li>Dirección del nodo: ${urls.length ? urls.map((u) => `<code>${u}</code>`).join(' ') : '<span class="warn">todavía no detecto Tailscale en este computador: ábrelo e inicia sesión en la misma red que la oficina principal. El nodo empieza a escuchar solo en cuanto aparezca (revisa cada minuto).</span>'}</li>
 <li>Código de enlace: <code>${cfg.data.token}</code></li></ol>
 <p>Ollama: ${ollamaLine(syncer.state)} · modelos: ${wantedModels(cfg).map(escape).join(', ') || 'los que pida la oficina al enlazar este nodo'}</p>
 <p>Impresora: ${info.configured ? (info.connected ? `<span class="ok">conectada (${escape(info.state?.estado || '')})</span>` : `<span class="warn">sin conexión: ${escape(info.error || '')}</span>`) : 'sin configurar (se configura desde la oficina principal)'}</p></main></html>`);

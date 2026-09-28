@@ -11,7 +11,7 @@ import { PROVIDERS, cloudflareAccount, hasKey, isLive, usableFilter, detectClis,
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep, healthOf } from './metrics.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
-import { addNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { addNode, diagnoseNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
 import { generate3d, trellisReady } from './model3d.js';
 import { VIDEO_SERVICES, ffmpegPath, generateVideo, videoService, videosDir } from './video.js';
 import { IMAGE_SERVICES, generateImage, imageService, imagesDir, saveImage } from './images.js';
@@ -1443,6 +1443,11 @@ export function createApp(store) {
         return { ...publicNode(n), online: false, error: err.message };
       }
     })));
+  });
+  // Probar la conexión con un nodo (antes o después de agregarlo).
+  app.post('/api/nodes/test', async (req, res) => {
+    const saved = req.body?.id ? nodeById(store.data.settings, req.body.id) : null;
+    res.json(await diagnoseNode(saved || req.body || {}));
   });
   app.post('/api/nodes', async (req, res) => {
     try {

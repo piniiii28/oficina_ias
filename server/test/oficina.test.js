@@ -2394,3 +2394,27 @@ console.log('hola desde nemotron');
     delete process.env.OFICINA_RETRY_MS;
   }
 });
+
+test('nodos: «Probar conexión» explica qué falla (dirección, llegada, código, Ollama)', async () => {
+  const { diagnoseNode, normalizeNodeUrl } = await import('../src/devices.js');
+  assert.equal(normalizeNodeUrl('http://la97:4748'), 'http://la97:4748', 'acepta el nombre corto de Tailscale');
+  assert.throws(() => normalizeNodeUrl('https://google.com'));
+  const { NodeConfig, createNodeApp } = await import(`../src/node.js?diag-${Date.now()}`);
+  const cfg = new NodeConfig(tmp());
+  const srv = createNodeApp(cfg, { syncer: { state: {}, run: async () => ({}) } }).listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+  const url = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const ok = await diagnoseNode({ url, token: cfg.data.token });
+    assert.ok(ok.steps.slice(0, 3).every((s) => s.ok), JSON.stringify(ok.steps));
+    const bad = await diagnoseNode({ url, token: 'malo' });
+    assert.match(bad.steps.at(-1).fix, /código de enlace no coincide/);
+    // Un puerto donde no hay nada escuchando (nodo.bat cerrado).
+    const net = await import('node:net');
+    const free = await new Promise((r) => { const t = net.createServer().listen(0, '127.0.0.1', () => { const p = t.address().port; t.close(() => r(p)); }); });
+    const closed = await diagnoseNode({ url: `http://127.0.0.1:${free}`, token: 'x' });
+    assert.match(closed.steps.at(-1).fix, /abre nodo\.bat/);
+  } finally {
+    srv.close();
+  }
+});

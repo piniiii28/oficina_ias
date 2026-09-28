@@ -349,6 +349,22 @@ function NodesSection() {
   const [nodes, setNodes] = useState<NodeInfo[] | null>(null);
   const [form, setForm] = useState({ url: '', token: '', name: '' });
   const [ollamaNode, setOllamaNode] = useState('');
+  const [diag, setDiag] = useState<{ for: string; busy: boolean; steps: { ok: boolean; text: string; fix: string }[] } | null>(null);
+  const test = async (key: string, body: { id?: string; url?: string; token?: string; name?: string }) => {
+    setDiag({ for: key, busy: true, steps: [] });
+    try {
+      const r = await api.testNode(body);
+      setDiag({ for: key, busy: false, steps: r.steps });
+    } catch (err) {
+      setDiag({ for: key, busy: false, steps: [{ ok: false, text: 'No pude probar', fix: (err as Error).message }] });
+    }
+  };
+  const diagView = (key: string) => diag?.for === key && (
+    <ul className="diag">
+      {diag.busy && <li className="muted">🩺 Probando la conexión…</li>}
+      {diag.steps.map((s, i) => <li key={i} className={s.ok ? 'ok' : 'danger'}>{s.ok ? '✅' : '❌'} {s.text}{s.fix && <div className="small">👉 {s.fix}</div>}</li>)}
+    </ul>
+  );
   const load = () => {
     api.nodes().then(setNodes).catch(() => setNodes([]));
     api.settings().then((s) => setOllamaNode(s.ollamaNode || '')).catch(() => {});
@@ -377,7 +393,9 @@ function NodesSection() {
         } catch (err) {
           toast(`❌ ${(err as Error).message}`);
         }
-      }}>＋ Agregar nodo</button>
+      }}>＋ Agregar nodo</button>{' '}
+      <button className="btn btn--ghost small" disabled={!form.url} onClick={() => test('nuevo', form)}>🩺 Probar conexión</button>
+      {diagView('nuevo')}
       <ul className="grant-list">
         {nodes?.map((n) => (
           <li key={n.id}>
@@ -392,8 +410,10 @@ function NodesSection() {
               {n.ollama !== false && <label className="check"><input type="checkbox" checked={n.syncModels !== false} onChange={async (e) => { await api.updateNodeSettings(n.id, { syncModels: e.target.checked }); load(); }} /> Descargar allí los modelos de las IAs</label>}
               {n.online && n.ollama !== false && <button className="link" onClick={async () => { try { await api.nodeModels(n.id); toast(`🦙 ${n.name} está descargando los modelos que faltan`); setTimeout(load, 1500); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>descargar modelos ya</button>}
               {n.online && <button className="link" onClick={async () => { try { const r = await api.nodeUpdate(n.id); toast(r.restart ? `⬆️ ${n.name} se está actualizando y se reinicia solo` : `⬆️ ${n.name} se está actualizando; reabre nodo.bat al terminar`); setTimeout(load, 8000); } catch (err) { toast(`❌ ${(err as Error).message}`); } }}>actualizar</button>}
+              <button className="link" onClick={() => test(n.id, { id: n.id })}>🩺 probar conexión</button>
               <button className="link" onClick={async () => { if (confirm(`¿Quitar el nodo ${n.name}?`)) { await api.deleteNode(n.id); load(); } }}>quitar</button>
             </div>
+            {diagView(n.id)}
           </li>
         ))}
         {nodes && !nodes.length && <li className="muted small">Todavía no hay nodos.</li>}
