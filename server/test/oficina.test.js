@@ -2366,3 +2366,31 @@ test('Ollama Cloud: si el modelo no entra en el plan gratis, prueba los económi
     PROVIDERS['ollama-cloud'].baseUrl = old;
   }
 });
+
+test('OpenCode CLI: con un modelo de otro proveedor usa los gratis de OpenCode Zen hasta dar con uno que funcione', async () => {
+  const { callModel } = await import('../src/providers.js');
+  process.env.OFICINA_RETRY_MS = '5';
+  const bin = tmp();
+  const log = path.join(bin, 'args.txt');
+  // Solo responde con Nemotron 3 Ultra (los demás, «Unexpected server error»).
+  fs.writeFileSync(path.join(bin, 'opencode'), `#!/usr/bin/env node
+const fs = require('fs'); const a = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a.filter((x) => x !== a[1])) + '\\n');
+const m = a[a.indexOf('-m') + 1];
+if (!a.includes('-m') || m !== 'opencode/nemotron-3-ultra-free') { console.error('Error: { "name": "UnknownError", "data": { "message": "Unexpected server error." } }'); process.exit(1); }
+console.log('hola desde nemotron');
+`, { mode: 0o755 });
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${oldPath}`;
+  try {
+    const agent = { id: 'opencode', provider: 'cli-opencode', model: 'qwen/qwen3.8-27b:free' };
+    const r = await callModel({ cli: { 'cli-opencode': { enabled: true } } }, { provider: 'cli-opencode', model: agent.model, agent, system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+    assert.equal(r.text, 'hola desde nemotron');
+    assert.equal(agent.model, 'opencode/nemotron-3-ultra-free');
+    const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.ok(!calls[0].includes('-m'), 'un modelo de OpenRouter no se le pasa a OpenCode');
+  } finally {
+    process.env.PATH = oldPath;
+    delete process.env.OFICINA_RETRY_MS;
+  }
+});

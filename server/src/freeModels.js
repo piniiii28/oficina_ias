@@ -66,6 +66,16 @@ export const FREE_MODELS = {
     { id: 'command-a-03-2025', label: 'Command A', for: 'general' },
     { id: 'command-r7b-12-2024', label: 'Command R7B (rápido)', for: 'rápido' },
   ],
+  // Gratis por tiempo limitado en OpenCode Zen; solo funcionan desde OpenCode CLI.
+  'cli-opencode': [
+    { id: 'opencode/big-pickle', label: 'Big Pickle', for: 'código' },
+    { id: 'opencode/nemotron-3-ultra-free', label: 'Nemotron 3 Ultra', for: 'razonamiento' },
+    { id: 'opencode/mimo-v2.6-flash-free', label: 'MiMo V2.6 Flash', for: 'rápido' },
+    { id: 'opencode/longcat-2.5-preview-free', label: 'LongCat 2.5', for: 'general' },
+    { id: 'opencode/nemotron-3.5-lightning-free', label: 'Nemotron 3.5 Lightning', for: 'rápido' },
+    { id: 'opencode/space-bunny-free', label: 'Space Bunny (sin retención de datos)', for: 'general' },
+    { id: 'opencode/mimo-v2.5-free', label: 'MiMo V2.5', for: 'general' },
+  ],
   cloudflare: [
     { id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', for: 'general' },
     { id: '@cf/qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', for: 'código' },

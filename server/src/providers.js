@@ -41,7 +41,7 @@ export const PROVIDERS = {
   // sesión ya iniciada (suscripción), sin clave de API.
   'cli-codex': { label: 'Codex CLI (tu sesión de ChatGPT)', tier: 'suscripcion', hint: 'Usa tu cuenta de ChatGPT (incluso la gratis, con pocos usos).', cli: true, bin: 'codex', npm: '@openai/codex', login: 'codex login', homeEnv: 'CODEX_HOME', command: 'codex exec --skip-git-repo-check --sandbox read-only -', keyUrl: 'https://github.com/openai/codex' },
   'cli-claude': { label: 'Claude Code (tu sesión de Claude)', tier: 'suscripcion', hint: 'Usa tu plan Pro o Max de Claude.', cli: true, bin: 'claude', npm: '@anthropic-ai/claude-code', login: 'claude', homeEnv: 'CLAUDE_CONFIG_DIR', command: 'claude -p', keyUrl: 'https://code.claude.com/docs' },
-  'cli-opencode': { label: 'OpenCode CLI', tier: 'gratis', hint: 'Programa gratis; trae modelos gratis o usa los tuyos.', cli: true, bin: 'opencode', npm: 'opencode-ai', login: 'opencode auth login', command: 'opencode run {prompt}', keyUrl: 'https://opencode.ai' },
+  'cli-opencode': { label: 'OpenCode CLI', tier: 'gratis', hint: 'Gratis y sin cuenta: trae modelos gratis de OpenCode Zen (Big Pickle, Nemotron 3 Ultra, MiMo, LongCat…) que solo funcionan desde OpenCode. No hace falta iniciar sesión para esos.', cli: true, bin: 'opencode', npm: 'opencode-ai', login: 'opencode auth login', command: 'opencode run {prompt}', keyUrl: 'https://opencode.ai' },
   'cli-gemini': { label: 'Gemini CLI (tu cuenta de Google)', tier: 'gratis', hint: 'Gratis con tu cuenta de Google (1.000 consultas al día); con Google AI Pro, 1.500. Si tienes varias cuentas Pro, agrégalas y se turnan.', cli: true, bin: 'gemini', npm: '@google/gemini-cli', login: 'gemini', command: 'gemini', keyUrl: 'https://github.com/google-gemini/gemini-cli' },
 };
 
@@ -182,6 +182,23 @@ async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
         console.warn(`[modelos] ${PROVIDERS[provider].label} no acepta «${model}»: uso el modelo que elija la herramienta`);
         onSwitch('', true);
         return run('');
+      }
+      // OpenCode: sus modelos gratis son temporales; si uno falla se prueba otro de la lista.
+      const alts = (FREE_MODELS[provider] || []).map((m) => m.id).filter((id) => id !== model);
+      if (alts.length && !isQuotaError(err.message)) {
+        let last = err;
+        for (const alt of alts.slice(0, 3)) {
+          try {
+            const out = await run(alt);
+            console.warn(`[modelos] ${PROVIDERS[provider].label}: «${model || 'el de fábrica'}» falló, la IA pasa a «${alt}»`);
+            onSwitch(alt, true);
+            return out;
+          } catch (e) {
+            if (wrote()) throw e;
+            last = e;
+          }
+        }
+        throw last;
       }
       if (isOverloaded(err.message)) {
         await new Promise((r) => setTimeout(r, retryWait()));
@@ -547,7 +564,7 @@ export function cliEnv(provider, home) {
 // Si la versión de Claude Code no conoce --strict-mcp-config, se deja de usar.
 let noStrictMcp = false;
 const CLI_MODEL_FLAG = { 'cli-claude': '--model', 'cli-codex': '-m', 'cli-gemini': '-m', 'cli-opencode': '-m' };
-const CLI_MODEL_OK = { 'cli-claude': /^(claude|opus|sonnet|haiku|fable)/i, 'cli-codex': /^(gpt|o\d|codex)/i, 'cli-gemini': /^gemini/i, 'cli-opencode': /\// };
+const CLI_MODEL_OK = { 'cli-claude': /^(claude|opus|sonnet|haiku|fable)/i, 'cli-codex': /^(gpt|o\d|codex)/i, 'cli-gemini': /^gemini/i, 'cli-opencode': /^(opencode|anthropic|openai|google|github-copilot|openrouter|ollama|groq|xai|mistral|deepseek)\/[\w./:-]+$/i };
 
 function callCli(settings, provider, system, messages, onDelta, signal, home = null, mcp = [], model = '') {
   const convo = messages.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
