@@ -33,7 +33,7 @@ export const PROVIDERS = {
   nvidia: { label: 'NVIDIA NIM', tier: 'gratis', hint: 'Créditos gratis para probar Nemotron, Kimi K3, GLM 5.3, DeepSeek V4 y más.', baseUrl: 'https://integrate.api.nvidia.com/v1', keyUrl: 'https://build.nvidia.com' },
   cohere: { label: 'Cohere (Command)', tier: 'gratis', hint: 'Clave de prueba gratis: 1.000 llamadas al mes (modelos Command A).', baseUrl: 'https://api.cohere.ai/compatibility/v1', keyUrl: 'https://dashboard.cohere.com/api-keys' },
   cloudflare: { label: 'Cloudflare Workers AI (gratis)', tier: 'gratis', hint: 'Gratis con tu cuenta de Cloudflare (la misma de las imágenes): GPT-OSS, Qwen 3.8, Llama, Kimi. Las 10.000 unidades diarias se comparten con las imágenes.', baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{cuenta}/ai/v1', keyUrl: 'https://dash.cloudflare.com/profile/api-tokens', needsAccount: true },
-  'ollama-cloud': { label: 'Ollama Cloud (modelos gigantes)', tier: 'gratis', hint: 'Modelos enormes en los servidores de Ollama (GPT-OSS 120B, Kimi K3, GLM 5.3, DeepSeek V4) sin tarjeta de video. Plan gratis con cupo por hora y por día. Lo que envías sale de tu casa.', baseUrl: 'https://ollama.com/v1', keyUrl: 'https://ollama.com/settings/keys' },
+  'ollama-cloud': { label: 'Ollama Cloud (modelos gigantes)', tier: 'gratis', hint: 'Modelos grandes en los servidores de Ollama, sin tarjeta de video. El plan gratis trae un cupo mensual y solo algunos modelos («starter»); si uno no está incluido, la oficina prueba otro sola. Lo que envías sale de tu casa.', baseUrl: 'https://ollama.com/v1', keyUrl: 'https://ollama.com/settings/keys' },
   ovh: { label: 'OVHcloud AI Endpoints (Europa)', tier: 'gratis', hint: 'Nube europea (GDPR). Gratis y sin clave, pero solo 2 preguntas por minuto por modelo: úsalo de respaldo. Con clave va más rápido, pero cobra por uso (centavos).', baseUrl: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1', keyUrl: 'https://www.ovh.com/manager/#/public-cloud/pci/projects', anonymous: true },
   minimax: { label: 'MiniMax (M3, muy barato)', tier: 'pago', hint: 'De pago pero muy barato (unos US$0,30 por millón de tokens de entrada). Fuerte para programar y tareas largas. Modelos: MiniMax-M3, MiniMax-M2.7.', baseUrl: 'https://api.minimax.io/v1', keyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key' },
   ollama: { label: 'Ollama (local, gratis)', tier: 'gratis', hint: 'Modelos en tu propio computador, gratis y sin límite.', baseUrl: 'http://localhost:11434/v1', keyless: true, keyUrl: 'https://ollama.com/download' },
@@ -114,7 +114,7 @@ export function credentials(settings, provider, accountId = null) {
 }
 
 /** ¿El error dice que el modelo ya no existe o dejó de ser gratis? */
-export const isRetiredModel = (msg) => /no longer available|does not exist|model_not_found|is not found|not found for API|not supported for generateContent|unavailable for free|decommissioned|has been (deprecated|retired|shut ?down)|not a valid model|invalid model/i.test(String(msg));
+export const isRetiredModel = (msg) => /not included in your free usage|requires? (a )?(paid|pro) (plan|subscription)|no longer available|does not exist|model_not_found|is not found|not found for API|not supported for generateContent|unavailable for free|decommissioned|has been (deprecated|retired|shut ?down)|not a valid model|invalid model/i.test(String(msg));
 /** ¿El modelo está saturado en este momento (se arregla solo en un rato)? */
 export const isOverloaded = (msg) => /high demand|overloaded|temporarily unavailable|try again later|\b503\b|\bUNAVAILABLE\b|server is busy|unexpected server error/i.test(String(msg));
 /** ¿Una CLI rechazó el modelo que se le pidió (p. ej. Codex con cuenta de ChatGPT)? */
@@ -144,14 +144,15 @@ async function listModels(provider, cred) {
 }
 
 /** Reemplazo gratis para un modelo retirado: el conocido, o uno recomendado que siga existiendo. */
-export async function replacementModel(provider, model, cred) {
+export async function replacementModel(provider, model, cred, tried = new Set([model])) {
   const known = RETIRED_MODELS[provider]?.[model];
-  if (known && known !== model) return known;
-  const recommended = (FREE_MODELS[provider] || []).map((m) => m.id).filter((id) => id !== model);
+  if (known && !tried.has(known)) return known;
+  const recommended = (FREE_MODELS[provider] || []).map((m) => m.id).filter((id) => !tried.has(id));
   if (provider === 'google') return recommended[0] || null;
   const available = await listModels(provider, cred);
-  if (!available.length) return null;
-  return recommended.find((id) => available.includes(id)) || (provider === 'openrouter' ? available.find((id) => id !== model) : null) || null;
+  // Si el proveedor no dice qué modelos tiene, se prueba el siguiente recomendado.
+  if (!available.length) return recommended[0] || null;
+  return recommended.find((id) => available.includes(id)) || (provider === 'openrouter' ? available.find((id) => !tried.has(id)) : null) || null;
 }
 
 const retryWait = () => Number(process.env.OFICINA_RETRY_MS ?? 2500);
@@ -205,11 +206,24 @@ async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
       return run(alt);
     }
     if (isRetiredModel(err.message)) {
-      const next = await replacementModel(provider, model, cred);
-      if (!next) throw new Error(`${err.message} (Cambia el modelo en el perfil de la IA.)`);
-      console.warn(`[modelos] ${PROVIDERS[provider].label}: «${model}» ya no está disponible, la IA pasa a «${next}»`);
-      onSwitch(next, true);
-      return run(next);
+      // Prueba reemplazos (hasta 4) hasta dar con uno disponible o incluido en el plan gratis.
+      const tried = new Set([model]);
+      let last = err;
+      for (let n = 0; n < 4; n++) {
+        const next = await replacementModel(provider, [...tried].at(-1), cred, tried);
+        if (!next) break;
+        tried.add(next);
+        try {
+          const out = await run(next);
+          console.warn(`[modelos] ${PROVIDERS[provider].label}: «${model}» no está disponible, la IA pasa a «${next}»`);
+          onSwitch(next, true);
+          return out;
+        } catch (e) {
+          if (wrote() || !isRetiredModel(e.message)) throw e;
+          last = e;
+        }
+      }
+      throw new Error(`${last.message} (Cambia el modelo en el perfil de la IA.)`);
     }
     throw err;
   }

@@ -2331,3 +2331,38 @@ test('NVIDIA: imágenes FLUX en cualquier formato, TRELLIS de texto o imagen a S
   }
   assert.ok(['galena', 'balance', 'musa'].every((id) => DEFAULT_AGENTS.find((a) => a.id === id)?.provider === 'nvidia'));
 });
+
+test('Ollama Cloud: si el modelo no entra en el plan gratis, prueba los económicos hasta dar con uno', async () => {
+  const http = await import('node:http');
+  const { callModel, PROVIDERS } = await import('../src/providers.js');
+  const tried = [];
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      if (req.method === 'GET') return res.end(JSON.stringify({ data: ['gpt-oss:20b', 'nemotron-3-super', 'gemma4'].map((id) => ({ id })) }));
+      const { model } = JSON.parse(b);
+      tried.push(model);
+      if (model !== 'nemotron-3-super') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'this model is not included in your free usage, add usage credits to pay as you go' }));
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'ok' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  const old = PROVIDERS['ollama-cloud'].baseUrl;
+  PROVIDERS['ollama-cloud'].baseUrl = `http://127.0.0.1:${fake.address().port}/v1`;
+  try {
+    const agent = { id: 'titan', provider: 'ollama-cloud', model: 'gpt-oss:120b' };
+    const r = await callModel({ apiKeys: { 'ollama-cloud': 'k' } }, { provider: 'ollama-cloud', model: agent.model, agent, system: 'S', messages: [{ role: 'user', content: 'hola' }] });
+    assert.equal(r.text, 'ok');
+    assert.deepEqual(tried, ['gpt-oss:120b', 'gpt-oss:20b', 'nemotron-3-super']);
+    assert.equal(agent.model, 'nemotron-3-super', 'se queda con el que sí está incluido');
+  } finally {
+    fake.close();
+    PROVIDERS['ollama-cloud'].baseUrl = old;
+  }
+});
