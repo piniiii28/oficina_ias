@@ -38,6 +38,7 @@ Antes de hacer commit, ejecuta `npm test` y `npm run build`.
 - `server/src/images.js`: imágenes. Las IAs escriben `<<imagen prompt="…" formato="16:9">>`; `callWithAccess` las genera (Pollinations, Cloudflare, Hugging Face o Gemini, según `settings.images`), las guarda en `imagenes/` y las sirve en `/api/images/<archivo>`.
 - `server/src/video.js`: videos. `<<video prompt="…" escenas="a | b" formato="16:9">>`; gratis con imágenes + FFmpeg (`ffmpeg-static`), o Hailuo (MiniMax) y Veo (Gemini), de pago.
 - `metrics.js` → `healthOf`: una IA con 2 fallas seguidas no recibe trabajo (`usableFilter` la excluye). `/api/agents/check` las revisa todas; `/api/agents/rescue` pasa las de demo a proveedores conectados (`rescuePlan`).
+- `server/src/model3d.js`: TRELLIS (NVIDIA) de texto o imagen a STL; `<<modelo3d prompt="…">>` crea un trabajo `kind: 'trellis'` en el Taller. `client/src/pdf.ts`: versión para imprimir y «Guardar como PDF».
 - `server/src/mcpServices.js`: servicios que se conectan por MCP a Claude Code (Undermind). La IA con `mcp: '<nombre>'` llama a Claude Code con `--allowedTools mcp__<nombre>` y solo está conectada si `settings.mcp.<nombre>.added`.
 - `server/src/ollama.js`: varios Ollama a la vez. Cada IA elige el suyo en `agent.account` (`local`, `node:<id>`, `auto` o nada = el preferido `settings.ollamaNode`); `credentials()` los devuelve en orden y, si uno falla, se usa el siguiente.
 - `client/src/state.tsx`: contexto global; recibe los eventos SSE (`agent`, `task`, `meeting`, `delta`, `notes`, `cards`).

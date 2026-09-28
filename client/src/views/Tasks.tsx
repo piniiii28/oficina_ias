@@ -5,6 +5,7 @@ import { Chibi } from '../components/Chibi';
 import { Markdown } from '../components/Markdown';
 import { Routines } from '../components/Routines';
 import { SpeakButton } from '../components/Voice';
+import { saveAsPdf } from '../pdf';
 import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice } from '../state';
 
@@ -93,6 +94,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
         <div className="row between"><h3>Respuesta integrada{task.ms != null && <small className="muted"> · ⏱ {fmtSecs(task.ms)} en total{task.synthMs ? ` (integrar: ${fmtSecs(task.synthMs)})` : ''}</small>}</h3>
           <div className="row">
             {task.status === 'done' && <CardsButton task={task} />}
+            {task.final && <button className="btn btn--ghost small" title="Guardar la respuesta como PDF" onClick={() => saveAsPdf(task.title, task.final || '', `Pedido: ${task.prompt.slice(0, 160)}`)}>📄 PDF</button>}
             {task.final && <SpeakButton text={task.final} />}
           </div>
         </div>

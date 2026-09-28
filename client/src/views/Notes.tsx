@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Note, type NoteSummary, type NoteType } from '../api';
 import { Markdown } from '../components/Markdown';
 import { useOffice } from '../state';
+import { saveAsPdf } from '../pdf';
 
 const TEMPLATES: { label: string; type: NoteType; title: string; body: string }[] = [
   { label: '🚀 Proyecto', type: 'nota', title: 'Proyecto: ', body: '## Objetivo\n\n## Entregables\n- [ ] \n\n## Equipo\n\n## Riesgos\n\n## Relacionado\n- [[ ]]\n\n#proyecto' },
@@ -199,6 +200,7 @@ export function Notes() {
                 a.click();
                 URL.revokeObjectURL(url);
               }}>⬇️ .md</button>
+              <button className="btn btn--ghost small" title="Guardar como PDF (portada, índice e imágenes)" onClick={() => saveAsPdf(note.title, draft)}>📄 PDF</button>
               <button className="btn btn--danger small" onClick={async () => {
                 if (!confirm(`¿Borrar "${note.title}"?`)) return;
                 await api.deleteNote(note.id);

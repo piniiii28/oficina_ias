@@ -221,6 +221,14 @@ Las IAs pueden generar imágenes: pídele una a Pixel (o a cualquiera) y aparece
 - **Hugging Face**: usa tu clave; los créditos gratis dan para pocas.
 - **Gemini**: la mejor calidad, pero de pago.
 
+## 📄 PDF
+
+Las respuestas de las tareas y las notas tienen el botón **📄 PDF**: arma una versión con portada, índice, tablas e imágenes y abre «Imprimir», donde eliges **Guardar como PDF**. Las IAs entregan el documento completo en Markdown y no gastan tiempo programando el PDF.
+
+## 🧊 De texto o imagen a 3D (TRELLIS)
+
+En **Taller 3D** describe un objeto o sube una imagen y TRELLIS (de Microsoft, en NVIDIA, con tu clave de NVIDIA) crea el modelo en STL, listo para laminar. Las IAs también lo usan con `<<modelo3d prompt="…">>` para figuras y decoración.
+
 ## 🎬 Videos
 
 Pídele un video a Clip (o a cualquier IA) y aparece en la respuesta. Se guardan en `videos/`. En **Ajustes → 🎬 Videos**:

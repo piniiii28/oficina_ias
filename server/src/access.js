@@ -385,6 +385,9 @@ async function runAction(store, agent, act, onceGrants) {
  * trae acciones, se ejecutan (con tu permiso) y se le devuelven los resultados
  * para que continúe, hasta 4 rondas.
  */
+// Documentos: la oficina ya los convierte a PDF; las IAs no deben programar eso.
+const DOC_GUIDE = '\n\n## PDF y documentos\nSi te piden un PDF, un informe o un documento, entrega el documento COMPLETO en Markdown bien estructurado (títulos ##, tablas, listas). El usuario lo guarda como PDF con el botón «📄 PDF» de la oficina (con portada e índice): NO escribas scripts ni programas para generar el PDF.';
+
 export async function callWithAccess(store, params) {
   const settings = store.data.settings;
   // Imágenes: cada <<imagen …>> de la respuesta se genera y se pone en su lugar.
@@ -415,7 +418,7 @@ export async function callWithAccess(store, params) {
     }
     return out;
   };
-  const imgGuide = imageGuide(settings) + videoGuide(settings) + trellisGuide(settings);
+  const imgGuide = imageGuide(settings) + videoGuide(settings) + trellisGuide(settings) + DOC_GUIDE;
   if (settings.accessEnabled === false) return withImages(await callModel(settings, { ...params, system: params.system + imgGuide }));
   const blender = await blenderStatus(store);
   const system = params.system + accessGuide(settings, store.dir, blender) + imgGuide;
