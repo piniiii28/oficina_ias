@@ -158,7 +158,15 @@ export function createNodeApp(cfg, { remoteHosts = [], syncer = modelSyncer(cfg)
   const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
   // La página del nodo (solo en este computador) muestra el código de enlace.
   app.get('/', (req, res) => {
-    if (!isLocal(req)) return res.status(403).send('Abre esta página en el computador del nodo.');
+    // Desde otro computador: la conexión funciona, pero el código solo se muestra aquí.
+    if (!isLocal(req)) {
+      return res.status(403).type('html').send(`<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nodo de la Oficina de IAs</title>
+<body style="font:15px system-ui,sans-serif;max-width:560px;margin:40px auto;padding:0 16px"><h1>✅ El nodo «${escape(cfg.data.name)}» responde</h1>
+<p>La red funciona: este computador llega al nodo por Tailscale.</p>
+<p>Para agregarlo, en la oficina principal ve a <b>Ajustes → Nodos → Agregar nodo</b> y pega:</p>
+<ul><li>Dirección: <code>http://${escape(String(req.headers.host || ''))}</code></li>
+<li>Código de enlace: por seguridad solo se ve en el computador del nodo, abriendo <code>http://localhost:${NODE_PORT}</code> allá.</li></ul></body></html>`);
+    }
     const info = printerInfo(settings());
     const urls = tailscaleAddresses().filter((ip) => !ip.includes(':')).map((ip) => `http://${ip}:${NODE_PORT}`);
     res.type('html').send(`<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nodo de la Oficina de IAs</title>
