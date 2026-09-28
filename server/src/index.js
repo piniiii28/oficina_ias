@@ -12,6 +12,7 @@ import { recordCall, accuracyOf, loadOf, juryReport, juryStep, healthOf } from '
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
 import { addNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
+import { generate3d, trellisReady } from './model3d.js';
 import { VIDEO_SERVICES, ffmpegPath, generateVideo, videoService, videosDir } from './video.js';
 import { IMAGE_SERVICES, generateImage, imageService, imagesDir, saveImage } from './images.js';
 import { MCP_SERVICES, mcpAdd, mcpLoginCommand, mcpRemove, mcpStatus } from './mcpServices.js';
@@ -76,7 +77,7 @@ export function createApp(store) {
   }
 
   // IAs nuevas de la plantilla: se contratan una sola vez (si luego las despides, no vuelven).
-  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'], freeV3Seeded: ['zeta', 'samba', 'rayo'], cloudV1Seeded: ['titan'] };
+  const NEW_AGENTS = { agentsV3Seeded: ['voltio', 'laser', 'celda', 'clip', 'newton', 'forma'], gemma4Seeded: ['gemma4'], ollamaV2Seeded: ['coda-local', 'deep-razona', 'qwen-local', 'brisa', 'granito', 'llamita'], undermindSeeded: ['undermind'], minimaxSeeded: ['maxi'], freeV3Seeded: ['zeta', 'samba', 'rayo'], cloudV1Seeded: ['titan'], nvidiaV2Seeded: ['galena', 'balance', 'musa'] };
   for (const [flag, ids] of Object.entries(NEW_AGENTS)) {
     if (store.data.settings[flag]) continue;
     for (const id of ids) if (!store.data.agents.some((a) => a.id === id)) store.data.agents.push(structuredClone(DEFAULT_AGENTS.find((a) => a.id === id)));
@@ -1550,7 +1551,7 @@ export function createApp(store) {
   });
 
   // --- Taller de Impresión 3D ---
-  app.get('/api/cad/detect', async (_req, res) => res.json(await detectCad(store.data.settings)));
+  app.get('/api/cad/detect', async (_req, res) => res.json({ ...(await detectCad(store.data.settings)), trellis: trellisReady(store.data.settings) }));
   app.get('/api/cad/jobs', (_req, res) => res.json(store.data.cadJobs || []));
   app.post('/api/cad/extract', (req, res) => res.json(extractCadBlocks(String(req.body?.text || ''))));
   const cadJob = (id) => (store.data.cadJobs || []).find((j) => j.id === id);
@@ -1564,6 +1565,25 @@ export function createApp(store) {
       const job = await runCad({ settings: store.data.settings, dataDir: store.dir, kind, code, name: String(req.body?.name || 'modelo').slice(0, 60), gui: Boolean(req.body?.gui), onLog: log });
       log.end();
       const record = { id, ...job, code: code.slice(0, 50000), taskId: req.body?.taskId || null, createdAt: new Date().toISOString() };
+      (store.data.cadJobs ||= []).unshift(record);
+      if (store.data.cadJobs.length > 60) store.data.cadJobs.length = 60;
+      store.save();
+      bus.emit('event', { type: 'cad' });
+      res.json(record);
+    } catch (err) {
+      log.end();
+      res.status(400).json({ error: err.message });
+    }
+  });
+  // De texto o imagen a 3D con TRELLIS (NVIDIA).
+  app.post('/api/cad/trellis', express.json({ limit: '15mb' }), async (req, res) => {
+    const prompt = String(req.body?.prompt || '').trim();
+    const m = /^data:image\/(png|jpe?g|webp);base64,(.+)$/.exec(String(req.body?.image || ''));
+    const log = streamer('cad:trellis');
+    try {
+      const job = await generate3d(store.data.settings, store.dir, { prompt, image: m ? Buffer.from(m[2], 'base64') : null, name: String(req.body?.name || prompt.split(/[,.]/)[0] || 'modelo').slice(0, 60) }, log);
+      log.end();
+      const record = { id: Store.id('j_'), ...job, taskId: null, createdAt: new Date().toISOString() };
       (store.data.cadJobs ||= []).unshift(record);
       if (store.data.cadJobs.length > 60) store.data.cadJobs.length = 60;
       store.save();

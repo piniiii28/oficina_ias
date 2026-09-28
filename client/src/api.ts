@@ -101,7 +101,7 @@ export type HubInfo = Hub & {
 };
 export type Bridge = { a: string; b: string; score: number; links: number; shared: string[] };
 export type CadKind = 'blender' | 'openscad' | 'freecad';
-export type CadJob = { id: string; kind: CadKind; name: string; dir: string; ok: boolean; log: string; files: { name: string; size: number }[]; opened: boolean; code: string; taskId: string | null; createdAt: string };
+export type CadJob = { id: string; kind: CadKind | 'trellis'; name: string; dir: string; ok: boolean; log: string; files: { name: string; size: number }[]; opened: boolean; code: string; taskId: string | null; createdAt: string };
 
 export type Step = {
   agentId: string;
@@ -401,8 +401,9 @@ export const api = {
   jury: () => req<JuryReport>('GET', '/api/jury'),
   askJury: (taskId: string, agentId: string) => req('POST', `/api/tasks/${taskId}/steps/${agentId}/jury`),
 
-  cadDetect: () => req<Record<string, string | null>>('GET', '/api/cad/detect'),
+  cadDetect: () => req<Record<string, string | boolean | null>>('GET', '/api/cad/detect'),
   cadJobs: () => req<CadJob[]>('GET', '/api/cad/jobs'),
+  cadTrellis: (b: { prompt?: string; image?: string; name?: string }) => req<CadJob>('POST', '/api/cad/trellis', b),
   cadRun: (b: { kind: CadKind; code: string; name?: string; gui?: boolean; taskId?: string }) => req<CadJob>('POST', '/api/cad/run', b),
   cadOpen: (id: string, what: 'app' | 'folder' | 'bambu') => req('POST', `/api/cad/jobs/${id}/open`, { what }),
   cadSlice: (id: string) => req<{ ok: boolean; log: string }>('POST', `/api/cad/jobs/${id}/slice`),

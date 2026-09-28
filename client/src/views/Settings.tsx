@@ -712,7 +712,7 @@ function HubsSection({ s, setS }: { s: SettingsT; setS: (s: SettingsT) => void }
 /** Rutas de Blender, OpenSCAD, FreeCAD y laminadores (si no se detectan solos). */
 function CadSection({ s, save }: { s: SettingsT; save: (patch: Record<string, unknown>, msg?: string) => Promise<void> }) {
   const { cadTools } = useOffice();
-  const [found, setFound] = useState<Record<string, string | null> | null>(null);
+  const [found, setFound] = useState<Record<string, string | boolean | null> | null>(null);
   useEffect(() => {
     api.cadDetect().then(setFound).catch(() => setFound({}));
   }, [s.cadPaths]);

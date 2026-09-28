@@ -18,6 +18,7 @@ import { PRINTER_COMMANDS } from './bambu.js';
 import { printerNow, printerCommand, printerCamera } from './devices.js';
 import { imageGuide, renderImages, IMAGE_RE } from './images.js';
 import { videoGuide, renderVideos, VIDEO_RE } from './video.js';
+import { trellisGuide, renderModels, TRELLIS_RE } from './model3d.js';
 
 const win = process.platform === 'win32';
 export const MODES = ['leer', 'escribir'];
@@ -397,6 +398,14 @@ export async function callWithAccess(store, params) {
       const { text, images } = await renderImages(settings, store.dir, out.text);
       out = { ...out, text, images };
     }
+    TRELLIS_RE.lastIndex = 0;
+    if (TRELLIS_RE.test(out.text)) {
+      TRELLIS_RE.lastIndex = 0;
+      if (params.agent) agentStatus(params.agent.id, 'working', '🧊 Creando el modelo 3D…');
+      const { text, jobs } = await renderModels(store, out.text);
+      if (jobs.length) bus.emit('event', { type: 'cad' });
+      out = { ...out, text, cadJobs: jobs };
+    }
     VIDEO_RE.lastIndex = 0;
     if (VIDEO_RE.test(out.text)) {
       VIDEO_RE.lastIndex = 0;
@@ -406,7 +415,7 @@ export async function callWithAccess(store, params) {
     }
     return out;
   };
-  const imgGuide = imageGuide(settings) + videoGuide(settings);
+  const imgGuide = imageGuide(settings) + videoGuide(settings) + trellisGuide(settings);
   if (settings.accessEnabled === false) return withImages(await callModel(settings, { ...params, system: params.system + imgGuide }));
   const blender = await blenderStatus(store);
   const system = params.system + accessGuide(settings, store.dir, blender) + imgGuide;

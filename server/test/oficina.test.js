@@ -2270,3 +2270,64 @@ test('tiempos: cada paso mide cuánto tardó, con un solo aporte no se integra d
     fake.close();
   }
 });
+
+test('NVIDIA: imágenes FLUX en cualquier formato, TRELLIS de texto o imagen a STL, y Mistral sin cuenta de Mistral', async () => {
+  const http = await import('node:http');
+  const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  const STL = Buffer.from('solid modelo\nendsolid modelo\n');
+  const seen = [];
+  const fake = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (d) => (b += d));
+    req.on('end', () => {
+      const body = b ? JSON.parse(b) : {};
+      seen.push({ url: req.url, auth: req.headers.authorization, body });
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url === '/v1/genai/black-forest-labs/flux.1-schnell') return res.end(JSON.stringify({ artifacts: [{ base64: JPG.toString('base64'), finishReason: 'SUCCESS' }] }));
+      if (req.url === '/v1/genai/microsoft/trellis') return res.end(JSON.stringify({ artifacts: [{ base64: STL.toString('base64'), finishReason: 'SUCCESS' }] }));
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Listo:\n<<modelo3d prompt="a cute low-poly fox">>' } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  fake.listen(0, '127.0.0.1');
+  await new Promise((r) => fake.once('listening', r));
+  process.env.NVIDIA_GENAI_BASE = `http://127.0.0.1:${fake.address().port}`;
+  const store = new Store(tmp());
+  try {
+    await withApp(store, async (call) => {
+      assert.equal((await call('GET', '/api/cad/detect')).data.trellis, false);
+      store.data.settings.apiKeys = { nvidia: 'nv-key', ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${fake.address().port}/v1` };
+      assert.equal((await call('GET', '/api/cad/detect')).data.trellis, true);
+      // Imágenes con NVIDIA: 16:9 de verdad.
+      await call('PUT', '/api/settings', { images: { service: 'nvidia' } });
+      const img = await call('POST', '/api/images', { prompt: 'a fox', formato: '16:9' });
+      assert.equal(img.data.service, 'nvidia');
+      const nv = seen.find((x) => x.url.includes('flux'));
+      assert.equal(nv.auth, 'Bearer nv-key');
+      assert.deepEqual([nv.body.width, nv.body.height], [1344, 768]);
+      // TRELLIS desde texto (botón del Taller).
+      const t = await call('POST', '/api/cad/trellis', { prompt: 'a small dragon figurine' });
+      assert.equal(t.data.kind, 'trellis');
+      assert.ok(t.data.files.some((f) => f.name === 'modelo.stl'));
+      assert.equal(seen.find((x) => x.url.includes('trellis')).body.mode, 'text');
+      assert.equal(seen.find((x) => x.url.includes('trellis')).body.output_format, 'stl');
+      // Desde una imagen.
+      await call('POST', '/api/cad/trellis', { image: `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}` });
+      assert.equal(seen.filter((x) => x.url.includes('trellis')).at(-1).body.mode, 'image');
+      // Una IA lo pide con <<modelo3d …>> y queda en el Taller.
+      await call('PUT', '/api/agents/blender-3d', { provider: 'ollama', model: 'm' });
+      const chat = await call('POST', '/api/agents/blender-3d/chat', { message: 'hazme un zorro para imprimir' });
+      assert.match(chat.data.reply, /Modelo 3D listo/);
+      assert.equal((await call('GET', '/api/cad/jobs')).data.filter((j) => j.kind === 'trellis').length, 3);
+      // Las IAs de Mistral (sin cuenta de Mistral) pasan a Mistral Large 2 por NVIDIA.
+      await call('POST', '/api/agents/rescue');
+      const m = store.data.agents.find((a) => a.id === 'mistral-story');
+      assert.equal(m.provider, 'nvidia');
+      assert.equal(m.model, 'mistralai/mistral-large-2-instruct');
+    });
+  } finally {
+    fake.close();
+    delete process.env.NVIDIA_GENAI_BASE;
+  }
+  assert.ok(['galena', 'balance', 'musa'].every((id) => DEFAULT_AGENTS.find((a) => a.id === id)?.provider === 'nvidia'));
+});

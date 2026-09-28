@@ -5,7 +5,7 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { runLogged, launchApp } from './system.js';
+import { runLogged, launchApp, openPath } from './system.js';
 
 const win = process.platform === 'win32';
 const mac = process.platform === 'darwin';
@@ -208,6 +208,11 @@ export async function runCad({ settings, dataDir, kind, code, name = 'modelo', g
 
 /** Abre el proyecto de un trabajo anterior en su programa. */
 export async function openInApp(settings, job) {
+  // Los modelos de TRELLIS son un STL: se abren con el programa que tengas para STL.
+  if (job.kind === 'trellis') {
+    const stl = path.join(job.dir, 'modelo.stl');
+    return fs.existsSync(stl) && openPath(stl);
+  }
   const tools = await detectCad(settings);
   const file = { blender: 'modelo.blend', openscad: 'modelo.scad', freecad: 'modelo.FCStd' }[job.kind];
   const target = path.join(job.dir, file);

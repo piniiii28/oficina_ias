@@ -19,7 +19,8 @@ const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.ma
 
 export function Taller() {
   const { agents, tasks, cadTools, cadVersion, toast, setView, live } = useOffice();
-  const [tools, setTools] = useState<Record<string, string | null> | null>(null);
+  const [tools, setTools] = useState<Record<string, string | boolean | null> | null>(null);
+  const [ai3d, setAi3d] = useState({ prompt: '', image: '' as string, busy: false });
   const [jobs, setJobs] = useState<CadJob[]>([]);
   const [prompt, setPrompt] = useState('');
   const [app, setApp] = useState<CadKind>('openscad');
@@ -93,7 +94,7 @@ export function Taller() {
         {tools && (
           <div className="tool-chips">
             {cadTools.map((t) => (
-              <span key={t.id} className={`pill ${tools[t.id] ? 'pill--done' : ''}`} title={tools[t.id] || 'No encontrado'}>
+              <span key={t.id} className={`pill ${tools[t.id] ? 'pill--done' : ''}`} title={typeof tools[t.id] === 'string' ? (tools[t.id] as string) : 'No encontrado'}>
                 {tools[t.id] ? '✓' : '✗'} {t.label}
                 {!tools[t.id] && <> · <a href={t.url} target="_blank" rel="noreferrer">descargar ↗</a></>}
               </span>
@@ -133,6 +134,44 @@ export function Taller() {
         )}
       </section>
 
+      <section className="card">
+        <h3>🧊 De texto o imagen a 3D (TRELLIS)</h3>
+        <p className="muted small">Para figuras, personajes, animales o decoración: la IA TRELLIS (de Microsoft, en NVIDIA) crea el modelo 3D y lo entrega en STL, listo para laminar. Para piezas con medidas exactas usa «Pide un modelo» con OpenSCAD o FreeCAD.</p>
+        {tools && !tools.trellis ? (
+          <p className="small warn">Necesita tu clave de NVIDIA: Ajustes → Conectar las IAs → NVIDIA NIM.</p>
+        ) : (
+          <>
+            <div className="row">
+              <input className="grow" value={ai3d.prompt} onChange={(e) => setAi3d({ ...ai3d, prompt: e.target.value })} placeholder="Ej.: a cute low-poly fox sitting, single object" />
+              <label className="btn btn--ghost small">
+                🖼️ {ai3d.image ? 'Imagen lista' : 'Desde una imagen'}
+                <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => setAi3d((x) => ({ ...x, image: String(r.result) }));
+                  r.readAsDataURL(f);
+                }} />
+              </label>
+              <button className="btn btn--primary small" disabled={ai3d.busy || (!ai3d.image && ai3d.prompt.trim().length < 3)} onClick={async () => {
+                setAi3d((x) => ({ ...x, busy: true }));
+                try {
+                  await api.cadTrellis({ prompt: ai3d.prompt.trim(), image: ai3d.image || undefined });
+                  toast('🧊 Modelo 3D listo: míralo abajo en «Modelos creados»');
+                  setAi3d({ prompt: '', image: '', busy: false });
+                  setJobs(await api.cadJobs());
+                } catch (err) {
+                  toast(`❌ ${(err as Error).message}`);
+                  setAi3d((x) => ({ ...x, busy: false }));
+                }
+              }}>{ai3d.busy ? 'Creando… (≈1 min)' : '🧊 Crear modelo 3D'}</button>
+            </div>
+            {ai3d.image && <p className="small">Usará la imagen (el texto es opcional). <button className="link" onClick={() => setAi3d({ ...ai3d, image: '' })}>quitar imagen</button></p>}
+            <p className="muted small">Tip: una imagen de un solo objeto, con fondo liso, da el mejor resultado. Escribe en inglés para más precisión.</p>
+          </>
+        )}
+      </section>
+
       {shopTasks.length > 0 && (
         <section className="card">
           <h3>Diseños del equipo</h3>
@@ -162,7 +201,7 @@ export function Taller() {
                 <header className="row between">
                   <div>
                     <strong>{j.name}</strong>
-                    <small className="muted"> · {APPS.find((a) => a.kind === j.kind)?.label} · {new Date(j.createdAt).toLocaleString()}</small>
+                    <small className="muted"> · {(j.kind === 'trellis' ? 'TRELLIS (IA)' : APPS.find((a) => a.kind === j.kind)?.label)} · {new Date(j.createdAt).toLocaleString()}</small>
                   </div>
                   <span className={`pill ${j.ok ? 'pill--done' : 'pill--error'}`}>{j.ok ? 'STL listo' : 'sin STL'}</span>
                 </header>
@@ -171,7 +210,7 @@ export function Taller() {
                   {j.files.map((f) => <a key={f.name} className="pill" href={`/api/cad/jobs/${j.id}/files/${encodeURIComponent(f.name)}`} download>⬇️ {f.name} <small>({size(f.size)})</small></a>)}
                 </div>
                 <div className="row">
-                  <button className="btn btn--ghost small" onClick={() => api.cadOpen(j.id, 'app').catch((e) => toast(`❌ ${e.message}`))}>🪟 Abrir en {APPS.find((a) => a.kind === j.kind)?.label}</button>
+                  <button className="btn btn--ghost small" onClick={() => api.cadOpen(j.id, 'app').catch((e) => toast(`❌ ${e.message}`))}>🪟 Abrir en {j.kind === 'trellis' ? 'tu programa de STL' : APPS.find((a) => a.kind === j.kind)?.label}</button>
                   <button className="btn btn--ghost small" onClick={() => api.cadOpen(j.id, 'folder').catch((e) => toast(`❌ ${e.message}`))}>📁 Carpeta</button>
                   {stl && <button className="btn btn--ghost small" title="Para laminarlo y mandarlo a tu Bambu Lab" onClick={() => api.cadOpen(j.id, 'bambu').catch((e) => toast(`❌ ${e.message}. Instala Bambu Studio.`))}>🟩 Bambu Studio</button>}
                   {stl && (

@@ -10,6 +10,7 @@ import { credentials } from './providers.js';
 // Cloudflare y Hugging Face dan cupo gratis con FLUX; Gemini es de pago.
 export const IMAGE_SERVICES = {
   cloudflare: { label: 'Cloudflare Workers AI (FLUX, gratis)', tier: 'gratis', hint: '10.000 unidades gratis al día: unas decenas de imágenes FLUX. Necesita tu Account ID y un token de API con permiso «Workers AI».', keyUrl: 'https://dash.cloudflare.com/profile/api-tokens', model: '@cf/black-forest-labs/flux-1-schnell' },
+  nvidia: { label: 'NVIDIA (FLUX, créditos gratis)', tier: 'gratis', hint: 'FLUX con tu clave de NVIDIA (la de «Conectar las IAs»). Buena calidad y en cualquier formato (horizontal, vertical, cuadrado). Usa tus créditos de prueba de NVIDIA.', keyUrl: 'https://build.nvidia.com/settings/api-keys', model: 'black-forest-labs/flux.1-schnell' },
   huggingface: { label: 'Hugging Face (FLUX, créditos gratis)', tier: 'gratis', hint: 'Usa tu clave de Hugging Face (la misma de «Conectar las IAs»). Los créditos gratis del mes alcanzan para pocas imágenes.', keyUrl: 'https://huggingface.co/settings/tokens', model: 'black-forest-labs/FLUX.1-schnell' },
   pollinations: { label: 'Pollinations (sin clave)', tier: 'gratis', hint: 'Funciona sin cuenta, pero la calidad es básica. Con una clave de enter.pollinations.ai hay mejores modelos.', keyUrl: 'https://enter.pollinations.ai', model: 'flux' },
   google: { label: 'Gemini (imagen, de pago)', tier: 'pago', hint: 'La mejor calidad para productos y texto, pero no tiene plan gratis: usa tu clave de Gemini con facturación.', keyUrl: 'https://aistudio.google.com/apikey', model: 'gemini-3.1-flash-image' },
@@ -28,11 +29,12 @@ export function imageService(settings) {
     if (id === 'pollinations') return true;
     if (id === 'cloudflare') return Boolean(s.cloudflareAccount && s.cloudflareToken);
     if (id === 'huggingface') return credentials(settings, 'huggingface').length > 0;
+    if (id === 'nvidia') return credentials(settings, 'nvidia').length > 0;
     if (id === 'google') return credentials(settings, 'google').length > 0 && s.service === 'google';
     return false;
   };
   if (s.service && ready(s.service)) return s.service;
-  return ['cloudflare', 'huggingface', 'pollinations'].find(ready);
+  return ['cloudflare', 'nvidia', 'huggingface', 'pollinations'].find(ready);
 }
 
 async function asBuffer(res, what) {
@@ -67,6 +69,22 @@ export async function generateImage(settings, { prompt, formato = '1:1', service
     const data = JSON.parse((await asBuffer(res, 'Cloudflare')).toString());
     const b64 = data.result?.image;
     if (!b64) throw new Error('Cloudflare no devolvió la imagen');
+    return { buffer: Buffer.from(b64, 'base64'), ext: 'jpg', service: id };
+  }
+  if (id === 'nvidia') {
+    // NVIDIA solo acepta ciertos tamaños.
+    const NV = { '16:9': [1344, 768], '9:16': [768, 1344], '4:3': [1152, 896], '3:4': [896, 1152], '3:2': [1216, 832], '4:5': [896, 1152], '1:1': [1024, 1024] };
+    const [w, h] = NV[formato] || NV['1:1'];
+    const key = credentials(settings, 'nvidia')[0]?.key;
+    const base = process.env.NVIDIA_GENAI_BASE || 'https://ai.api.nvidia.com';
+    const res = await fetch(`${base}/v1/genai/${IMAGE_SERVICES.nvidia.model}`, {
+      method: 'POST', signal,
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ prompt, width: w, height: h, steps: 4, seed: Math.floor(Math.random() * 1e9) }),
+    });
+    const data = JSON.parse((await asBuffer(res, 'NVIDIA')).toString());
+    const b64 = data.artifacts?.[0]?.base64;
+    if (!b64) throw new Error(`NVIDIA no devolvió la imagen (${data.artifacts?.[0]?.finishReason || 'sin detalle'})`);
     return { buffer: Buffer.from(b64, 'base64'), ext: 'jpg', service: id };
   }
   if (id === 'huggingface') {

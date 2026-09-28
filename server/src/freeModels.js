@@ -52,6 +52,14 @@ export const FREE_MODELS = {
     { id: 'z-ai/glm-5.3', label: 'GLM 5.3', for: 'razonamiento' },
     { id: 'deepseek-ai/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', for: 'código' },
     { id: 'google/gemma-4-31b-it', label: 'Gemma 4 31B', for: 'redacción' },
+    { id: 'mistralai/mistral-large-2-instruct', label: 'Mistral Large 2 (sin cuenta de Mistral)', for: 'redacción' },
+    { id: 'mistralai/mistral-nemotron', label: 'Mistral Nemotron', for: 'general' },
+    { id: 'z-ai/glm-5.3-flash', label: 'GLM 5.3 Flash (rápido)', for: 'rápido' },
+    { id: 'poolside/laguna-xs-2.1', label: 'Laguna XS 2.1 (código)', for: 'código' },
+    { id: 'writer/palmyra-med-70b-32k', label: 'Palmyra Med (medicina)', for: 'salud' },
+    { id: 'writer/palmyra-fin-70b-32k', label: 'Palmyra Fin (finanzas)', for: 'finanzas' },
+    { id: 'writer/palmyra-creative-122b', label: 'Palmyra Creative (escritura creativa)', for: 'creatividad' },
+    { id: 'meta/llama-3.2-90b-vision-instruct', label: 'Llama 3.2 90B Vision', for: 'imágenes' },
   ],
   cohere: [
     { id: 'command-a-plus-05-2026', label: 'Command A+', for: 'redacción' },
@@ -164,7 +172,9 @@ export function rescuePlan(agents, isConnected) {
   for (const a of agents) {
     if (a.enabled === false || a.mcp || a.provider.startsWith('cli-') || isConnected(a.provider)) continue;
     const need = a.isBrain ? 'razonamiento' : NEED[a.department] || 'general';
-    const pick = ORDER[need].find(([p]) => isConnected(p)) || ORDER.general.find(([p]) => isConnected(p));
+    // Las IAs de Mistral siguen siendo Mistral, pero por NVIDIA (sin cuenta de Mistral).
+    const sameFamily = a.provider === 'mistral' && isConnected('nvidia') ? ['nvidia', 'mistralai/mistral-large-2-instruct'] : null;
+    const pick = sameFamily || ORDER[need].find(([p]) => isConnected(p)) || ORDER.general.find(([p]) => isConnected(p));
     if (pick) changes.push({ id: a.id, from: { provider: a.provider, model: a.model }, to: { provider: pick[0], model: pick[1] } });
   }
   return changes;
