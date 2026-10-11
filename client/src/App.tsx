@@ -17,27 +17,29 @@ import { api, onLoginNeeded, type User } from './api';
 import { Welcome } from './components/Welcome';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AchievementWatcher } from './components/Achievements';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { play, setSounds, soundsOn } from './sounds';
 
-const NAV: { id: View; label: string; icon: string }[] = [
-  { id: 'oficina', label: 'Oficina', icon: '🏢' },
-  { id: 'tablero', label: 'Tablero', icon: '📋' },
-  { id: 'tareas', label: 'Tareas', icon: '🎯' },
-  { id: 'reuniones', label: 'Reuniones', icon: '🗣️' },
-  { id: 'notas', label: 'Notas', icon: '📝' },
-  { id: 'grafo', label: 'Grafo', icon: '🕸️' },
-  { id: 'taller', label: 'Taller 3D', icon: '🖨️' },
-  { id: 'automatizar', label: 'Automatizar', icon: '⚡' },
-  { id: 'jurado', label: 'Jurado', icon: '⚖️' },
-  { id: 'agentes', label: 'Equipo', icon: '👥' },
-  { id: 'ajustes', label: 'Ajustes', icon: '⚙️' },
+// El menú, por grupos (en el celular es la barra de abajo, sin títulos).
+const NAV: { id: View; label: string; icon: string; group: string }[] = [
+  { id: 'oficina', label: 'Oficina', icon: '🏢', group: 'Trabajo' },
+  { id: 'tablero', label: 'Tablero', icon: '📋', group: 'Trabajo' },
+  { id: 'tareas', label: 'Tareas', icon: '🎯', group: 'Trabajo' },
+  { id: 'reuniones', label: 'Reuniones', icon: '🗣️', group: 'Trabajo' },
+  { id: 'notas', label: 'Notas', icon: '📝', group: 'Conocimiento' },
+  { id: 'grafo', label: 'Grafo', icon: '🕸️', group: 'Conocimiento' },
+  { id: 'taller', label: 'Taller 3D', icon: '🖨️', group: 'Herramientas' },
+  { id: 'automatizar', label: 'Automatizar', icon: '⚡', group: 'Herramientas' },
+  { id: 'jurado', label: 'Jurado', icon: '⚖️', group: 'Herramientas' },
+  { id: 'agentes', label: 'Equipo', icon: '👥', group: 'Equipo' },
+  { id: 'ajustes', label: 'Ajustes', icon: '⚙️', group: 'Equipo' },
 ];
 
 function Shell({ user }: { user: (User & { local?: boolean }) | null }) {
   const { view, setView, connected, toasts, tasks, agents, hubs, hub, setHub } = useOffice();
   const me = hubs.find((h) => h.id === hub);
-  const running = tasks.filter((t) => t.status !== 'done' && t.status !== 'error').length;
+  const running = tasks.filter((t) => !['done', 'error', 'waiting'].includes(t.status)).length;
+  const waiting = tasks.filter((t) => t.status === 'waiting').length;
   const [sound, setSound] = useState(soundsOn);
   const [theme, setThemeState] = useState<string>(() => {
     try {
@@ -73,12 +75,16 @@ function Shell({ user }: { user: (User & { local?: boolean }) | null }) {
             </select>
           </label>
         )}
-        {NAV.map((n) => (
-          <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => setView(n.id)}>
-            <span>{n.icon}</span>
-            <span className="nav-label">{n.label}</span>
-            {n.id === 'tareas' && running > 0 && <span className="badge">{running}</span>}
-          </button>
+        {NAV.map((n, i) => (
+          <React.Fragment key={n.id}>
+            {n.group !== NAV[i - 1]?.group && <div className="nav-group">{n.group}</div>}
+            <button className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => setView(n.id)}>
+              <span>{n.icon}</span>
+              <span className="nav-label">{n.label}</span>
+              {n.id === 'tareas' && running > 0 && <span className="badge" title="Tareas en curso">{running}</span>}
+              {n.id === 'tareas' && waiting > 0 && <span className="badge badge--wait" title="En espera de cupo: se retoman solas">⏳{waiting}</span>}
+            </button>
+          </React.Fragment>
         ))}
         <button className="nav-item search-hint" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
           <span>🔍</span><span className="nav-label">Buscar <kbd>Ctrl K</kbd></span>
