@@ -109,9 +109,9 @@ async function makePlan(store, task, forced, template) {
     'Si alguien necesita el trabajo de otro (p. ej. el tester necesita el código, el redactor necesita la investigación), ' +
     'indícalo en "dependsOn" con los agentId de los que depende; los demás trabajan en paralelo. ' +
     'Responde SOLO con JSON: {"analysis": "una frase", "subtasks": [{"agentId": "...", "instruction": "...", "dependsOn": []}]}';
-  try {
+  const ask = async (planner) => {
     const { text } = await callModel(settings, {
-      provider: brain.provider, model: brain.model, agent: brain, effort: 'low',
+      provider: planner.provider, model: planner.model, agent: planner, effort: 'low',
       system: 'Eres el planificador de una oficina de IAs. Devuelves únicamente JSON válido.',
       messages: [{ role: 'user', content: prompt }],
     });
@@ -120,9 +120,21 @@ async function makePlan(store, task, forced, template) {
     // Sin repetir IA (cada paso se identifica por su IA).
     plan.subtasks = plan.subtasks.filter((s, i) => plan.subtasks.findIndex((x) => x.agentId === s.agentId) === i);
     if (!plan.subtasks.length) throw new Error('Plan vacío');
-    plan.by = brain.id;
+    plan.by = planner.id;
     return sanitizeDeps(plan);
+  };
+  try {
+    return await ask(brain);
   } catch (err) {
+    // Si el planificador falló (p. ej. sin cupo), prueba otra IA conectada antes del plan por palabras clave.
+    const alt = actingBrain(store, [], new Set([brain.id]));
+    if (alt && alt.id !== brain.id && isLive(settings, alt)) {
+      try {
+        return await ask(alt);
+      } catch (e2) {
+        console.warn('[cerebro] El suplente tampoco pudo planificar:', e2.message);
+      }
+    }
     console.warn('[cerebro] Plan en vivo falló, uso planificador local:', err.message);
     return demoPlan(task, pool, maxTeam);
   }
@@ -218,14 +230,14 @@ export function pickReplacement(store, task, failed, exclude = new Set(), { allo
  * no (sin clave, sin cupo o con fallas), lo suple la mejor IA conectada, para
  * que el plan y la respuesta final no salgan en modo demo.
  */
-export function actingBrain(store, prefer = []) {
+export function actingBrain(store, prefer = [], exclude = new Set()) {
   const brain = brainOf(store);
-  if (ready(store, brain)) return brain;
+  if (!exclude.has(brain.id) && ready(store, brain)) return brain;
   const skills = ['planificar', 'sintetizar', 'coordinar', 'estrategia', 'redacción', 'razonamiento', 'resumen'];
   const score = (a) => (prefer.includes(a.id) ? -50 : 0) + (a.isHead ? -10 : 0)
     - (a.skills || []).filter((s) => skills.includes(s)).length * 5
     + Math.min(20, Math.round((speedOf(store, a.id) || 30000) / 5000));
-  return store.data.agents.filter((a) => !a.isBrain && ready(store, a)).sort((a, b) => score(a) - score(b))[0] || brain;
+  return store.data.agents.filter((a) => !a.isBrain && !exclude.has(a.id) && ready(store, a)).sort((a, b) => score(a) - score(b))[0] || brain;
 }
 
 /** Cambia la IA de un paso: los pasos que la esperaban pasan a esperar a la nueva. */

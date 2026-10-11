@@ -2456,9 +2456,15 @@ async function fakeModels(rules) {
     let body = '';
     req.on('data', (d) => (body += d));
     req.on('end', () => {
-      const { model } = JSON.parse(body || '{}');
+      const { model, messages } = JSON.parse(body || '{}');
       calls.push(model);
       const rule = rules[model] || 'ok';
+      // «plan:<id>»: si le piden planificar, devuelve un plan con esa IA.
+      if (String(rule).startsWith('plan:') && /Responde SOLO con JSON/.test(messages?.at(-1)?.content || '')) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        const plan = { analysis: 'Plan del suplente', subtasks: [{ agentId: rule.slice(5), instruction: 'Hazlo', dependsOn: [] }] };
+        return res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(plan) } }] })}\n\ndata: [DONE]\n\n`);
+      }
       if (rule === 'cupo') {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: { message: 'Rate limit reached for model. Please try again in 1m30s.' } }));
@@ -2862,6 +2868,25 @@ test('chat: un mensaje sin cupo queda en fila y se responde solo cuando vuelve e
     assert.equal(await retryChats(store), true);
     assert.equal(store.data.chatQueue.length, 0);
     assert.equal(store.data.chats.chatgpt.at(-1).content, 'Respuesta de sin-cupo');
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
+
+test('si el Cerebro no puede planificar, planifica otra IA conectada (no el plan por palabras clave)', async () => {
+  const fake = await fakeModels({ 'cerebro-caido': 'cae', planificador: 'plan:lexi' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro-caido' },
+    chatgpt: { provider: 'ollama', model: 'planificador' },
+    lexi: { provider: 'ollama', model: 'legal' },
+  });
+  try {
+    const t = await runTask(store, new Notes(store), { prompt: 'zzz', saveNotes: false });
+    assert.equal(t.status, 'done', t.final);
+    assert.match(t.plan.analysis, /Plan del suplente/);
+    assert.equal(t.plan.by, 'chatgpt');
+    assert.equal(t.steps[0].agentId, 'lexi');
   } finally {
     restore();
     fake.srv.close();
