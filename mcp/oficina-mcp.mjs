@@ -79,6 +79,8 @@ const TOOLS = [
           const team = t.steps.map((s) => `${s.agentId}${s.status === 'error' ? ' (falló)' : ''}`).join(', ');
           return `${t.status === 'error' ? '⚠️ ' : ''}${t.final}\n\n---\nEquipo: ${team}${t.noteId ? '\nQuedó guardada como nota en el grafo de la oficina.' : ''}`;
         }
+        // Sin cupo en las IAs: la oficina la retoma sola más tarde; no tiene sentido esperar aquí.
+        if (t.status === 'waiting') return `⏳ Ninguna IA tiene cupo ahora: la tarea quedó en espera y la oficina la retoma sola${t.resume?.at ? ` (a las ${new Date(t.resume.at).toLocaleTimeString()})` : ''}. Id: ${id}. Revisa la sección Tareas de la oficina.`;
       }
       return `La tarea sigue en curso (id ${id}). Revisa la sección Tareas de la oficina.`;
     },
