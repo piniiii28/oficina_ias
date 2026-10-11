@@ -2788,3 +2788,27 @@ test('reunión donde ninguna IA puede hablar: lo explica en vez de resumir una c
     fake.srv.close();
   }
 });
+
+test('las IAs con fallas pasajeras se prueban solas y vuelven a trabajar si responden', async () => {
+  const { probeFailing, healthOf } = await import('../src/metrics.js');
+  const fake = await fakeModels({});
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    perplexity: { provider: 'ollama', model: 'vuelve' },
+    chatgpt: { provider: 'groq', model: 'x' },
+  });
+  try {
+    const now = Date.now();
+    store.data.metrics = {
+      perplexity: { calls: 2, errors: 2, recent: [{ at: now - 1000, ok: false, kind: 'red', error: 'fetch failed' }, { at: now, ok: false, kind: 'red', error: 'fetch failed' }] },
+      chatgpt: { calls: 2, errors: 2, recent: [{ at: now - 1000, ok: false, kind: 'clave', error: '401' }, { at: now, ok: false, kind: 'clave', error: '401' }] },
+    };
+    assert.equal(healthOf(store, 'perplexity').ok, false);
+    const back = await probeFailing(store);
+    assert.deepEqual(back, ['perplexity'], 'una clave mala no se arregla sola: esa no se prueba');
+    assert.equal(healthOf(store, 'perplexity').ok, true);
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});

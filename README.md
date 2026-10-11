@@ -251,6 +251,7 @@ Y mientras trabajan, la oficina se cuida sola de los errores:
 - **Chat y reuniones**: si el motor de una IA falla (o está en demo), responde con el de otra IA conectada sin dejar de ser ella.
 - Cada proveedor gratis recibe **máximo 2 pedidos a la vez por cuenta**, para no agotar su límite por minuto, y si un proveedor se queda callado 4 minutos se corta para que otra IA siga.
 - Los errores se explican en palabras simples (🔑 clave, ⏳ cupo, 🧩 modelo, 📡 conexión…) con qué hacer, y cada IA tiene **🩺 Probar ahora** en su perfil.
+- Las IAs que quedaron «con fallas» por algo pasajero (sin conexión, saturadas, lentas) se prueban solas cada 20 minutos y vuelven a trabajar en cuanto responden.
 
 ## Undermind: artículos científicos
 

@@ -50,6 +50,32 @@ export function healthOf(store, agentId) {
   return { ok: false, kind: last[1].kind || null, error: last[1].error || 'Falló dos veces seguidas', at: last[1].at };
 }
 
+/**
+ * Las IAs que quedaron «con fallas» por algo pasajero (sin conexión, saturadas,
+ * tardaron demasiado…) se prueban solas de vez en cuando con una pregunta
+ * cortita: si responden, vuelven a recibir trabajo sin que tengas que revisarlas.
+ */
+export async function probeFailing(store, max = 3) {
+  const s = store.data.settings;
+  if (s.demoMode === 'always') return [];
+  const temporary = ['red', 'tiempo', 'servidor', 'saturado', 'vacio'];
+  const list = store.data.agents.filter((a) => {
+    if (!a.enabled || !isLive(s, a)) return false;
+    const h = healthOf(store, a.id);
+    return !h.ok && !h.quota && !h.provider && temporary.includes(h.kind);
+  }).slice(0, max);
+  const back = [];
+  for (const a of list) {
+    try {
+      await callModel(s, { provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(60000), system: 'Prueba de conexión. Responde solo con la palabra OK.', messages: [{ role: 'user', content: 'Di OK' }] });
+      back.push(a.id);
+    } catch {
+      /* sigue con fallas: se vuelve a probar más tarde */
+    }
+  }
+  return back;
+}
+
 /** Cuánto tarda una IA en responder (promedio de sus últimas respuestas reales, en ms). */
 export function speedOf(store, agentId) {
   const ok = (store.data.metrics?.[agentId]?.recent || []).filter((r) => r.ok && !r.sim && r.ms).slice(-8);
