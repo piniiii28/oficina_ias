@@ -98,7 +98,7 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
         </div>
       )}
       {task.status === 'waiting' && (
-        <p className="small warn">⏳ Ninguna IA tiene cupo ahora: se retoma sola{task.resume?.at ? ` a las ${clock(task.resume.at)}` : ''}.{' '}
+        <p className="small warn">⏳ Ninguna IA tiene cupo ahora{task.resume?.at ? `: se retoma sola a las ${clock(task.resume.at)}` : ''}.{' '}
           <button className="link small" onClick={() => api.resumeTask(task.id).catch((e) => alert(e.message))}>▶ Retomar ya</button>
         </p>
       )}

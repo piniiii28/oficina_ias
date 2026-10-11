@@ -107,7 +107,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       <blockquote>{task.prompt}</blockquote>
       {task.status === 'waiting' && (
         <div className="callout callout--wait">
-          <strong>⏳ En espera: se retoma sola{task.resume?.at ? ` a las ${clock(task.resume.at)}` : ''}</strong>
+          <strong>⏳ En espera: {task.resume?.at ? `se retoma sola a las ${clock(task.resume.at)}` : 'retómala con «▶ Retomar ya» cuando quieras'}</strong>
           <span className="small">Ninguna IA pudo trabajar ahora (sin cupo, saturadas o sin conexión). Lo que ya estaba hecho se conserva{task.resume?.attempts ? ` · intento ${task.resume.attempts} de 8` : ''}.</span>
         </div>
       )}

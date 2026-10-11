@@ -132,7 +132,7 @@ export type Task = {
   status: 'planning' | 'working' | 'synthesizing' | 'reviewing' | 'waiting' | 'done' | 'error';
   plan: { analysis: string } | null;
   /** En espera (sin cupo o sin conexión): cuándo se retoma sola y cuántos intentos van. */
-  resume?: { at?: string; attempts?: number };
+  resume?: { at?: string | null; attempts?: number };
   /** Quién integró la respuesta (si no fue el Cerebro). */
   synthBy?: string;
   steps: Step[];

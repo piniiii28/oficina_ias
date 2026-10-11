@@ -568,9 +568,11 @@ function finishWithoutContributions(store, task, emitTask, nameOf) {
     // Si alguna de estas IAs recupera su cupo antes, se retoma en ese momento.
     const soon = fails.map((f) => healthOf(store, f.agentId).until).filter(Boolean);
     const wait = Math.min(RESUME_BACKOFF_MIN[attempts] * 60000, ...soon.map((u) => u - Date.now()));
+    // Con «retomar solas» apagado, queda en espera hasta que el usuario la retome.
+    const auto = store.data.settings.autoResume !== false;
     task.status = 'waiting';
-    task.resume = { ...(task.resume || {}), attempts: attempts + 1, at: new Date(Date.now() + Math.max(60000, wait)).toISOString() };
-    task.final = `⏳ **En espera.** Ninguna IA pudo trabajar en este momento, por algo que suele arreglarse solo. La oficina la retomará sola (intento ${attempts + 1} de ${RESUME_BACKOFF_MIN.length}); también puedes retomarla ya o cancelarla.\n\n${lines.join('\n')}`;
+    task.resume = { ...(task.resume || {}), attempts: attempts + 1, at: auto ? new Date(Date.now() + Math.max(60000, wait)).toISOString() : null };
+    task.final = `⏳ **En espera.** Ninguna IA pudo trabajar en este momento, por algo que suele arreglarse solo. ${auto ? `La oficina la retomará sola (intento ${attempts + 1} de ${RESUME_BACKOFF_MIN.length}); también puedes retomarla ya o cancelarla.` : 'Retómala con «▶ Retomar ya» cuando quieras.'}\n\n${lines.join('\n')}`;
     for (const st of task.steps) if (st.status !== 'done') st.status = 'pending';
     agentStatus(brainOf(store).id, 'idle', 'Esperando a que vuelva el cupo de las IAs…');
   } else {
