@@ -30,6 +30,7 @@ type Ctx = {
   feed: { at: number; agentId: string; status: AgentState; message: string }[];
   setMeetings: (m: Meeting[]) => void;
   notesVersion: number;
+  chatVersion: number;
   cardsVersion: number;
   connected: boolean;
   reloadAgents: () => Promise<void>;
@@ -113,6 +114,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [streams, setStreams] = useState<Record<string, string>>({});
   const [feed, setFeed] = useState<Ctx['feed']>([]);
   const [notesVersion, setNotesVersion] = useState(0);
+  const [chatVersion, setChatVersion] = useState(0);
   const [cardsVersion, setCardsVersion] = useState(0);
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
@@ -141,6 +143,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     setToasts((t) => [...t, { id, msg }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   }, []);
+  // Para usarlos dentro de los eventos en vivo (que se registran una sola vez).
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
   const reloadAgents = useCallback(async () => setAgents(await api.agents()), []);
   const reloadTasks = useCallback(async () => setTasks(await api.tasks()), []);
@@ -229,6 +236,12 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         setCardsVersion((v) => v + 1);
       } else if (e.type === 'notes') {
         setNotesVersion((v) => v + 1);
+      } else if (e.type === 'chat') {
+        // Un mensaje que esperaba cupo ya se respondió (o se dejó de intentar).
+        setChatVersion((v) => v + 1);
+        const name = agentsRef.current.find((a) => a.id === e.agentId)?.name || e.agentId;
+        if (e.answered) toastRef.current(`💬 ${name} respondió tu mensaje pendiente`);
+        if (e.gaveUp) toastRef.current(`⚠️ ${name} no pudo responder tu mensaje pendiente (sin cupo varias horas)`);
       }
     };
     return () => es.close();
@@ -244,11 +257,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
-      agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, printer, live, tasks, meetings, setMeetings, streams, feed, notesVersion, cardsVersion, connected,
+      agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, printer, live, tasks, meetings, setMeetings, streams, feed, notesVersion, chatVersion, cardsVersion, connected,
       reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote,
       clearPendingNote: () => setPendingNote(null), view, setView,
     }),
-    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, printer, live, tasks, meetings, streams, feed, notesVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
+    [agents, departments, providers, vaultPath, flows, freeModels, cadTools, suggestedAssistants, hubs, reloadHubs, hub, setHub, cadVersion, accessRequests, blenderVersion, metrics, printer, live, tasks, meetings, streams, feed, notesVersion, chatVersion, cardsVersion, connected, reloadAgents, reloadTasks, toast, toasts, openNote, pendingNote, view, setView],
   );
   return <OfficeCtx.Provider value={value}>{children}</OfficeCtx.Provider>;
 }

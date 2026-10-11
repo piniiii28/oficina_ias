@@ -36,7 +36,7 @@ import { seedWelcome } from './seed.js';
 import { Vault, parseMarkdownFile } from './vault.js';
 import { suggestConnections, applyConnection } from './librarian.js';
 import { runMeeting } from './meetings.js';
-import { createRoutine, normalizeRoutine, startScheduler } from './routines.js';
+import { createRoutine, normalizeRoutine, startScheduler, queueChat } from './routines.js';
 import { FLOWS, flowPlan } from './flows.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -492,6 +492,19 @@ export function createApp(store) {
     } catch (err) {
       res.status(500).json({ error: err.message, kind: err.kind || null });
     }
+  });
+  // Responder cuando vuelva el cupo: el mensaje queda en fila y se reintenta solo.
+  app.post('/api/agents/:id/chat/later', (req, res) => {
+    const a = agentById(req.params.id);
+    const message = String(req.body?.message || '').trim();
+    if (!a || !message) return res.status(400).json({ error: 'Falta la IA o el mensaje' });
+    res.status(201).json(queueChat(store, a.id, message));
+  });
+  app.get('/api/chat-queue', (_req, res) => res.json((store.data.chatQueue || []).map(({ id, agentId, message, at, attempts, next }) => ({ id, agentId, message, at, attempts, next }))));
+  app.delete('/api/chat-queue/:id', (req, res) => {
+    store.data.chatQueue = (store.data.chatQueue || []).filter((x) => x.id !== req.params.id);
+    store.save();
+    res.json({ ok: true });
   });
   app.delete('/api/agents/:id/chat', (req, res) => {
     delete store.data.chats[req.params.id];

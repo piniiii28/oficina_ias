@@ -244,7 +244,11 @@ export type OfficeEvent =
   | { type: 'blender'; capture?: string }
   | ({ type: 'printer' } & PrinterInfo)
   | { type: 'task'; task: Task }
+  | { type: 'chat'; agentId: string; answered?: boolean; gaveUp?: boolean }
   | { type: 'notes' };
+
+/** Mensaje del chat que espera cupo para responderse solo. */
+export type QueuedChat = { id: string; agentId: string; message: string; at: string; attempts: number; next: number };
 
 export type AgentState = 'idle' | 'thinking' | 'working' | 'talking' | 'done' | 'error';
 
@@ -384,6 +388,9 @@ export const api = {
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
     return r.text();
   },
+  chatLater: (id: string, message: string) => req<QueuedChat>('POST', `/api/agents/${id}/chat/later`, { message }),
+  chatQueue: () => req<QueuedChat[]>('GET', '/api/chat-queue'),
+  dropQueued: (id: string) => req('DELETE', `/api/chat-queue/${id}`),
   checkAgent: (id: string) => req<CheckResult & { health: Agent['health'] }>('POST', `/api/agents/${id}/check`),
   checkAgents: () => req<{ checked: number; failed: number; resting?: number; results: CheckResult[] }>('POST', '/api/agents/check'),
   rescueAgents: () => req<{ changed: number; stillDemo: number; changes: { id: string; to: { provider: string; model: string } }[] }>('POST', '/api/agents/rescue'),

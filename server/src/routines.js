@@ -1,7 +1,7 @@
 // Rutinas: tareas que el Cerebro Central ejecuta solo, a una hora y en los
 // días elegidos, mientras la oficina esté encendida.
 import { Store } from './store.js';
-import { runTask, resumeTask, bus } from './orchestrator.js';
+import { runTask, resumeTask, bus, chatWithAgent } from './orchestrator.js';
 import { probeFailing } from './metrics.js';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -60,6 +60,8 @@ export function startScheduler(store, notes) {
         }
       }).catch(() => {});
     }
+    // Mensajes del chat que esperan cupo: se reintentan solos (uno a la vez).
+    retryChats(store);
     // Tareas en espera (sin cupo, sin conexión o cortadas por un reinicio): se retoman solas.
     if (store.data.settings.autoResume !== false) {
       for (const t of store.data.tasks || []) {
@@ -70,4 +72,39 @@ export function startScheduler(store, notes) {
   const id = setInterval(tick, 20000);
   id.unref?.();
   return () => clearInterval(id);
+}
+
+const CHAT_BACKOFF_MIN = [2, 5, 10, 20, 30, 60, 60, 120];
+let chatBusy = false;
+
+/** Guarda un mensaje para que la IA lo responda cuando vuelva a tener cupo. */
+export function queueChat(store, agentId, message) {
+  const item = { id: Store.id('q_'), agentId, message: String(message).slice(0, 8000), at: new Date().toISOString(), attempts: 0, next: Date.now() + 60000 };
+  (store.data.chatQueue ||= []).push(item);
+  store.save();
+  return item;
+}
+
+/** Reintenta el mensaje en espera más antiguo que ya toque. */
+export async function retryChats(store) {
+  const q = store.data.chatQueue || [];
+  const item = q.find((x) => x.next <= Date.now());
+  if (!item || chatBusy) return null;
+  chatBusy = true;
+  try {
+    await chatWithAgent(store, item.agentId, item.message);
+    store.data.chatQueue = q.filter((x) => x !== item);
+    bus.emit('event', { type: 'chat', agentId: item.agentId, answered: true });
+    return true;
+  } catch {
+    item.attempts++;
+    if (item.attempts >= CHAT_BACKOFF_MIN.length) {
+      store.data.chatQueue = q.filter((x) => x !== item);
+      bus.emit('event', { type: 'chat', agentId: item.agentId, gaveUp: true });
+    } else item.next = Date.now() + CHAT_BACKOFF_MIN[item.attempts] * 60000;
+    return false;
+  } finally {
+    chatBusy = false;
+    store.save();
+  }
 }

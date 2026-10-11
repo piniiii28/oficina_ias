@@ -1,7 +1,7 @@
 // Panel lateral de una IA: chat directo, entrenamiento, memoria y perfil.
 import { useEffect, useRef, useState } from 'react';
 import { Meters } from './Meters';
-import { api, levelOf, TIER_LABEL, type Account, type Agent, type AssistantDef, type ChatMessage, type OllamaServer } from '../api';
+import { api, levelOf, TIER_LABEL, type Account, type Agent, type AssistantDef, type ChatMessage, type OllamaServer, type QueuedChat } from '../api';
 import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { MicButton, SpeakButton } from './Voice';
@@ -96,13 +96,15 @@ function ChatTab({ agent }: { agent: Agent }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<{ message: string; text: string } | null>(null);
-  const { toast, openNote, streams, agents } = useOffice();
+  const [pending, setPending] = useState<QueuedChat[]>([]);
+  const { toast, openNote, streams, agents, chatVersion } = useOffice();
   const liveReply = streams[`chat:${agent.id}`];
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.chat(agent.id).then(setMsgs);
-  }, [agent.id]);
+    api.chatQueue().then((q) => setPending(q.filter((x) => x.agentId === agent.id))).catch(() => setPending([]));
+  }, [agent.id, chatVersion]);
   useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs, sending, liveReply]);
 
   async function send() {
@@ -164,10 +166,27 @@ function ChatTab({ agent }: { agent: Agent }) {
               <p><strong>{h.icon} {agent.name} no pudo responder: {h.title.toLowerCase()}</strong></p>
               {h.fix && <p className="small">{h.fix}</p>}
               <details><summary className="small muted">Detalle técnico</summary><code className="small">{failure.message}</code></details>
-              <button className="btn btn--ghost small" onClick={() => send()}>🔁 Reintentar</button>
+              <div className="row">
+                <button className="btn btn--ghost small" onClick={() => send()}>🔁 Reintentar</button>
+                {['cupo', 'saturado', 'red', 'tiempo', 'servidor'].includes(h.kind) && (
+                  <button className="btn btn--primary small" title="El mensaje queda guardado y la oficina lo reintenta sola; te avisa cuando responda" onClick={async () => {
+                    const q = await api.chatLater(agent.id, failure.text);
+                    setPending((p) => [...p, q]);
+                    setFailure(null);
+                    setText('');
+                    toast(`⏳ ${agent.name} te responde apenas vuelva el cupo`);
+                  }}>⏳ Responder cuando vuelva el cupo</button>
+                )}
+              </div>
             </div>
           );
         })()}
+        {pending.map((q) => (
+          <div key={q.id} className="msg msg--user pending">
+            <p>{q.message}</p>
+            <small className="muted">⏳ Pendiente: se reintenta solo cuando vuelva el cupo{q.attempts ? ` (intento ${q.attempts + 1})` : ''} · <button className="link small" onClick={async () => { await api.dropQueued(q.id); setPending((p) => p.filter((x) => x.id !== q.id)); }}>cancelar</button></small>
+          </div>
+        ))}
         <div ref={end} />
       </div>
       <div className="chat-input">

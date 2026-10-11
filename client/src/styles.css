@@ -945,3 +945,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .task-error .markdown p, .task-error .markdown li { margin: 2px 0; }
 .task-filter { flex-wrap: wrap; margin: 6px 0; }
 .task-filter button { flex: 0 0 auto; font-size: 12px; }
+.msg.pending { opacity: 0.75; border-style: dashed; }

@@ -2833,3 +2833,30 @@ test('diagnóstico: estado de cada IA y sus últimos errores, sin claves', async
     fake.srv.close();
   }
 });
+
+test('chat: un mensaje sin cupo queda en fila y se responde solo cuando vuelve el cupo', async () => {
+  const { queueChat, retryChats } = await import('../src/routines.js');
+  const rules = { 'sin-cupo': 'cupo' };
+  const fake = await fakeModels(rules);
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'sin-cupo' },
+    chatgpt: { provider: 'groq', model: 'sin-cupo' },
+  });
+  try {
+    const item = queueChat(store, 'chatgpt', '¿Qué tal?');
+    item.next = 0;
+    assert.equal(await retryChats(store), false, 'sigue sin cupo');
+    assert.equal(store.data.chatQueue[0].attempts, 1);
+    assert.ok(store.data.chatQueue[0].next > Date.now());
+    delete rules['sin-cupo'];
+    for (const m of Object.values(store.data.metrics)) for (const r of m.recent) if (r.until) r.until = Date.now() - 1;
+    delete store.data.providerHealth;
+    store.data.chatQueue[0].next = 0;
+    assert.equal(await retryChats(store), true);
+    assert.equal(store.data.chatQueue.length, 0);
+    assert.equal(store.data.chats.chatgpt.at(-1).content, 'Respuesta de sin-cupo');
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
