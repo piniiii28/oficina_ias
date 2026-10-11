@@ -253,6 +253,7 @@ Y mientras trabajan, la oficina se cuida sola de los errores:
 - Los errores se explican en palabras simples (🔑 clave, ⏳ cupo, 🧩 modelo, 📡 conexión…) con qué hacer, y cada IA tiene **🩺 Probar ahora** en su perfil.
 - Las IAs que quedaron «con fallas» por algo pasajero (sin conexión, saturadas, lentas) se prueban solas cada 20 minutos y vuelven a trabajar en cuanto responden.
 - **📋 Copiar diagnóstico** (en Conectar las IAs) copia un informe sin claves del estado de cada IA y sus últimos errores, para pegárselo a Claude cuando algo falle.
+- Si una tarea terminó con alguna parte fallida, **🔁 Completar lo que faltó** la continúa solo con esas partes. En Tareas puedes filtrar por en curso, en espera, con error o listas, y en Ajustes elegir cuántos pedidos a la vez se hacen por cuenta gratis y si las tareas en espera se retoman solas.
 
 ## Undermind: artículos científicos
 
