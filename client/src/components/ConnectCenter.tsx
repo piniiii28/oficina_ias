@@ -178,6 +178,7 @@ function ConnectPanel({ p, s, setS, refresh }: { p: Provider; s: Settings; setS:
   const { toast, streams } = useOffice();
   const [key, setKey] = useState('');
   const [label, setLabel] = useState('');
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState('');
   const [installed, setInstalled] = useState<string | null | undefined>(undefined);
   const [manual, setManual] = useState('');
@@ -192,11 +193,14 @@ function ConnectPanel({ p, s, setS, refresh }: { p: Provider; s: Settings; setS:
 
   async function test() {
     setBusy('test');
+    setTestResult(null);
     try {
       const r = await api.testProvider(p.id);
       toast(`✅ ${p.label} responde (${(r.ms / 1000).toFixed(1)} s): «${r.reply}»`);
+      setTestResult({ ok: true, text: `✅ Responde (${(r.ms / 1000).toFixed(1)} s): «${r.reply}»` });
     } catch (err) {
-      toast(`❌ ${(err as Error).message}`);
+      // El resultado queda a la vista, explicado, en vez de un aviso que se va.
+      setTestResult({ ok: false, text: (err as Error).message });
     } finally {
       setBusy('');
     }
@@ -223,6 +227,15 @@ function ConnectPanel({ p, s, setS, refresh }: { p: Provider; s: Settings; setS:
 
   return (
     <div className="connect-panel">
+      {testResult && (testResult.ok ? <p className="ok small">{testResult.text}</p> : (() => {
+        const h = errorHelp(null, testResult.text);
+        return (
+          <div className="step-error">
+            <p><strong>{h.icon} {h.title}</strong>{h.fix ? <> — <span className="small">{h.fix}</span></> : null}</p>
+            <details><summary className="small muted">Detalle técnico</summary><code className="small">{testResult.text}</code></details>
+          </div>
+        );
+      })())}
       {p.cli && (
         <ol className="steps">
           <li>
