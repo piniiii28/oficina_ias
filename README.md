@@ -252,6 +252,7 @@ Y mientras trabajan, la oficina se cuida sola de los errores:
 - Cada proveedor gratis recibe **máximo 2 pedidos a la vez por cuenta**, para no agotar su límite por minuto, y si un proveedor se queda callado 4 minutos se corta para que otra IA siga.
 - Los errores se explican en palabras simples (🔑 clave, ⏳ cupo, 🧩 modelo, 📡 conexión…) con qué hacer, y cada IA tiene **🩺 Probar ahora** en su perfil.
 - Las IAs que quedaron «con fallas» por algo pasajero (sin conexión, saturadas, lentas) se prueban solas cada 20 minutos y vuelven a trabajar en cuanto responden.
+- **📋 Copiar diagnóstico** (en Conectar las IAs) copia un informe sin claves del estado de cada IA y sus últimos errores, para pegárselo a Claude cuando algo falle.
 
 ## Undermind: artículos científicos
 

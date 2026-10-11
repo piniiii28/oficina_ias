@@ -2812,3 +2812,24 @@ test('las IAs con fallas pasajeras se prueban solas y vuelven a trabajar si resp
     fake.srv.close();
   }
 });
+
+test('diagnóstico: estado de cada IA y sus últimos errores, sin claves', async () => {
+  const fake = await fakeModels({ 'sin-cupo': 'cupo' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'sin-cupo' },
+  });
+  store.data.settings.apiKeys.groq = 'gsk_SECRETOSECRETOSECRETO';
+  store.data.metrics = { chatgpt: { calls: 1, errors: 1, recent: [{ at: Date.now(), ok: false, quota: true, until: Date.now() + 60000, kind: 'cupo', error: 'Groq: Invalid key gsk_SECRETOSECRETOSECRETO (429)' }] } };
+  try {
+    await withApp(store, async (_call, base) => {
+      const text = await (await fetch(`${base}/api/diagnostico`)).text();
+      assert.match(text, /Diagnóstico de la Oficina/);
+      assert.match(text, /ChatGPT \(chatgpt\).*sin cupo/);
+      assert.ok(!text.includes('SECRETO'), 'nunca muestra claves');
+    });
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});

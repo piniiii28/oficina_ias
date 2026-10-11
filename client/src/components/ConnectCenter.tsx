@@ -83,6 +83,15 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
           toast(r.changed ? `🔁 ${r.changed} IAs de demo ahora usan tus proveedores conectados${r.stillDemo ? ` (quedan ${r.stillDemo} en demo)` : ''}` : 'Conecta al menos un proveedor gratis (por ejemplo Groq) para activarlas');
         }}>🔁 Activar las {inDemo} de demo</button>}
         {rescued > 0 && <button className="link" onClick={async () => { const r = await api.undoRescue(); await refresh(); toast(`↩️ ${r.restored} IAs volvieron a su proveedor anterior`); }}>deshacer</button>}
+        <button className="btn btn--ghost small" title="Copia un informe (sin claves) del estado de cada IA y sus últimos errores, para pegárselo a Claude" onClick={async () => {
+          try {
+            const text = await api.diagnostics();
+            await navigator.clipboard.writeText(text);
+            toast('📋 Diagnóstico copiado: pégalo en el chat con Claude');
+          } catch (e) {
+            toast(`No pude copiarlo: ${(e as Error).message}`);
+          }
+        }}>📋 Copiar diagnóstico</button>
       </div>
       {check.results && (
         <ul className="check-results">

@@ -379,6 +379,11 @@ export const api = {
 
   videos: () => req<VideosInfo>('GET', '/api/videos'),
   generateVideo: (prompt: string, service?: string, formato?: string) => req<{ file: string; url: string; service: string }>('POST', '/api/videos', { prompt, service, formato }),
+  diagnostics: async () => {
+    const r = await fetch('/api/diagnostico', { headers: activeHub ? { 'X-Nucleo': activeHub } : {} });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    return r.text();
+  },
   checkAgent: (id: string) => req<CheckResult & { health: Agent['health'] }>('POST', `/api/agents/${id}/check`),
   checkAgents: () => req<{ checked: number; failed: number; resting?: number; results: CheckResult[] }>('POST', '/api/agents/check'),
   rescueAgents: () => req<{ changed: number; stillDemo: number; changes: { id: string; to: { provider: string; model: string } }[] }>('POST', '/api/agents/rescue'),

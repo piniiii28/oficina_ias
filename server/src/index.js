@@ -9,7 +9,7 @@ import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, cloudflareAccount, hasKey, isLive, usableFilter, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep, healthOf } from './metrics.js';
-import { classifyError } from './errors.js';
+import { classifyError, maskSecrets } from './errors.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
 import { addNode, diagnoseNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
@@ -965,6 +965,38 @@ export function createApp(store) {
       return { id: a.id, name: a.name, provider: a.provider, model: a.model, ok: !again, ms: Date.now() - t0, error: again ? String(again.message).slice(0, 240) : undefined, kind: again ? classifyError(again.message) : undefined, firstError: again ? undefined : String(err.message).slice(0, 160) };
     }
   };
+  // Diagnóstico para pegarle a Claude (o a quien te ayude): estado de cada IA y sus últimos errores, sin claves.
+  app.get('/api/diagnostico', async (req, res) => {
+    if (req.user && req.user.role !== 'admin') return res.status(403).json({ error: 'Solo un administrador' });
+    const s = store.data.settings;
+    const v = await updateStatus(ROOT, { fetch: false }).catch(() => ({}));
+    const lines = [
+      `# Diagnóstico de la Oficina de IAs (${new Date().toISOString()})`,
+      `Versión: ${v.branch || '?'} ${v.head || ''} · Node ${process.version} · ${process.platform}`,
+      `Solo IAs conectadas: ${s.onlyLive !== false ? 'sí' : 'no'} · IAs a la vez: ${s.maxParallel || 4} · por cuenta gratis: ${s.perAccount || 2} · retomar solas: ${s.autoResume !== false ? 'sí' : 'no'}`,
+      '',
+      '## Proveedores conectados',
+      ...Object.entries(PROVIDERS).filter(([id]) => hasKey(s, id)).map(([id, p]) => {
+        const down = store.data.providerHealth?.[id];
+        return `- ${p.label} (${id})${down ? ` — ${down.kind}: ${maskSecrets(down.error).slice(0, 160)}` : ''}`;
+      }),
+      '',
+      '## IAs conectadas',
+      ...store.data.agents.filter((a) => a.enabled && isLive(s, a)).map((a) => {
+        const h = healthOf(store, a.id);
+        const errs = (store.data.metrics?.[a.id]?.recent || []).filter((r) => !r.ok && !r.sim).slice(-2).map((r) => `${r.kind || classifyError(r.error)}: ${maskSecrets(r.error).slice(0, 140)}`);
+        return `- ${a.name} (${a.id}) · ${a.provider} / ${a.model || '—'} · ${h.ok ? 'bien' : h.quota ? 'sin cupo' : `con fallas (${h.kind || '?'})`}${errs.length ? `\n  últimos errores: ${errs.join(' | ')}` : ''}`;
+      }),
+      `- (${store.data.agents.filter((a) => a.enabled && !isLive(s, a)).length} IAs en modo demo)`,
+      '',
+      '## Últimas tareas',
+      ...store.data.tasks.slice(0, 8).map((t) => {
+        const fails = t.steps.flatMap((st) => (st.failed || []).filter((f) => !f.skipped).map((f) => `${f.agentId}: ${f.kind}`));
+        return `- [${t.status}] ${t.title}${t.ms ? ` · ${Math.round(t.ms / 1000)} s` : ''}${fails.length ? ` · fallaron: ${fails.join(', ')}` : ''}`;
+      }),
+    ];
+    res.type('text/plain').send(lines.join('\n'));
+  });
   // Probar una sola IA (desde su perfil).
   app.post('/api/agents/:id/check', async (req, res) => {
     const a = agentById(req.params.id);

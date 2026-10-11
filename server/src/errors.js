@@ -97,3 +97,8 @@ export function retryAfterMs(msg, headerMs = 0) {
   if (/per.?minute|\bRPM\b|\bTPM\b|tokens per minute|requests per minute/i.test(m)) return 2 * MIN;
   return 10 * MIN;
 }
+
+/** Tapa lo que parezca una clave dentro de un texto (los errores a veces la repiten). */
+export const maskSecrets = (text) => String(text || '')
+  .replace(/\b(sk-(?:proj-|ant-)?|gsk_|AIza|hf_|nvapi-|csk-|xai-|ghp_|github_pat_|sk_)[A-Za-z0-9_\-]{6,}/g, '$1…')
+  .replace(/(Bearer\s+)[A-Za-z0-9._\-]{8,}/gi, '$1…');
