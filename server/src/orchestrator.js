@@ -231,6 +231,11 @@ export function actingBrain(store, prefer = []) {
 /** Cambia la IA de un paso: los pasos que la esperaban pasan a esperar a la nueva. */
 function swapAgent(task, step, newId) {
   const oldId = step.agentId;
+  // El análisis del plan nombra a las IAs originales: se avisa que hubo cambios.
+  if (task.plan && !task.plan.swapped) {
+    task.plan.swapped = true;
+    task.plan.analysis = `${task.plan.analysis} (hubo reemplazos por fallas: mira cada aporte)`;
+  }
   for (const o of task.steps) if (o !== step && o.dependsOn?.includes(oldId)) o.dependsOn = o.dependsOn.map((d) => (d === oldId ? newId : d));
   step.agentId = newId;
   step.output = '';
