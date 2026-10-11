@@ -2624,3 +2624,59 @@ test('si el proveedor se queda callado, se corta pronto (no espera los 10 minuto
     hung.close();
   }
 });
+
+test('cupo por segundos: espera y reintenta; máximo 2 llamadas a la vez por cuenta gratis; clave rechazada vale para todo el proveedor', async () => {
+  const { callModel, PROVIDERS, setCallSink } = await import('../src/providers.js');
+  const { recordCall, healthOf } = await import('../src/metrics.js');
+  const http = await import('node:http');
+  let n = 0;
+  let now = 0;
+  let peak = 0;
+  const srv = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const { model } = JSON.parse(body);
+      if (req.headers.authorization === 'Bearer vencida') {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Invalid API Key' } }));
+      }
+      if (model === 'por-segundos' && n++ === 0) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Rate limit reached for model. Please try again in 0.05s.' } }));
+      }
+      now++;
+      peak = Math.max(peak, now);
+      setTimeout(() => {
+        now--;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'ok' } }] })}\n\ndata: [DONE]\n\n`);
+      }, model === 'lento' ? 150 : 0);
+    });
+  });
+  srv.listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+  const original = PROVIDERS.groq.baseUrl;
+  PROVIDERS.groq.baseUrl = `http://127.0.0.1:${srv.address().port}/v1`;
+  const settings = { apiKeys: { groq: 'clave' } };
+  const ask = (model, s = settings, agent) => callModel(s, { provider: 'groq', model, agent, system: 'S', messages: [{ role: 'user', content: 'x' }] });
+  try {
+    assert.equal((await ask('por-segundos')).text, 'ok', 'esperó unos segundos y reintentó');
+    await Promise.all([ask('lento'), ask('lento'), ask('lento'), ask('lento')]);
+    assert.equal(peak, 2, 'nunca más de 2 a la vez en la misma cuenta');
+    // Clave rechazada: las demás IAs de Groq también quedan con fallas.
+    const store = new Store(tmp());
+    store.data.agents = [{ id: 'a', provider: 'groq', enabled: true }, { id: 'b', provider: 'groq', enabled: true }, { id: 'c', provider: 'ollama', enabled: true }];
+    setCallSink((c) => recordCall(store, c));
+    await assert.rejects(ask('x', { apiKeys: { groq: 'vencida' } }, store.data.agents[0]), /Invalid API Key/);
+    assert.equal(healthOf(store, 'b').ok, false);
+    assert.equal(healthOf(store, 'b').kind, 'clave');
+    assert.equal(healthOf(store, 'c').ok, true);
+    await ask('x', settings, store.data.agents[1]);
+    assert.equal(healthOf(store, 'a').ok, true, 'cuando una vuelve a responder, se levanta para todas');
+  } finally {
+    setCallSink(null);
+    PROVIDERS.groq.baseUrl = original;
+    srv.close();
+  }
+});

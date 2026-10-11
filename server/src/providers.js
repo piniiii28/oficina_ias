@@ -153,6 +153,44 @@ export async function replacementModel(provider, model, cred, tried = new Set([m
 }
 
 const retryWait = () => Number(process.env.OFICINA_RETRY_MS ?? 2500);
+/** Hasta cuánto vale la pena esperar a que el proveedor devuelva el cupo (más que eso: otra IA). */
+const shortWait = () => Number(process.env.OFICINA_SHORT_WAIT_MS ?? 12000);
+
+// Llamadas a la vez por cuenta de cada proveedor: los planes gratis limitan las
+// peticiones por minuto, y varias IAs del mismo proveedor en paralelo las agotan.
+const slots = new Map();
+const PER_PROVIDER = { ovh: 1, cohere: 1 };
+function limitFor(provider) {
+  const p = PROVIDERS[provider];
+  if (!p || p.keyless) return Infinity; // Ollama ya pone en fila sus pedidos
+  return Number(process.env.OFICINA_MAX_PER_PROVIDER) || PER_PROVIDER[provider] || (p.tier === 'pago' ? 4 : 2);
+}
+/** Espera turno para esta cuenta; devuelve la función que lo libera. */
+async function acquire(key, limit, signal) {
+  const s = slots.get(key) || slots.set(key, { busy: 0, queue: [] }).get(key);
+  const release = () => {
+    const next = s.queue.shift();
+    if (next) next(); // el turno pasa directo al siguiente
+    else s.busy--;
+  };
+  if (s.busy < limit) {
+    s.busy++;
+    return release;
+  }
+  await new Promise((resolve, reject) => {
+    const onAbort = () => {
+      s.queue = s.queue.filter((e) => e !== go);
+      reject(new Error('Cancelada'));
+    };
+    const go = () => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    s.queue.push(go);
+  });
+  return release;
+}
 
 /**
  * Llama al modelo y, si falla antes de escribir algo:
@@ -166,8 +204,22 @@ async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
   const heals = !cli && !PROVIDERS[provider]?.keyless && provider !== 'anthropic';
   try {
     return await run(model);
-  } catch (err) {
+  } catch (first) {
+    let err = first;
     if (wrote()) throw err;
+    // Límite por minuto que se libera en segundos («try again in 3s»): se espera y se reintenta una vez.
+    if (classifyError(err.message) === 'cupo') {
+      const ms = retryAfterMs(err.message, err.retryAfterMs);
+      if (ms <= shortWait()) {
+        await new Promise((r) => setTimeout(r, ms));
+        try {
+          return await run(model);
+        } catch (e2) {
+          if (wrote()) throw e2;
+          err = e2;
+        }
+      }
+    }
     // CLIs: si rechaza el modelo, se deja que la herramienta elija el suyo (y la IA queda así);
     // si su servidor falló, se reintenta una vez.
     if (cli) {
@@ -293,12 +345,15 @@ export async function callModel(settings, params) {
   const agentId = params.agent?.id;
   try {
     const r = await callModelInner(settings, params);
-    if (agentId) callSink?.({ agentId, ok: true, simulated: r.simulated, inChars, ms: Date.now() - t0 });
+    if (agentId) callSink?.({ agentId, provider: r.simulated ? null : params.provider, ok: true, simulated: r.simulated, inChars, ms: Date.now() - t0 });
     return r;
   } catch (err) {
     if (agentId && err.message !== 'Cancelada') {
-      const quota = isQuotaError(err.message);
-      callSink?.({ agentId, ok: false, quota, retryMs: quota ? retryAfterMs(err.message, err.retryAfterMs) : 0, kind: classifyError(err.message), error: err.message.slice(0, 300), inChars, ms: Date.now() - t0 });
+      const kind = classifyError(err.message);
+      const quota = kind === 'cupo';
+      // Con una sola cuenta, una clave rechazada vale para todas las IAs de ese proveedor.
+      const single = credentials(settings, params.provider).length <= 1;
+      callSink?.({ agentId, provider: params.provider, providerDown: kind === 'clave' && single, ok: false, quota, retryMs: quota ? retryAfterMs(err.message, err.retryAfterMs) : 0, kind, error: err.message.slice(0, 300), inChars, ms: Date.now() - t0 });
     }
     throw err;
   }
@@ -327,6 +382,7 @@ async function callModelInner(settings, { provider, model, system, messages, age
       emit(d);
     };
     const ollama = cred.server;
+    const free = await acquire(`${provider}:${cred.id}`, limitFor(provider), signal);
     const done = ollama ? track(ollama.id) : null;
     try {
       if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar
@@ -353,13 +409,15 @@ async function callModelInner(settings, { provider, model, system, messages, age
         console.warn(`[ollama] «${cred.label}» falló (${err.message.slice(0, 120)}), pruebo con «${creds[i + 1].label}»`);
         continue;
       }
-      // Sin cupo en esta cuenta: se prueba con la siguiente (si aún no escribió nada).
-      if (i < creds.length - 1 && !wrote && isQuotaError(err.message)) {
-        console.warn(`[cuentas] ${PROVIDERS[provider]?.label}: «${cred.label}» sin cupo, pruebo con «${creds[i + 1].label}»`);
+      // Sin cupo (o con la clave vencida) en esta cuenta: se prueba con la siguiente (si aún no escribió nada).
+      const kind = classifyError(err.message);
+      if (i < creds.length - 1 && !wrote && (kind === 'cupo' || kind === 'clave')) {
+        console.warn(`[cuentas] ${PROVIDERS[provider]?.label}: «${cred.label}» ${kind === 'cupo' ? 'sin cupo' : 'con la clave rechazada'}, pruebo con «${creds[i + 1].label}»`);
         continue;
       }
       throw err;
     } finally {
+      free();
       done?.();
     }
   }

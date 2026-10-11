@@ -9,7 +9,10 @@ import { callModel, hasKey } from './providers.js';
 const HOUR = 3600000;
 
 /** Registra una llamada (la conecta el servidor con setCallSink). */
-export function recordCall(store, { agentId, ok, simulated, inChars, ms, quota, retryMs, kind, error }) {
+export function recordCall(store, { agentId, provider, providerDown, ok, simulated, inChars, ms, quota, retryMs, kind, error }) {
+  // Clave rechazada: todas las IAs de ese proveedor quedan con fallas hasta que una vuelva a responder.
+  if (provider && ok) delete store.data.providerHealth?.[provider];
+  if (provider && providerDown) (store.data.providerHealth ||= {})[provider] = { kind: 'clave', error: error || '', at: Date.now(), agentId };
   const all = (store.data.metrics ||= {});
   const m = (all[agentId] ||= { calls: 0, errors: 0, recent: [] });
   m.calls++;
@@ -29,6 +32,9 @@ export function recordCall(store, { agentId, ok, simulated, inChars, ms, quota, 
  *   ejemplo con «Revisar todas»).
  */
 export function healthOf(store, agentId) {
+  const agent = store.data.agents?.find((a) => a.id === agentId);
+  const down = agent && store.data.providerHealth?.[agent.provider];
+  if (down && Date.now() - down.at < 6 * 3600000) return { ok: false, kind: down.kind, error: down.error, at: down.at, provider: true };
   const recent = (store.data.metrics?.[agentId]?.recent || []).filter((r) => !r.sim);
   const lastOne = recent.at(-1);
   if (lastOne && !lastOne.ok && lastOne.quota) {

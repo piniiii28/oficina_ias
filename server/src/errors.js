@@ -27,8 +27,9 @@ const isServerError = (msg) => /\b50[0-9]\b|internal server error|bad gateway|ga
 export function classifyError(msg) {
   const m = String(msg || '');
   if (/^Cancelada/i.test(m)) return 'cancelada';
-  if (isQuotaError(m)) return 'cupo';
+  // «No incluido en tu plan gratis» es del modelo (hay que cambiarlo), aunque llegue con un 429.
   if (isRetiredModel(m) || isCliModelError(m)) return 'modelo';
+  if (isQuotaError(m)) return 'cupo';
   if (isAuthError(m)) return 'clave';
   if (isOverloaded(m)) return 'saturado';
   if (isMissingProgram(m)) return 'programa';
