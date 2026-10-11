@@ -70,15 +70,25 @@ const MIN = 60000;
  * Sin pista: 2 min si es por minuto, 2 h si es por día y 10 min si no se sabe.
  */
 export function retryAfterMs(msg, headerMs = 0) {
-  if (headerMs > 0) return Math.min(headerMs, 24 * 60 * MIN);
+  const cap = (ms) => Math.min(Math.max(ms, 1000), 3 * 24 * 60 * MIN);
+  if (headerMs > 0) return cap(headerMs);
   const m = String(msg || '');
-  const hms = m.match(/(?:try again|retry|reintenta)[^0-9]{0,20}(?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?\s*(?:([\d.]+)\s*s)?/i);
-  if (hms && (hms[1] || hms[2] || hms[3])) {
-    const ms = ((Number(hms[1]) || 0) * 3600 + (Number(hms[2]) || 0) * 60 + (Number(hms[3]) || 0)) * 1000;
-    if (ms > 0) return Math.min(Math.ceil(ms) + 2000, 24 * 60 * MIN);
+  // Claude Code: «usage limit reached|1760000000» (la hora en que vuelve, en segundos).
+  const epoch = m.match(/limit reached\|(\d{10})/i);
+  if (epoch) return cap(Number(epoch[1]) * 1000 - Date.now() + 5000);
+  // «try again in 7m12.5s», «retry in 41s», «try again in 2 days 3 hours», «resets in 5h»…
+  const after = m.match(/(?:try again|retry|reintenta|vuelve a intentar|resets?)\s*(?:in|en|after)?\s*((?:[^.;\n]|\.(?=\d)){0,60})/i);
+  if (after) {
+    const UNIT = { d: 86400000, h: 3600000, m: 60000, s: 1000, ms: 1 };
+    let ms = 0;
+    for (const [, n, u] of after[1].matchAll(/(\d+(?:\.\d+)?)\s*(days?|d[ií]as?|d|hours?|horas?|hrs?|h|minutes?|minutos?|mins?|m|milliseconds?|ms|seconds?|segundos?|secs?|s)(?![a-z])/gi)) {
+      const k = /^ms|^milli/i.test(u) ? 'ms' : u[0].toLowerCase();
+      ms += Number(n) * UNIT[k];
+    }
+    if (ms > 0) return cap(Math.ceil(ms) + 2000);
   }
   const delay = m.match(/retryDelay"?\s*:\s*"?(\d+(?:\.\d+)?)s/i);
-  if (delay) return Math.ceil(Number(delay[1]) * 1000) + 2000;
+  if (delay) return cap(Math.ceil(Number(delay[1]) * 1000) + 2000);
   if (/per.?day|daily|por d[ií]a|\bRPD\b|free-models-per-day|requests per day|tokens per day/i.test(m)) return 120 * MIN;
   if (/credit|balance|billing|month|insufficient/i.test(m)) return 360 * MIN;
   if (/per.?minute|\bRPM\b|\bTPM\b|tokens per minute|requests per minute/i.test(m)) return 2 * MIN;

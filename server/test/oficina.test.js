@@ -2434,6 +2434,11 @@ test('errores de las IAs: tipo, explicación y cuánto esperar', async () => {
   assert.equal(retryAfterMs('x', 30000), 30000, 'el encabezado Retry-After manda');
   assert.equal(retryAfterMs('Rate limit exceeded: free-models-per-day'), 120 * 60000);
   assert.equal(retryAfterMs('Rate limit'), 10 * 60000);
+  assert.equal(retryAfterMs('You have hit your usage limit, try again in 2 days 3 hours'), (2 * 24 + 3) * 3600000 > 3 * 24 * 3600000 ? 3 * 24 * 3600000 : (2 * 24 + 3) * 3600000 + 2000);
+  assert.equal(retryAfterMs('Rate limit reached. Please try again in 500ms.'), 2500);
+  const reset = Math.floor(Date.now() / 1000) + 3600;
+  const ms = retryAfterMs(`Claude AI usage limit reached|${reset}`);
+  assert.ok(ms > 3590000 && ms < 3700000, `vuelve en ~1 h (${ms})`);
 });
 
 /** Proveedor falso compatible con OpenAI: responde según el modelo pedido. */
