@@ -447,11 +447,40 @@ async function httpError(label, res) {
   return err;
 }
 
+/**
+ * Vigila que la respuesta siga llegando: si el proveedor no manda nada (ni el
+ * encabezado ni datos) en `ms`, se corta para que otra IA tome el trabajo en
+ * vez de esperar los 10 minutos del límite.
+ */
+function watchdog(signal, ms, label) {
+  const ctrl = new AbortController();
+  let timer;
+  let fired = false;
+  const alive = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      fired = true;
+      ctrl.abort();
+    }, ms);
+  };
+  alive();
+  return {
+    signal: signal ? AbortSignal.any([signal, ctrl.signal]) : ctrl.signal,
+    alive,
+    stop: () => clearTimeout(timer),
+    error: (err) => (fired && !signal?.aborted ? new Error(`${label}: dejó de responder (nada en ${Math.round(ms / 1000)} s)`) : err),
+  };
+}
+
+/** Cuánto esperar sin recibir nada: Ollama puede tardar en cargar el modelo. */
+const idleMs = (local) => Number(process.env.OFICINA_IDLE_MS) || (local ? 300000 : 150000);
+
 /** Lee un cuerpo SSE ("data: {...}") y entrega cada evento JSON. */
-async function readSSE(res, onEvent) {
+async function readSSE(res, onEvent, onChunk = () => {}) {
   const decoder = new TextDecoder();
   let buf = '';
   for await (const chunk of res.body) {
+    onChunk();
     buf += decoder.decode(chunk, { stream: true });
     let i;
     while ((i = buf.indexOf('\n')) !== -1) {
@@ -480,9 +509,21 @@ async function callOpenAICompatible(provider, cred, model, system, messages, onD
     headers['HTTP-Referer'] = 'http://localhost:4747';
     headers['X-Title'] = 'Oficina de IAs';
   }
+  const label = `${PROVIDERS[provider].label}${cred.server ? ` (${cred.server.label})` : ''}`;
+  const dog = watchdog(signal, idleMs(Boolean(cred.server)), label);
+  try {
+    return await streamOpenAI(provider, base, headers, model, system, messages, onDelta, dog, label);
+  } catch (err) {
+    throw dog.error(err);
+  } finally {
+    dog.stop();
+  }
+}
+
+async function streamOpenAI(provider, base, headers, model, system, messages, onDelta, dog, label) {
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
-    signal,
+    signal: dog.signal,
     headers,
     body: JSON.stringify({
       model,
@@ -492,10 +533,8 @@ async function callOpenAICompatible(provider, cred, model, system, messages, onD
       ...(provider === 'minimax' ? { reasoning_split: true } : {}),
     }),
   });
-  if (!res.ok) {
-    const where = cred.server ? ` (${cred.server.label})` : '';
-    throw await httpError(`${PROVIDERS[provider].label}${where}`, res);
-  }
+  dog.alive();
+  if (!res.ok) throw await httpError(label, res);
   let text = '';
   await readSSE(res, (e) => {
     if (e.error) throw new Error(`${PROVIDERS[provider].label}: ${e.error.message || 'error'}`);
@@ -504,22 +543,34 @@ async function callOpenAICompatible(provider, cred, model, system, messages, onD
       text += d;
       onDelta(d);
     }
-  });
+  }, dog.alive);
   return provider === 'minimax' ? text.replace(/<think>[\s\S]*?<\/think>\s*/g, '') : text;
 }
 
 async function callGemini(apiKey, model, system, messages, onDelta, signal) {
   const base = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
   const url = `${base}/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+  const dog = watchdog(signal, idleMs(false), 'Gemini');
+  try {
+    return await streamGemini(url, apiKey, system, messages, onDelta, dog);
+  } catch (err) {
+    throw dog.error(err);
+  } finally {
+    dog.stop();
+  }
+}
+
+async function streamGemini(url, apiKey, system, messages, onDelta, dog) {
   const res = await fetch(url, {
     method: 'POST',
-    signal,
+    signal: dog.signal,
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
     }),
   });
+  dog.alive();
   if (!res.ok) throw await httpError('Gemini', res);
   let text = '';
   await readSSE(res, (e) => {
@@ -528,7 +579,7 @@ async function callGemini(apiKey, model, system, messages, onDelta, signal) {
       text += d;
       onDelta(d);
     }
-  });
+  }, dog.alive);
   return text;
 }
 

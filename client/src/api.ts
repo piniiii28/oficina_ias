@@ -182,7 +182,11 @@ export type Suggestion = { from: string; to: string; fromTitle: string; toTitle:
 
 export type Card = { id: string; title: string; details: string; column: 'todo' | 'doing' | 'done'; project: string; taskId: string | null; noteId: string | null; createdAt: string };
 
-export type ChatMessage = { role: 'user' | 'assistant'; content: string; at: string; simulated?: boolean };
+export type ChatMessage = {
+  role: 'user' | 'assistant'; content: string; at: string; simulated?: boolean;
+  /** Respondió con el motor de otra IA (la suya falló o no está conectada). */
+  via?: string; failed?: { error: string; kind: string };
+};
 
 export type Settings = {
   demoMode: 'auto' | 'always';
@@ -219,8 +223,9 @@ export type Meeting = {
   rounds: number;
   status: 'running' | 'done' | 'error';
   speaking: string | null;
-  transcript: { agentId: string; name: string; text: string; round: number; simulated: boolean; at: string }[];
+  transcript: { agentId: string; name: string; text: string; round: number; simulated: boolean; at: string; via?: string; error?: string }[];
   summary: string;
+  summaryBy?: string;
   noteId: string | null;
   createdAt: string;
 };

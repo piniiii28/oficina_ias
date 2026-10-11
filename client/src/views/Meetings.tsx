@@ -143,7 +143,7 @@ function MeetingRoom({ meeting, onDelete, openNote, live, agents, brainId }: {
             <div key={i} className="line">
               {a ? <Chibi avatar={a.avatar} size={36} /> : <span className="you-badge">🙋</span>}
               <div>
-                <strong>{t.name}</strong> <small className="muted">ronda {t.round}{t.simulated ? ' · demo' : ''}</small>
+                <strong>{t.name}</strong> <small className="muted">ronda {t.round}{t.simulated ? ' · demo' : ''}{t.via ? ` · con el motor de ${byId(t.via)?.name || t.via}` : ''}</small>
                 <Markdown text={t.text} />
               </div>
             </div>
@@ -154,7 +154,7 @@ function MeetingRoom({ meeting, onDelete, openNote, live, agents, brainId }: {
       {meeting.status === 'running' && <SayBox id={meeting.id} />}
       {meeting.summary && (
         <section className="card final">
-          <h3>Resumen de Claude</h3>
+          <h3>Resumen de {byId(meeting.summaryBy || brainId || '')?.name || 'Claude'}</h3>
           <Markdown text={meeting.summary} onLink={(t) => openNote({ title: t })} />
         </section>
       )}

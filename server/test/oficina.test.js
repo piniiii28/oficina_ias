@@ -2553,3 +2553,74 @@ test('si el Cerebro falla al integrar, lo suple otra IA (el trabajo no se pierde
     fake.srv.close();
   }
 });
+
+test('chat: si su motor falla (o no está conectada) responde con el de otra IA, sin dejar de ser ella', async () => {
+  const { chatWithAgent } = await import('../src/orchestrator.js');
+  const fake = await fakeModels({ 'sin-cupo': 'cupo' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'sin-cupo' },
+    perplexity: { provider: 'ollama', model: 'suplente' },
+    lexi: { provider: 'anthropic', model: 'claude-sonnet-5' },
+  });
+  try {
+    const r = await chatWithAgent(store, 'chatgpt', 'hola');
+    assert.equal(r.reply, 'Respuesta de suplente');
+    assert.equal(r.via, 'perplexity', 'prefiere otro proveedor');
+    const last = store.data.chats.chatgpt.at(-1);
+    assert.equal(last.failed.kind, 'cupo');
+    // Lexi está en modo demo (sin clave de Anthropic): responde con un motor conectado, no con texto simulado.
+    const d = await chatWithAgent(store, 'lexi', '¿qué es un contrato?');
+    assert.equal(d.simulated, false);
+    assert.ok(d.via);
+    assert.equal(store.data.chats.lexi.at(-1).failed.kind, 'demo');
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
+
+test('reunión: quien falla no llena la charla de errores y otra IA hace el resumen', async () => {
+  const { runMeeting } = await import('../src/meetings.js');
+  const fake = await fakeModels({ 'cerebro-caido': 'cae', 'cae-tambien': 'cae' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro-caido' },
+    chatgpt: { provider: 'groq', model: 'cae-tambien' },
+    perplexity: { provider: 'ollama', model: 'investigador' },
+    lexi: { provider: 'ollama', model: 'legal' },
+  });
+  try {
+    const m = await runMeeting(store, new Notes(store), { topic: 'Precios de la tienda', agentIds: ['chatgpt', 'perplexity', 'lexi'], rounds: 2 });
+    assert.equal(m.status, 'done', m.summary);
+    const fromChatgpt = m.transcript.filter((t) => t.agentId === 'chatgpt');
+    assert.equal(fromChatgpt.length, 1, 'solo aparece una vez');
+    assert.match(fromChatgpt[0].text, /No pudo intervenir/);
+    assert.equal(m.transcript.filter((t) => t.agentId === 'perplexity').length, 2);
+    assert.ok(['perplexity', 'lexi'].includes(m.summaryBy), `resumió ${m.summaryBy}`);
+    assert.match(m.summary, /Respuesta de (investigador|legal)/);
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
+
+test('si el proveedor se queda callado, se corta pronto (no espera los 10 minutos)', async () => {
+  const { callModel } = await import('../src/providers.js');
+  const http = await import('node:http');
+  const hung = http.createServer(() => {}); // recibe la petición y nunca contesta
+  hung.listen(0, '127.0.0.1');
+  await new Promise((r) => hung.once('listening', r));
+  process.env.OFICINA_IDLE_MS = '300';
+  const t0 = Date.now();
+  try {
+    await assert.rejects(
+      callModel({ apiKeys: { ollamaEnabled: true, ollamaUrl: `http://127.0.0.1:${hung.address().port}/v1` } }, { provider: 'ollama', model: 'x', system: 'S', messages: [{ role: 'user', content: 'hola' }] }),
+      /dejó de responder/,
+    );
+    assert.ok(Date.now() - t0 < 5000);
+  } finally {
+    delete process.env.OFICINA_IDLE_MS;
+    hung.closeAllConnections?.();
+    hung.close();
+  }
+});

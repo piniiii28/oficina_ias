@@ -201,15 +201,15 @@ const ready = (store, a) => Boolean(a?.enabled) && isLive(store.data.settings, a
  * cupo, suelen fallar todas sus IAs), luego el mismo departamento, las que
  * comparten habilidades y las más rápidas.
  */
-export function pickReplacement(store, task, failed, exclude = new Set()) {
-  const inTask = new Set(task.steps.map((s) => s.agentId));
+export function pickReplacement(store, task, failed, exclude = new Set(), { allowBrain = false } = {}) {
+  const inTask = new Set((task?.steps || []).map((s) => s.agentId));
   const skills = new Set((failed?.skills || []).map((s) => s.toLowerCase()));
   const score = (a) => (failed && a.provider === failed.provider ? 100 : 0)
     + (failed && a.department === failed.department ? 0 : 20)
     - Math.min(15, (a.skills || []).filter((s) => skills.has(s.toLowerCase())).length * 3)
     + Math.min(9, Math.round((speedOf(store, a.id) || 60000) / 15000));
   return store.data.agents
-    .filter((a) => !a.isBrain && !inTask.has(a.id) && !exclude.has(a.id) && ready(store, a))
+    .filter((a) => (allowBrain || !a.isBrain) && !inTask.has(a.id) && !exclude.has(a.id) && ready(store, a))
     .sort((a, b) => score(a) - score(b))[0] || null;
 }
 
@@ -734,26 +734,55 @@ function saveTaskNotes(store, notes, task, names) {
 export async function chatWithAgent(store, agentId, message) {
   const agent = store.data.agents.find((a) => a.id === agentId);
   if (!agent) throw new Error('Agente no encontrado');
+  const { settings } = store.data;
   const history = (store.data.chats[agentId] ||= []);
   history.push({ role: 'user', content: message, at: new Date().toISOString() });
   agentStatus(agentId, 'thinking', 'Pensando…');
-  const onDelta = streamer(`chat:${agentId}`);
+  // Con su propio motor o, si no puede, con el de otra IA conectada (sigue siendo ella: su rol y su memoria).
+  const ask = (engine, onDelta) => (engine === agent ? callWithAssistants : callWithAccess)(store, {
+    provider: engine.provider, model: engine.model, agent: engine, onDelta,
+    system: buildSystem(agent) + (engine === agent ? '' : `\n\n(Hoy respondes con el motor de ${engine.name} porque el tuyo no está disponible; sigues siendo ${agent.name}, con tu rol.)`),
+    messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
+  });
+  let onDelta = streamer(`chat:${agentId}`);
+  let res;
+  let via = null;
+  let failed = null;
   try {
-    const res = await callWithAssistants(store, {
-      provider: agent.provider, model: agent.model, agent, onDelta,
-      system: buildSystem(agent),
-      messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
-    });
+    // En modo demo no se responde con texto simulado si hay otra IA conectada que pueda.
+    const sub0 = !isLive(settings, agent) && settings.onlyLive !== false ? pickReplacement(store, null, agent, new Set([agent.id]), { allowBrain: true }) : null;
+    if (sub0) {
+      via = sub0.id;
+      failed = { error: 'No está conectada (modo demo)', kind: 'demo' };
+    }
+    try {
+      res = await ask(sub0 || agent, onDelta);
+    } catch (err) {
+      onDelta.end();
+      if (/^Cancelada/.test(err.message)) throw err;
+      const sub = pickReplacement(store, null, agent, new Set([agent.id, sub0?.id]), { allowBrain: true });
+      if (!sub) throw err;
+      failed = { error: err.message.slice(0, 300), kind: classifyError(err.message) };
+      via = sub.id;
+      agentStatus(agentId, 'thinking', `Respondo con ayuda de ${sub.name}…`);
+      onDelta = streamer(`chat:${agentId}`);
+      try {
+        res = await ask(sub, onDelta);
+      } catch {
+        throw err; // se muestra el error de la IA elegida, que es el que hay que arreglar
+      }
+    }
     onDelta.end();
-    history.push({ role: 'assistant', content: res.text, simulated: res.simulated, at: new Date().toISOString() });
+    history.push({ role: 'assistant', content: res.text, simulated: res.simulated, at: new Date().toISOString(), ...(via ? { via, failed } : {}) });
     agent.stats = { tasks: agent.stats?.tasks || 0, lastActive: new Date().toISOString() };
     agentStatus(agentId, 'done', res.text.replace(/[#*>`]/g, '').slice(0, 140));
     store.save();
-    return { reply: res.text, simulated: res.simulated, history };
+    return { reply: res.text, simulated: res.simulated, history, via };
   } catch (err) {
     onDelta.end();
     history.pop();
     agentStatus(agentId, 'error', err.message);
+    err.kind = classifyError(err.message);
     throw err;
   }
 }

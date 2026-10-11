@@ -483,7 +483,7 @@ export function createApp(store) {
     try {
       res.json(await chatWithAgent(store, req.params.id, String(req.body?.message || '')));
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message, kind: err.kind || null });
     }
   });
   app.delete('/api/agents/:id/chat', (req, res) => {

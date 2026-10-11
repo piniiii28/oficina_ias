@@ -6,6 +6,7 @@ import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { MicButton, SpeakButton } from './Voice';
 import { useOffice } from '../state';
+import { errorHelp } from '../errorHelp';
 
 type Tab = 'chat' | 'entrenamiento' | 'asistentes' | 'memoria' | 'perfil';
 
@@ -57,7 +58,8 @@ function ChatTab({ agent }: { agent: Agent }) {
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const { toast, openNote, streams } = useOffice();
+  const [failure, setFailure] = useState<{ message: string; text: string } | null>(null);
+  const { toast, openNote, streams, agents } = useOffice();
   const liveReply = streams[`chat:${agent.id}`];
   const end = useRef<HTMLDivElement>(null);
 
@@ -71,12 +73,14 @@ function ChatTab({ agent }: { agent: Agent }) {
     if (!m || sending) return;
     setText('');
     setSending(true);
+    setFailure(null);
     setMsgs((x) => [...x, { role: 'user', content: m, at: new Date().toISOString() }]);
     try {
       const r = await api.sendChat(agent.id, m);
       setMsgs(r.history);
     } catch (err) {
-      toast(`Error: ${(err as Error).message}`);
+      // Se explica qué pasó y el mensaje queda listo para reintentar.
+      setFailure({ message: (err as Error).message, text: m });
       setMsgs((x) => x.slice(0, -1));
       setText(m);
     } finally {
@@ -100,6 +104,11 @@ function ChatTab({ agent }: { agent: Agent }) {
             {m.role === 'assistant' && (
               <div className="msg-actions">
                 {m.simulated && <span className="pill">demo</span>}
+                {m.via && (
+                  <span className="pill" title={m.failed?.error || ''}>
+                    🔁 con el motor de {agents.find((x) => x.id === m.via)?.name || m.via}{m.failed?.kind === 'demo' ? ' (no está conectada)' : m.failed ? ` (${errorHelp(m.failed.kind, m.failed.error).title.toLowerCase()})` : ''}
+                  </span>
+                )}
                 <SpeakButton text={m.content} />
                 <button className="link" onClick={() => saveAsNote(m.content)}>Guardar como nota</button>
               </div>
@@ -111,6 +120,17 @@ function ChatTab({ agent }: { agent: Agent }) {
             {liveReply ? <div className="streaming"><Markdown text={liveReply} /></div> : <div className="bubble bubble--think inline"><span /><span /><span /></div>}
           </div>
         )}
+        {failure && !sending && (() => {
+          const h = errorHelp(null, failure.message);
+          return (
+            <div className="step-error">
+              <p><strong>{h.icon} {agent.name} no pudo responder: {h.title.toLowerCase()}</strong></p>
+              {h.fix && <p className="small">{h.fix}</p>}
+              <details><summary className="small muted">Detalle técnico</summary><code className="small">{failure.message}</code></details>
+              <button className="btn btn--ghost small" onClick={() => send()}>🔁 Reintentar</button>
+            </div>
+          );
+        })()}
         <div ref={end} />
       </div>
       <div className="chat-input">

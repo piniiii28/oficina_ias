@@ -17,7 +17,7 @@ export const isCliModelError = (msg) => /model.{0,80}(not supported|not availabl
 const isAuthError = (msg) => /\b401\b|\b403\b|unauthori[sz]ed|forbidden|invalid.{0,20}(api.?key|token|credential)|incorrect api key|api key not valid|authentication|la clave de api no es válida|permission denied|not logged in|please log ?in|inicia sesi[oó]n/i.test(String(msg));
 const isNetworkError = (msg) => /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|EHOSTUNREACH|ENETUNREACH|socket hang up|fetch failed|network/i.test(String(msg));
 const isMissingProgram = (msg) => /no encontré el comando|is not recognized|no se reconoce|command not found|ENOENT/i.test(String(msg));
-const isTimeout = (msg) => /no respondió en|timed? ?out|ETIMEDOUT|tard[oó] demasiado/i.test(String(msg));
+const isTimeout = (msg) => /no respondió en|dejó de responder|timed? ?out|ETIMEDOUT|tard[oó] demasiado/i.test(String(msg));
 const isServerError = (msg) => /\b50[0-9]\b|internal server error|bad gateway|gateway timeout/i.test(String(msg));
 
 /**

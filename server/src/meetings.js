@@ -4,7 +4,8 @@
 import { Store } from './store.js';
 import { callModel, usableFilter } from './providers.js';
 import { healthOf } from './metrics.js';
-import { bus, agentStatus, buildSystem } from './orchestrator.js';
+import { bus, agentStatus, buildSystem, pickReplacement, actingBrain } from './orchestrator.js';
+import { explainError } from './errors.js';
 import { keywords } from './demo.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -57,37 +58,72 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2, hu
   emit();
   const { settings } = store.data;
 
+  // Quien falla deja de recibir turnos (para no llenar la conversación de errores).
+  const muted = new Set();
+  const turn = (a, engine, r, convo) => callModel(settings, {
+    provider: engine.provider, model: engine.model, agent: engine, effort: 'low',
+    system: buildSystem(a) + '\n\nEstás en una reunión con otras IAs. Habla en primera persona, máximo 120 palabras, sin títulos. Responde a lo que dijeron los demás (si el usuario, «Tú», intervino, respóndele primero) y aporta algo nuevo desde tu especialidad.' + (engine === a ? '' : `\n(Hablas con el motor de ${engine.name} porque el tuyo no está disponible; sigues siendo ${a.name}.)`),
+    messages: [{ role: 'user', content: `Tema de la reunión: ${topic}\n\n${convo ? `Lo que se ha dicho:\n\n${convo}\n\n` : ''}Tu turno (ronda ${r + 1} de ${meeting.rounds}).` }],
+  });
   try {
     rounds: for (let r = 0; r < meeting.rounds; r++) {
       for (const a of agents) {
         if (meeting.stopRequested) break rounds;
+        if (muted.has(a.id)) continue;
         meeting.speaking = a.id;
         emit();
         agentStatus(a.id, 'thinking', 'Preparando su intervención…');
         const convo = meeting.transcript.map((t) => `**${t.name}:** ${t.text}`).join('\n\n');
-        const res = settings.demoMode === 'always'
-          ? { text: await demoTurn(a, topic, meeting.transcript, r), simulated: true }
-          : await callModel(settings, {
-            provider: a.provider, model: a.model, agent: a, effort: 'low',
-            system: buildSystem(a) + '\n\nEstás en una reunión con otras IAs. Habla en primera persona, máximo 120 palabras, sin títulos. Responde a lo que dijeron los demás (si el usuario, «Tú», intervino, respóndele primero) y aporta algo nuevo desde tu especialidad.',
-            messages: [{ role: 'user', content: `Tema de la reunión: ${topic}\n\n${convo ? `Lo que se ha dicho:\n\n${convo}\n\n` : ''}Tu turno (ronda ${r + 1} de ${meeting.rounds}).` }],
-          }).catch((err) => ({ text: `(No pude intervenir: ${err.message})`, simulated: false }));
+        let res;
+        let via;
+        if (settings.demoMode === 'always') res = { text: await demoTurn(a, topic, meeting.transcript, r), simulated: true };
+        else {
+          try {
+            res = await turn(a, a, r, convo);
+          } catch (err) {
+            // Su motor falló: habla con el de otra IA conectada que no esté en la reunión.
+            const sub = pickReplacement(store, null, a, new Set(agents.map((x) => x.id)), { allowBrain: true });
+            res = sub ? await turn(a, sub, r, convo).catch(() => null) : null;
+            if (res) via = sub.id;
+            else {
+              muted.add(a.id);
+              const e = explainError(err.message);
+              res = { text: `*(No pudo intervenir: ${e.icon} ${e.title.toLowerCase()}.)*`, simulated: false, error: err.message.slice(0, 300) };
+              agentStatus(a.id, 'error', err.message);
+            }
+          }
+        }
         const text = res.simulated && settings.demoMode !== 'always' ? await demoTurn(a, topic, meeting.transcript, r) : res.text;
-        meeting.transcript.push({ agentId: a.id, name: a.name, text, round: r + 1, simulated: res.simulated, at: new Date().toISOString() });
-        agentStatus(a.id, 'talking', text.replace(/[*#>]/g, '').slice(0, 120));
+        meeting.transcript.push({ agentId: a.id, name: a.name, text, round: r + 1, simulated: res.simulated, at: new Date().toISOString(), ...(via ? { via } : {}), ...(res.error ? { error: res.error } : {}) });
+        if (!res.error) agentStatus(a.id, 'talking', text.replace(/[*#>]/g, '').slice(0, 120));
         emit();
       }
     }
 
-    meeting.speaking = brain.id;
-    emit();
-    agentStatus(brain.id, 'thinking', 'Resumiendo la reunión…');
+    // Resume el Cerebro (o su suplente); si nadie puede, queda la conversación completa.
+    const spoke = meeting.transcript.filter((t) => !t.error && !t.simulated).map((t) => t.agentId);
+    const closers = [actingBrain(store, spoke), ...agents.filter((a) => !muted.has(a.id))].filter((a, i, all) => all.indexOf(a) === i).slice(0, 3);
     const convo = meeting.transcript.map((t) => `**${t.name}:** ${t.text}`).join('\n\n');
-    const res = await callModel(settings, {
-      provider: brain.provider, model: brain.model, agent: brain, effort: 'low',
-      system: buildSystem(brain),
-      messages: [{ role: 'user', content: `Resume esta reunión sobre "${topic}": acuerdos, desacuerdos y próximos pasos (con responsable). Termina con "### Ideas clave".\n\n${convo}` }],
-    });
+    let res = null;
+    let lastErr = null;
+    for (const who of closers) {
+      meeting.speaking = who.id;
+      emit();
+      agentStatus(who.id, 'thinking', 'Resumiendo la reunión…');
+      try {
+        res = await callModel(settings, {
+          provider: who.provider, model: who.model, agent: who, effort: 'low',
+          system: buildSystem(who),
+          messages: [{ role: 'user', content: `Resume esta reunión sobre "${topic}": acuerdos, desacuerdos y próximos pasos (con responsable). Termina con "### Ideas clave".\n\n${convo}` }],
+        });
+        if (!who.isBrain) meeting.summaryBy = who.id;
+        break;
+      } catch (err) {
+        lastErr = err;
+        agentStatus(who.id, 'error', err.message);
+      }
+    }
+    if (!res) res = { text: `> ⚠️ No se pudo hacer el resumen (${explainError(lastErr?.message).title.toLowerCase()}). La conversación completa quedó guardada abajo.`, simulated: false };
     meeting.summary = res.simulated
       ? [
         '**Claude** — *resumen simulado (modo demo)*',
@@ -102,14 +138,14 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2, hu
       ].join('\n')
       : res.text;
     meeting.status = 'done';
-    agentStatus(brain.id, 'done', 'Reunión terminada');
+    agentStatus(meeting.summaryBy || brain.id, 'done', 'Reunión terminada');
 
     const note = notes.create({
       title: `Reunión: ${topic.slice(0, 70)}`,
       type: 'nota',
       tags: ['reunion'],
       hub,
-      source: { agentId: brain.id, meetingId: meeting.id },
+      source: { agentId: meeting.summaryBy || brain.id, meetingId: meeting.id },
       content: `# Reunión: ${topic}\n\n**Participantes:** ${agents.map((a) => a.name).join(', ')}\n\n## Resumen\n${meeting.summary}\n\n## Conversación\n${convo}`,
     });
     meeting.noteId = note.id;
