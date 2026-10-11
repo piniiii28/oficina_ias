@@ -8,9 +8,10 @@ import { SpeakButton } from '../components/Voice';
 import { saveAsPdf } from '../pdf';
 import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice } from '../state';
+import { clock, errorHelp } from '../errorHelp';
 
 export const STATUS_ES: Record<string, string> = {
-  planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', reviewing: 'revisando', done: 'lista', error: 'error', pending: 'en espera',
+  planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', reviewing: 'revisando', done: 'lista', error: 'error', pending: 'en cola', waiting: 'en espera',
 };
 
 /** 75000 → «1 min 15 s». */
@@ -40,7 +41,7 @@ export function Tasks() {
           <button key={t.id} className={`task-item ${current?.id === t.id ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
             <strong>{t.title}</strong>
             <small className="muted">{new Date(t.createdAt).toLocaleString()} · {t.steps.length} IAs</small>
-            <span className={`pill pill--${t.status}`}>{STATUS_ES[t.status]}</span>
+            <span className={`pill pill--${t.status}`} title={t.status === 'waiting' && t.resume?.at ? `Se retoma sola a las ${clock(t.resume.at)}` : undefined}>{t.status === 'waiting' ? '⏳ ' : ''}{STATUS_ES[t.status]}</span>
           </button>
         ))}
       </aside>
@@ -66,6 +67,9 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       <header className="row between">
         <h2>{task.title}</h2>
         <div className="row">
+          {task.status === 'waiting' && (
+            <button className="btn btn--primary small" title="No esperar: probar ya con las IAs que haya" onClick={() => api.resumeTask(task.id).catch((e) => alert(e.message))}>▶ Retomar ya</button>
+          )}
           {task.status !== 'done' && task.status !== 'error' && (
             <button className="btn btn--danger small" onClick={() => api.cancelTask(task.id)}>✖ Cancelar</button>
           )}
@@ -81,6 +85,12 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       </header>
       {parent && <p className="small">↩ Continúa <a href="#" onClick={(e) => { e.preventDefault(); onOpen(parent.id); }}>{parent.title}</a></p>}
       <blockquote>{task.prompt}</blockquote>
+      {task.status === 'waiting' && (
+        <div className="callout callout--wait">
+          <strong>⏳ En espera: se retoma sola{task.resume?.at ? ` a las ${clock(task.resume.at)}` : ''}</strong>
+          <span className="small">Ninguna IA pudo trabajar ahora (sin cupo, saturadas o sin conexión). Lo que ya estaba hecho se conserva{task.resume?.attempts ? ` · intento ${task.resume.attempts} de 8` : ''}.</span>
+        </div>
+      )}
       {task.plan && <p className="muted">🧠 {task.plan.analysis}</p>}
       <PlanDiagram task={task} agents={agents} />
       {task.attachments?.length ? <p className="small">📎 Adjuntos: {task.attachments.map((f) => f.name).join(', ')}</p> : null}
@@ -91,14 +101,14 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       ) : null}
 
       <section className="card final">
-        <div className="row between"><h3>Respuesta integrada{task.ms != null && <small className="muted"> · ⏱ {fmtSecs(task.ms)} en total{task.synthMs ? ` (integrar: ${fmtSecs(task.synthMs)})` : ''}</small>}</h3>
+        <div className="row between"><h3>Respuesta integrada{task.ms != null && <small className="muted"> · ⏱ {fmtSecs(task.ms)} en total{task.synthMs ? ` (integrar: ${fmtSecs(task.synthMs)})` : ''}</small>}{task.synthBy && <small className="muted" title="El Cerebro no estaba disponible y otra IA integró la respuesta"> · integró {agent(task.synthBy)?.name || task.synthBy}</small>}</h3>
           <div className="row">
             {task.status === 'done' && <CardsButton task={task} />}
-            {task.final && <button className="btn btn--ghost small" title="Guardar la respuesta como PDF" onClick={() => saveAsPdf(task.title, task.final || '', `Pedido: ${task.prompt.slice(0, 160)}`)}>📄 PDF</button>}
-            {task.final && <SpeakButton text={task.final} />}
+            {task.final && task.status === 'done' && <button className="btn btn--ghost small" title="Guardar la respuesta como PDF" onClick={() => saveAsPdf(task.title, task.final || '', `Pedido: ${task.prompt.slice(0, 160)}`)}>📄 PDF</button>}
+            {task.final && task.status === 'done' && <SpeakButton text={task.final} />}
           </div>
         </div>
-        {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : liveFinal ? <div className="streaming"><Markdown text={liveFinal} /></div> : <p className="muted">El equipo sigue trabajando…</p>}
+        {task.final ? <Markdown text={task.final} onLink={(t) => openNote({ title: t })} /> : liveFinal ? <div className="streaming"><Markdown text={liveFinal} /></div> : <p className="muted">{task.status === 'waiting' ? 'Esperando a que vuelva el cupo de las IAs…' : 'El equipo sigue trabajando…'}</p>}
       </section>
 
       {task.status === 'done' && <FollowUp task={task} onSent={onFollow} />}
@@ -114,13 +124,26 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
                 <strong>{a?.name || s.agentId}</strong> {a?.isHead && <span title="Jefe de departamento">👑</span>} <small className="muted">{s.review ? 'Revisión del jefe de departamento' : a?.role}</small>
                 <div className="small muted">{s.instruction}</div>
                 {s.dependsOn?.length ? <div className="small">↳ Trabajó sobre la entrega de {s.dependsOn.map((d) => agent(d)?.name || d).join(', ')}</div> : null}
+                {s.failed?.length ? (
+                  <div className="small swaps">
+                    {s.failed.map((f, i) => {
+                      const h = errorHelp(f.kind, f.error);
+                      const who = <b>{agent(f.agentId)?.name || f.agentId}</b>;
+                      return (
+                        <span key={i} className="swap" title={`${f.error}\n\n${h.fix}`}>
+                          {f.skipped ? <>⏭ {who} seguía con {h.title.toLowerCase()}</> : s.status === 'done' && f.agentId !== s.agentId ? <>🔁 Reemplazó a {who} · {h.icon} {h.title.toLowerCase()}</> : <>{h.icon} {who}: {h.title.toLowerCase()}</>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
               {s.jury && <span className={`pill ${s.jury.score >= 4 ? 'pill--done' : s.jury.score <= 2 ? 'pill--error' : ''}`} title={s.jury.votes.map((v) => `${v.name}: ${v.score} — ${v.reason}`).join('\n')}>⚖️ {s.jury.score}/5</span>}
               {s.verify && <span className={`pill ${s.verify.score >= 4 ? 'pill--done' : s.verify.score <= 2 ? 'pill--error' : ''}`} title={`${s.verify.by}: ${s.verify.reason}`}>✔ {s.verify.score}/5</span>}
               {s.ms != null && <span className={`small ${s.ms > 90000 ? 'warn' : 'muted'}`} title="Lo que tardó esta IA">⏱ {fmtSecs(s.ms)}</span>}
               <span className={`pill pill--${s.status}`}>{s.simulated ? 'demo' : STATUS_ES[s.status]}</span>
             </summary>
-            {s.error ? <p className="danger">{s.error}</p> : <div className={s.status === 'working' ? 'streaming' : ''}><Markdown text={s.output || streams[`task:${task.id}:${s.agentId}`] || '…'} onLink={(t) => openNote({ title: t })} /></div>}
+            {s.error ? <StepError error={s.error} kind={s.errorKind} /> : <div className={s.status === 'working' ? 'streaming' : ''}><Markdown text={s.output || streams[`task:${task.id}:${s.agentId}`] || (s.status === 'pending' ? (task.status === 'waiting' ? '_En espera: se hace cuando vuelva el cupo._' : '_Esperando su turno…_') : '…')} onLink={(t) => openNote({ title: t })} /></div>}
             {/* Lo que entregaron sus asistentes (o lo que escriben en vivo) */}
             {(s.assistants?.length || (s.status === 'working' && a?.assistants?.some((_, i) => streams[`task:${task.id}:${s.agentId}:asist:${i}`]))) ? (
               <div className="assistant-outputs">
@@ -148,6 +171,18 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
         );
       })}
     </main>
+  );
+}
+
+/** Error de un paso: qué pasó en palabras simples, qué hacer y el detalle técnico. */
+function StepError({ error, kind }: { error: string; kind?: string | null }) {
+  const h = errorHelp(kind, error);
+  if (h.kind === 'cancelada') return <p className="muted small">✖ {error}</p>;
+  return (
+    <div className="step-error">
+      <p><strong>{h.icon} {h.title}</strong>{h.fix ? <> — <span className="small">{h.fix}</span></> : null}</p>
+      <details><summary className="small muted">Detalle técnico</summary><code className="small">{error}</code></details>
+    </div>
   );
 }
 

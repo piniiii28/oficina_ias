@@ -3,7 +3,8 @@
 // conectadas en el grafo. Emite eventos para animar la oficina en vivo.
 import { EventEmitter } from 'node:events';
 import { Store } from './store.js';
-import { callModel, hasKey, usableFilter } from './providers.js';
+import { callModel, isLive, usableFilter } from './providers.js';
+import { classifyError, explainError, isTemporaryError } from './errors.js';
 import { demoPlan } from './demo.js';
 import { extractKeyIdeas } from './notes.js';
 import { relatedNotes } from './librarian.js';
@@ -90,8 +91,9 @@ async function makePlan(store, task, forced, template) {
       })),
     });
   }
-  const brain = brainOf(store);
-  const live = settings.demoMode !== 'always' && hasKey(settings, brain.provider);
+  // Si el Cerebro no está conectado o se quedó sin cupo, planifica su suplente.
+  const brain = actingBrain(store);
+  const live = isLive(settings, brain);
   const maxTeam = settings.maxTeam || 5;
   if (!live) return demoPlan(task, pool, maxTeam);
 
@@ -114,8 +116,11 @@ async function makePlan(store, task, forced, template) {
       messages: [{ role: 'user', content: prompt }],
     });
     const plan = parseJson(text);
-    plan.subtasks = (plan.subtasks || []).filter((s) => pool.some((a) => a.id === s.agentId)).slice(0, maxTeam);
+    plan.subtasks = (plan.subtasks || []).filter((s) => s && pool.some((a) => a.id === s.agentId)).slice(0, maxTeam);
+    // Sin repetir IA (cada paso se identifica por su IA).
+    plan.subtasks = plan.subtasks.filter((s, i) => plan.subtasks.findIndex((x) => x.agentId === s.agentId) === i);
     if (!plan.subtasks.length) throw new Error('Plan vacío');
+    plan.by = brain.id;
     return sanitizeDeps(plan);
   } catch (err) {
     console.warn('[cerebro] Plan en vivo falló, uso planificador local:', err.message);
@@ -183,6 +188,54 @@ function remember(store, agent, text) {
 
 const shortTitle = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 60) + (s.length > 60 ? '…' : '');
 
+const MAX_SWAPS = 2; // reemplazos por paso si su IA falla
+// Esperas entre reintentos de una tarea que no pudo avanzar (minutos).
+const RESUME_BACKOFF_MIN = [2, 5, 10, 15, 30, 60, 60, 120];
+
+/** ¿Esta IA puede trabajar ya? (activa, conectada y sin fallas ni falta de cupo) */
+const ready = (store, a) => Boolean(a?.enabled) && isLive(store.data.settings, a) && healthOf(store, a.id).ok;
+
+/**
+ * Quién reemplaza a una IA que falló en un paso: una conectada y sana que no
+ * esté ya en la tarea. Prefiere otro proveedor (si uno se cae o se queda sin
+ * cupo, suelen fallar todas sus IAs), luego el mismo departamento, las que
+ * comparten habilidades y las más rápidas.
+ */
+export function pickReplacement(store, task, failed, exclude = new Set()) {
+  const inTask = new Set(task.steps.map((s) => s.agentId));
+  const skills = new Set((failed?.skills || []).map((s) => s.toLowerCase()));
+  const score = (a) => (failed && a.provider === failed.provider ? 100 : 0)
+    + (failed && a.department === failed.department ? 0 : 20)
+    - Math.min(15, (a.skills || []).filter((s) => skills.has(s.toLowerCase())).length * 3)
+    + Math.min(9, Math.round((speedOf(store, a.id) || 60000) / 15000));
+  return store.data.agents
+    .filter((a) => !a.isBrain && !inTask.has(a.id) && !exclude.has(a.id) && ready(store, a))
+    .sort((a, b) => score(a) - score(b))[0] || null;
+}
+
+/**
+ * El cerebro que trabaja hoy: el Cerebro Central si está conectado y sano; si
+ * no (sin clave, sin cupo o con fallas), lo suple la mejor IA conectada, para
+ * que el plan y la respuesta final no salgan en modo demo.
+ */
+export function actingBrain(store, prefer = []) {
+  const brain = brainOf(store);
+  if (ready(store, brain)) return brain;
+  const skills = ['planificar', 'sintetizar', 'coordinar', 'estrategia', 'redacción', 'razonamiento', 'resumen'];
+  const score = (a) => (prefer.includes(a.id) ? -50 : 0) + (a.isHead ? -10 : 0)
+    - (a.skills || []).filter((s) => skills.includes(s)).length * 5
+    + Math.min(20, Math.round((speedOf(store, a.id) || 30000) / 5000));
+  return store.data.agents.filter((a) => !a.isBrain && ready(store, a)).sort((a, b) => score(a) - score(b))[0] || brain;
+}
+
+/** Cambia la IA de un paso: los pasos que la esperaban pasan a esperar a la nueva. */
+function swapAgent(task, step, newId) {
+  const oldId = step.agentId;
+  for (const o of task.steps) if (o !== step && o.dependsOn?.includes(oldId)) o.dependsOn = o.dependsOn.map((d) => (d === oldId ? newId : d));
+  step.agentId = newId;
+  step.output = '';
+}
+
 /** Ejecuta una tarea completa en la oficina. */
 export async function runTask(store, notes, { prompt, agentIds, saveNotes = true, parentId = null, attachments = [], tags = [], template = null, effort = 'medium', fromNote = null, hub = null }) {
   if (!['low', 'medium', 'high'].includes(effort)) effort = 'medium';
@@ -204,16 +257,15 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     : '';
   // Memoria compartida: notas del grafo relacionadas con la tarea.
   const related = relatedNotes(store.data.notes, prompt + ' ' + (parent?.prompt || ''), 4);
-  let extraText = '';
   const knowledgeBase = filesText + (related.length
     ? `\n\nNotas relevantes de la base de conocimiento de la oficina:\n${related.map((n) => `### ${n.title}\n${n.content.slice(0, 900)}`).join('\n\n')}\n`
     : '');
-  const ctx = () => knowledgeBase + extraText;
   const task = {
     hub: hub || parent?.hub || 'cerebro',
     parentId: parent?.id || null,
     effort,
     fromNote,
+    saveNotes,
     contextNotes: related.map((n) => n.title),
     tags,
     attachments: files.map((f) => ({ name: f.name, size: f.content.length })),
@@ -232,120 +284,182 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
   // El historial crudo se recorta; el resultado de cada tarea vive en sus notas.
   if (store.data.tasks.length > 300) store.data.tasks.length = 300;
   store.save();
-  const emitTask = () => bus.emit('event', { type: 'task', task });
-  emitTask();
+  bus.emit('event', { type: 'task', task });
+  return executeTask(store, notes, task, { background, context: knowledgeBase, agentIds, template: template || parent?.steps, readLinks: true });
+}
 
-  const brain = brainOf(store);
+/**
+ * Retoma una tarea que quedó esperando (sin cupo, sin conexión o por un
+ * reinicio): lo que ya estaba hecho se conserva y solo se repite lo que faltó.
+ */
+export function resumeTask(store, notes, task) {
+  if (!task || running.has(task.id) || task.status !== 'waiting') return null;
+  for (const s of task.steps) {
+    if (s.status === 'done') continue;
+    s.status = 'pending';
+    s.error = null;
+    s.errorKind = null;
+  }
+  task.status = task.plan ? 'working' : 'planning';
+  const r = task.resume || {};
+  return executeTask(store, notes, task, { background: r.background || '', context: r.context || '', agentIds: r.agentIds || null, template: null, readLinks: false });
+}
+
+async function executeTask(store, notes, task, run) {
   const { settings } = store.data;
+  const emitTask = () => bus.emit('event', { type: 'task', task });
+  const prompt = task.prompt;
+  const effort = task.effort || 'medium';
   const ctrl = new AbortController();
   const signal = ctrl.signal;
   running.set(task.id, ctrl);
-  agentStatus(brain.id, 'thinking', 'Planificando…');
+  const nameOf = (id) => store.data.agents.find((a) => a.id === id)?.name || id;
+  // Lo necesario para retomarla si se queda sin cupo o se reinicia la oficina.
+  const keep = () => {
+    task.resume = { ...(task.resume || {}), background: run.background, context: run.context.slice(0, 200000), agentIds: run.agentIds || null };
+    store.save();
+  };
+  let planner = actingBrain(store);
+  agentStatus(planner.id, 'thinking', 'Planificando…');
 
   try {
     // Enlaces en la tarea: se leen y se agregan como adjuntos.
-    if (settings.readLinks !== false && /https?:\/\//.test(prompt)) {
-      agentStatus(brain.id, 'thinking', 'Leyendo los enlaces…');
+    if (run.readLinks && settings.readLinks !== false && /https?:\/\//.test(prompt)) {
+      agentStatus(planner.id, 'thinking', 'Leyendo los enlaces…');
       const pages = await readLinks(prompt);
       if (pages.length) {
-        extraText = `\n\nPáginas enlazadas por el usuario:\n${pages.map((p) => `--- ${p.name} ---\n${p.content.slice(0, 30000)}`).join('\n\n')}\n`;
+        run.context += `\n\nPáginas enlazadas por el usuario:\n${pages.map((p) => `--- ${p.name} ---\n${p.content.slice(0, 30000)}`).join('\n\n')}\n`;
         task.attachments = [...(task.attachments || []), ...pages.map((p) => ({ name: p.name, size: p.content.length }))];
         emitTask();
       }
     }
-    task.plan = await makePlan(store, prompt, agentIds, template || parent?.steps);
+    keep();
+    if (!task.plan) {
+      task.plan = await makePlan(store, prompt, run.agentIds, run.template);
+      if (!task.plan.subtasks.length) throw new Error('No hay IAs disponibles para esta tarea: conecta o activa alguna en Ajustes → Conectar las IAs.');
+      task.steps = task.plan.subtasks.map((s) => ({ ...s, status: 'pending', output: '', simulated: false, error: null }));
+      if (task.plan.by && task.plan.by !== brainOf(store).id) task.plan.analysis = `${task.plan.analysis} (planificó ${nameOf(task.plan.by)}, suplente del Cerebro)`;
+    }
     task.status = 'working';
-    task.steps = task.plan.subtasks.map((s) => ({ ...s, status: 'pending', output: '', simulated: false, error: null }));
     emitTask();
-    agentStatus(brain.id, 'talking', task.plan.analysis);
+    agentStatus(planner.id, 'talking', task.plan.analysis);
 
-    const nameOf = (id) => store.data.agents.find((a) => a.id === id)?.name || id;
-    for (const s of task.steps) if (s.dependsOn?.length) agentStatus(s.agentId, 'thinking', `Esperando a ${s.dependsOn.map(nameOf).join(', ')}`);
+    for (const s of task.steps) if (s.status !== 'done' && s.dependsOn?.length) agentStatus(s.agentId, 'thinking', `Esperando a ${s.dependsOn.map(nameOf).join(', ')}`);
 
     await runGraph(task.steps, settings.maxParallel || 4, async (step) => {
+      if (step.status === 'done') return; // al retomar, lo ya hecho no se repite
       if (signal.aborted) {
         step.status = 'error';
         step.error = 'Cancelada';
         return;
       }
-      const agent = store.data.agents.find((a) => a.id === step.agentId);
-      step.status = 'working';
       const t0 = Date.now();
+      step.status = 'working';
+      step.error = null;
+      step.errorKind = null;
       step.startedAt = new Date(t0).toISOString();
-      emitTask();
-      agentStatus(agent.id, 'working', step.instruction);
-      // Trabajo en conjunto: recibe lo que ya entregaron sus compañeros.
-      const inputs = (step.dependsOn || [])
-        .map((d) => task.steps.find((x) => x.agentId === d))
-        .filter((x) => x?.status === 'done')
-        .map((x) => `### Entrega de ${nameOf(x.agentId)}\n${x.output}`)
-        .join('\n\n');
-      const onDelta = streamer(`task:${task.id}:${agent.id}`);
-      try {
-        // Puede pedir acceso a carpetas o programas del usuario (con su permiso).
-        // Si tiene asistentes, decide si les delega partes.
-        const res = await callWithAssistants(store, {
-          provider: agent.provider, model: agent.model, agent, onDelta, signal, effort,
-          system: buildSystem(agent),
-          messages: [{
-            role: 'user',
-            content: `${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${background}${prompt}${ctx()}`,
-          }],
-        }, { taskKey: `task:${task.id}:${agent.id}`, allowDemoDelegation: true });
-        if (res.assistants) step.assistants = res.assistants;
-        step.output = res.text;
-        step.simulated = res.simulated;
-        step.status = 'done';
-        remember(store, agent, `Tarea "${task.title}": ${step.instruction}`);
-        // Opcional: un verificador le pone nota al aporte (alimenta el medidor de acierto).
-        if (settings.jury?.enabled && !signal.aborted) {
-          // Jurado: otras IAs califican el aporte a ciegas.
-          agentStatus(agent.id, 'thinking', 'El jurado está revisando mi aporte…');
-          const j = await juryStep(store, task, step, settings.jury.size || 2);
-          if (j) step.jury = j;
-        } else if (settings.verifySteps && !signal.aborted) {
-          const v = await verifyStep(store, task, step);
-          if (v) step.verify = v;
+      const tried = new Set([step.agentId]);
+      let agent = store.data.agents.find((a) => a.id === step.agentId);
+      let replacing = null;
+      // Si la IA del plan ya no está o sigue sin cupo, el paso arranca con otra.
+      const health = agent && isLive(settings, agent) ? healthOf(store, agent.id) : { ok: true };
+      if (!agent || !health.ok) {
+        const alt = pickReplacement(store, task, agent, tried);
+        if (alt) {
+          (step.failed ||= []).push({ agentId: step.agentId, error: agent ? health.error : 'Ya no está en la oficina', kind: agent ? health.kind || 'otro' : 'otro', skipped: true, at: new Date().toISOString() });
+          replacing = agent;
+          swapAgent(task, step, alt.id);
+          agent = alt;
         }
-        agentStatus(agent.id, 'done', res.text.replace(/[#*>`]/g, '').slice(0, 140));
-      } catch (err) {
+      }
+      if (!agent) {
         step.status = 'error';
-        step.error = err.message;
-        agentStatus(agent.id, 'error', err.message);
+        step.error = 'Esta IA ya no está en la oficina';
+        step.errorKind = 'otro';
+        emitTask();
+        return;
+      }
+      for (let attempt = 0; ; attempt++) {
+        tried.add(agent.id);
+        emitTask();
+        agentStatus(agent.id, 'working', replacing ? `Reemplazo a ${replacing.name}: ${step.instruction}` : step.instruction);
+        // Trabajo en conjunto: recibe lo que ya entregaron sus compañeros.
+        const inputs = (step.dependsOn || [])
+          .map((d) => task.steps.find((x) => x.agentId === d))
+          .filter((x) => x?.status === 'done')
+          .map((x) => `### Entrega de ${nameOf(x.agentId)}\n${x.output}`)
+          .join('\n\n');
+        const onDelta = streamer(`task:${task.id}:${agent.id}`);
+        try {
+          // Puede pedir acceso a carpetas o programas del usuario (con su permiso).
+          // Si tiene asistentes, decide si les delega partes.
+          const res = await callWithAssistants(store, {
+            provider: agent.provider, model: agent.model, agent, onDelta, signal, effort,
+            system: buildSystem(agent),
+            messages: [{
+              role: 'user',
+              content: `${replacing ? `(Reemplazas a ${replacing.name}, ${replacing.role}, que no pudo hacer esta parte.)\n\n` : ''}${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${run.background}${prompt}${run.context}`,
+            }],
+          }, { taskKey: `task:${task.id}:${agent.id}`, allowDemoDelegation: true });
+          if (res.assistants) step.assistants = res.assistants;
+          step.output = res.text;
+          step.simulated = res.simulated;
+          step.status = 'done';
+          remember(store, agent, `Tarea "${task.title}": ${step.instruction}`);
+          // Opcional: un verificador le pone nota al aporte (alimenta el medidor de acierto).
+          if (settings.jury?.enabled && !signal.aborted) {
+            // Jurado: otras IAs califican el aporte a ciegas.
+            agentStatus(agent.id, 'thinking', 'El jurado está revisando mi aporte…');
+            const j = await juryStep(store, task, step, settings.jury.size || 2);
+            if (j) step.jury = j;
+          } else if (settings.verifySteps && !signal.aborted) {
+            const v = await verifyStep(store, task, step);
+            if (v) step.verify = v;
+          }
+          agentStatus(agent.id, 'done', res.text.replace(/[#*>`]/g, '').slice(0, 140));
+          onDelta.end();
+          break;
+        } catch (err) {
+          onDelta.end();
+          if (signal.aborted) {
+            step.status = 'error';
+            step.error = 'Cancelada';
+            break;
+          }
+          const kind = classifyError(err.message);
+          agentStatus(agent.id, 'error', err.message);
+          (step.failed ||= []).push({ agentId: agent.id, error: err.message.slice(0, 300), kind, at: new Date().toISOString() });
+          // Otra IA retoma el paso (si queda alguna conectada y sana).
+          const next = attempt < MAX_SWAPS ? pickReplacement(store, task, agent, tried) : null;
+          if (!next) {
+            step.status = 'error';
+            step.error = err.message;
+            step.errorKind = kind;
+            break;
+          }
+          replacing = agent;
+          swapAgent(task, step, next.id);
+          agent = next;
+        }
       }
       step.ms = Date.now() - t0;
-      onDelta.end();
       emitTask();
     });
 
     if (signal.aborted) throw new Error('Cancelada por ti');
+    const ok = task.steps.filter((s) => s.status === 'done');
+    // Nadie pudo trabajar: si es algo pasajero (sin cupo, sin red…) la tarea espera y se retoma sola.
+    if (!ok.length) return finishWithoutContributions(store, task, emitTask, nameOf);
     // Opcional: el jefe de cada departamento revisa lo que entregó su equipo.
     if (settings.headsReview) await headsReview(store, task, settings, signal, emitTask, nameOf);
-    // Síntesis del cerebro.
+    // Síntesis del cerebro (o de su suplente).
     task.status = 'synthesizing';
     emitTask();
-    agentStatus(brain.id, 'thinking', 'Integrando aportes del equipo…');
-    const ok = task.steps.filter((s) => s.status === 'done');
-    const names = (id) => store.data.agents.find((a) => a.id === id)?.name || id;
-    const contributions = ok.map((s) => `## Aporte de ${names(s.agentId)}\n${s.output}`).join('\n\n');
-    const synthDelta = streamer(`task:${task.id}:final`);
     const tSynth = Date.now();
-    // Con un solo aporte no hace falta integrar: se entrega tal cual (ahorra una llamada al cerebro).
-    const synth = ok.length === 1 && !ok[0].simulated ? { text: ok[0].output, simulated: false } : await callModel(settings, {
-      provider: brain.provider, model: brain.model, agent: brain, effort,
-      onDelta: synthDelta, signal,
-      system: buildSystem(brain),
-      messages: [{
-        role: 'user',
-        content:
-          `Tarea original: ${background}${prompt}${ctx()}\n\nAportes del equipo:\n\n${contributions || '(ningún aporte)'}\n\n` +
-          'Integra todo en una respuesta final única, coherente y accionable. Menciona a quién se debe cada parte cuando aporte valor. ' +
-          'Termina con "### Ideas clave" (3 a 6 viñetas cortas, cada una una idea reutilizable).',
-      }],
-    });
-    synthDelta.end();
+    const synth = await synthesize(store, task, { ok, run, effort, signal, nameOf });
     task.synthMs = Date.now() - tSynth;
-    task.final = synth.simulated ? demoSynthesis(prompt, ok, names) : synth.text;
+    if (synth.by) task.synthBy = synth.by;
+    task.final = synth.text;
     // Las imágenes que generaron las IAs no se pierden en el resumen final.
     const imgs = [...new Set(ok.flatMap((s) => (s.output || '').match(/!?\[[^\]]*\]\(\/api\/(?:images|videos)\/[\w.-]+\)/g) || []))].filter((m) => !task.final.includes(m.match(/\(([^)]+)\)/)[1]));
     if (imgs.length) task.final = `${imgs.join('\n\n')}\n\n${task.final}`;
@@ -374,17 +488,26 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     task.status = 'done';
     task.finishedAt = new Date().toISOString();
     task.ms = Date.parse(task.finishedAt) - Date.parse(task.createdAt || task.finishedAt);
-    remember(store, store.data.agents.find((a) => a.id === brain.id), `Coordiné "${task.title}" con ${ok.map((s) => names(s.agentId)).join(', ')}`);
+    const brain = store.data.agents.find((a) => a.id === (task.synthBy || brainOf(store).id)) || brainOf(store);
+    remember(store, brain, `Coordiné "${task.title}" con ${ok.map((s) => nameOf(s.agentId)).join(', ')}`);
     agentStatus(brain.id, 'done', '¡Tarea completada!');
 
-    if (saveNotes) saveTaskNotes(store, notes, task, names);
+    if (task.saveNotes !== false) saveTaskNotes(store, notes, task, nameOf);
   } catch (err) {
     task.status = 'error';
     task.final = signal.aborted ? 'Cancelada por ti. Puedes reintentarla cuando quieras.' : `Error: ${err.message}`;
-    agentStatus(brain.id, signal.aborted ? 'idle' : 'error', signal.aborted ? '' : err.message);
+    agentStatus(planner.id, signal.aborted ? 'idle' : 'error', signal.aborted ? '' : err.message);
     for (const st of task.steps) if (st.status === 'pending' || st.status === 'working') st.status = 'error', st.error ||= 'Cancelada';
+  } finally {
+    running.delete(task.id);
   }
-  running.delete(task.id);
+  return finishTask(store, task);
+}
+
+/** Cierra la tarea: tablero, automatizaciones y eventos (no se llama mientras espera cupo). */
+function finishTask(store, task) {
+  const { settings } = store.data;
+  if (task.status !== 'waiting') delete task.resume;
   // Opcional: los próximos pasos se convierten en tarjetas del tablero.
   if (task.status === 'done' && settings.autoCards) {
     const m = task.final.match(/#+\s*(próximos pasos|proximos pasos|ideas clave)[^\n]*\n([\s\S]*?)(?:\n#+\s|\n---|$)/i);
@@ -395,24 +518,111 @@ export async function runTask(store, notes, { prompt, agentIds, saveNotes = true
     if (items.length) bus.emit('event', { type: 'cards' });
   }
   // Tarjetas del tablero ligadas a esta tarea pasan a «Hecho».
-  for (const c of store.data.cards || []) {
-    if (c.taskId === task.id) {
-      if (task.status === 'done') {
-        c.column = 'done';
-        c.noteId = task.noteId;
-      } else {
-        // Falló: la tarjeta vuelve a «Por hacer» para poder reintentarla.
-        c.column = 'todo';
-        c.taskId = null;
+  if (task.status !== 'waiting') {
+    for (const c of store.data.cards || []) {
+      if (c.taskId === task.id) {
+        if (task.status === 'done') {
+          c.column = 'done';
+          c.noteId = task.noteId;
+        } else {
+          // Falló: la tarjeta vuelve a «Por hacer» para poder reintentarla.
+          c.column = 'todo';
+          c.taskId = null;
+        }
+        bus.emit('event', { type: 'cards' });
       }
-      bus.emit('event', { type: 'cards' });
     }
   }
   store.save();
-  emitTask();
+  bus.emit('event', { type: 'task', task });
   bus.emit('event', { type: 'notes' });
-  onTaskFinished(store, task);
+  if (task.status !== 'waiting') onTaskFinished(store, task);
   return task;
+}
+
+/** Errores de todos los intentos de los pasos (para explicar qué pasó). */
+function failuresOf(task) {
+  return task.steps.flatMap((s) => (s.failed?.length ? s.failed.filter((f) => !f.skipped) : s.error && s.error !== 'Cancelada' ? [{ agentId: s.agentId, error: s.error, kind: s.errorKind || classifyError(s.error) }] : []));
+}
+
+/**
+ * Ningún paso salió. Si fue por algo pasajero (sin cupo, saturado, sin red…),
+ * la tarea queda «esperando» y se retoma sola más tarde; si no, se explica
+ * qué falló y qué hacer.
+ */
+function finishWithoutContributions(store, task, emitTask, nameOf) {
+  const fails = failuresOf(task);
+  const attempts = task.resume?.attempts || 0;
+  const lines = [...new Map(fails.map((f) => [f.agentId, f])).values()].map((f) => {
+    const e = explainError(f.error);
+    return `- **${nameOf(f.agentId)}** — ${e.icon} ${e.title}: ${f.error.slice(0, 200)}${e.fix ? `\n  ${e.fix}` : ''}`;
+  });
+  if (fails.some((f) => isTemporaryError(f.error)) && attempts < RESUME_BACKOFF_MIN.length) {
+    // Si alguna de estas IAs recupera su cupo antes, se retoma en ese momento.
+    const soon = fails.map((f) => healthOf(store, f.agentId).until).filter(Boolean);
+    const wait = Math.min(RESUME_BACKOFF_MIN[attempts] * 60000, ...soon.map((u) => u - Date.now()));
+    task.status = 'waiting';
+    task.resume = { ...(task.resume || {}), attempts: attempts + 1, at: new Date(Date.now() + Math.max(60000, wait)).toISOString() };
+    task.final = `⏳ **En espera.** Ninguna IA pudo trabajar en este momento, por algo que suele arreglarse solo. La oficina la retomará sola (intento ${attempts + 1} de ${RESUME_BACKOFF_MIN.length}); también puedes retomarla ya o cancelarla.\n\n${lines.join('\n')}`;
+    for (const st of task.steps) if (st.status !== 'done') st.status = 'pending';
+    agentStatus(brainOf(store).id, 'idle', 'Esperando a que vuelva el cupo de las IAs…');
+  } else {
+    task.status = 'error';
+    task.final = `No se pudo hacer la tarea: ninguna IA respondió.\n\n${lines.join('\n') || '- No había IAs disponibles.'}`;
+    agentStatus(brainOf(store).id, 'error', 'Ninguna IA pudo hacer la tarea');
+  }
+  emitTask();
+  return finishTask(store, task);
+}
+
+/**
+ * Integra los aportes: el cerebro o, si no puede, otra IA que ya trabajó en la
+ * tarea. Si nadie puede integrar, se entregan los aportes tal cual (el trabajo
+ * del equipo nunca se pierde por una falla del final).
+ */
+async function synthesize(store, task, { ok, run, effort, signal, nameOf }) {
+  const { settings } = store.data;
+  // Con un solo aporte no hace falta integrar: se entrega tal cual (ahorra una llamada).
+  if (ok.length === 1 && !ok[0].simulated) return { text: ok[0].output, simulated: false };
+  const worked = ok.filter((s) => !s.simulated).map((s) => s.agentId);
+  const first = actingBrain(store, worked);
+  const others = worked.map((id) => store.data.agents.find((a) => a.id === id)).filter((a) => a && a.id !== first.id && ready(store, a))
+    .sort((a, b) => (speedOf(store, a.id) || 60000) - (speedOf(store, b.id) || 60000));
+  const order = [first, ...others].slice(0, 3);
+  const contributions = ok.map((s) => `## Aporte de ${nameOf(s.agentId)}\n${s.output}`).join('\n\n');
+  const failures = [];
+  for (const who of order) {
+    const brain = who.isBrain;
+    agentStatus(who.id, 'thinking', 'Integrando aportes del equipo…');
+    const synthDelta = streamer(`task:${task.id}:final`);
+    try {
+      const r = await callModel(settings, {
+        provider: who.provider, model: who.model, agent: who, effort,
+        onDelta: synthDelta, signal,
+        system: buildSystem(who) + (brain ? '' : '\n\nHoy suples al Cerebro Central: integras los aportes del equipo en una sola respuesta.'),
+        messages: [{
+          role: 'user',
+          content:
+            `Tarea original: ${run.background}${task.prompt}${run.context}\n\nAportes del equipo:\n\n${contributions}\n\n` +
+            'Integra todo en una respuesta final única, coherente y accionable. Menciona a quién se debe cada parte cuando aporte valor. ' +
+            'Termina con "### Ideas clave" (3 a 6 viñetas cortas, cada una una idea reutilizable).',
+        }],
+      });
+      synthDelta.end();
+      if (r.simulated) return { text: demoSynthesis(task.prompt, ok, nameOf), simulated: true, by: who.id };
+      return { text: r.text, simulated: false, by: who.id };
+    } catch (err) {
+      synthDelta.end();
+      if (signal.aborted) throw err;
+      failures.push({ agentId: who.id, error: err.message });
+      agentStatus(who.id, 'error', err.message);
+    }
+  }
+  const why = failures.map((f) => `${nameOf(f.agentId)}: ${explainError(f.error).title.toLowerCase()}`).join('; ');
+  return {
+    text: `> ⚠️ No se pudo integrar la respuesta (${why || 'sin IAs disponibles'}). Aquí están los aportes del equipo tal cual; con «¿Algún ajuste?» puedes pedir que los unan.\n\n${ok.map((s) => `## Aporte de ${nameOf(s.agentId)}\n\n${s.output}`).join('\n\n')}`,
+    simulated: false,
+  };
 }
 
 /** Revisión de los jefes: si 2 o más IAs de un departamento trabajaron, su jefe revisa y ajusta. */

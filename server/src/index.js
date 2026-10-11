@@ -21,7 +21,7 @@ import { requestAccess } from './access.js';
 import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
 import { COOKIE, cookieOf, createUser, hashPassword, hostAllowed, login, logout, needsAdmin, publicUser, tailscaleAddresses, userFromSession } from './auth.js';
-import { bus, runTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
+import { bus, runTask, resumeTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
 import { FREE_MODELS, freePlan, healAgents, rescuePlan } from './freeModels.js';
 import { CAD_TOOLS, detectCad, runCad, openInApp, openInBambu, sliceJob, extractCadBlocks, listFiles } from './cad.js';
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
@@ -45,6 +45,12 @@ const dataDir = () => resolveDataDir(ROOT);
 const PORT = Number(process.env.PORT || 4747);
 // Solo tu computador puede usar la oficina (tiene tus claves y puede ejecutar CLIs).
 const HOST = process.env.HOST || '127.0.0.1';
+
+/**
+ * Una tarea en espera guarda su contexto (adjuntos, enlaces) para retomarse;
+ * eso no se le envía a la interfaz: solo cuándo se retoma y cuántos intentos van.
+ */
+const hideResume = (k, v) => (k === 'resume' && v && typeof v === 'object' ? { at: v.at, attempts: v.attempts } : v);
 
 export function createApp(store) {
   const notes = new Notes(store);
@@ -113,9 +119,15 @@ export function createApp(store) {
     store.save();
   }
 
-  // Tareas o reuniones que quedaron a medias por un reinicio.
+  // Tareas o reuniones que quedaron a medias por un reinicio: si se guardó lo
+  // necesario, la tarea se retoma sola en unos segundos (lo ya hecho se conserva).
   for (const t of store.data.tasks) {
-    if (!['done', 'error'].includes(t.status)) {
+    if (!['done', 'error', 'waiting'].includes(t.status) && t.resume?.context !== undefined) {
+      t.status = 'waiting';
+      t.resume.at = new Date(Date.now() + 5000).toISOString();
+      t.final = '⏳ La oficina se cerró mientras el equipo trabajaba: la tarea se retoma sola (lo que ya estaba hecho se conserva).';
+      for (const st of t.steps) if (st.status === 'working') st.status = 'pending';
+    } else if (!['done', 'error', 'waiting'].includes(t.status)) {
       t.status = 'error';
       t.final ||= 'Interrumpida: la oficina se cerró mientras el equipo trabajaba. Puedes volver a enviarla.';
       for (const st of t.steps) if (st.status === 'working' || st.status === 'pending') st.status = 'error', st.error ||= 'Interrumpida por un reinicio';
@@ -481,10 +493,10 @@ export function createApp(store) {
   });
 
   // --- Tareas (el cerebro coordina al equipo) ---
-  app.get('/api/tasks', (_req, res) => res.json(store.data.tasks.slice(0, 100)));
+  app.get('/api/tasks', (_req, res) => res.type('json').send(JSON.stringify(store.data.tasks.slice(0, 100), hideResume)));
   app.get('/api/tasks/:id', (req, res) => {
     const t = store.data.tasks.find((x) => x.id === req.params.id);
-    return t ? res.json(t) : res.status(404).json({ error: 'No existe' });
+    return t ? res.type('json').send(JSON.stringify(t, hideResume)) : res.status(404).json({ error: 'No existe' });
   });
   app.post('/api/tasks', (req, res) => {
     const prompt = String(req.body?.prompt || '').trim();
@@ -520,9 +532,29 @@ export function createApp(store) {
   });
   app.post('/api/tasks/:id/cancel', (req, res) => {
     const ctrl = running.get(req.params.id);
+    const t = store.data.tasks.find((x) => x.id === req.params.id);
+    // Una tarea en espera (sin cupo) se cancela sin más.
+    if (!ctrl && t?.status === 'waiting') {
+      t.status = 'error';
+      t.final = 'Cancelada por ti. Puedes reintentarla cuando quieras.';
+      delete t.resume;
+      for (const st of t.steps) if (st.status !== 'done') st.status = 'error', st.error ||= 'Cancelada';
+      store.save();
+      bus.emit('event', { type: 'task', task: t });
+      return res.json({ ok: true });
+    }
     if (!ctrl) return res.status(404).json({ error: 'Esa tarea no está en curso' });
     ctrl.abort();
     res.json({ ok: true });
+  });
+  // Retomar ya una tarea en espera (sin esperar a que vuelva el cupo).
+  app.post('/api/tasks/:id/resume', (req, res) => {
+    const t = store.data.tasks.find((x) => x.id === req.params.id);
+    if (!t) return res.status(404).json({ error: 'No existe' });
+    if (t.status !== 'waiting') return res.status(409).json({ error: 'Esa tarea no está en espera' });
+    const p = resumeTask(store, notes, t);
+    p?.catch((err) => console.error('[tarea]', err));
+    res.status(202).json({ ok: true });
   });
   app.delete('/api/tasks/:id', (req, res) => {
     store.data.tasks = store.data.tasks.filter((t) => t.id !== req.params.id);
@@ -1717,7 +1749,7 @@ Estado actual de la oficina:\n${status}\n${blenderLine}`,
   app.get('/api/events', (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.write('retry: 2000\n\n');
-    const send = (e) => res.write(`data: ${JSON.stringify(e)}\n\n`);
+    const send = (e) => res.write(`data: ${JSON.stringify(e, hideResume)}\n\n`);
     bus.on('event', send);
     const ping = setInterval(() => res.write(': ping\n\n'), 25000);
     req.on('close', () => {

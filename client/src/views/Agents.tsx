@@ -8,6 +8,7 @@ import { Stats } from '../components/Stats';
 import { CATALOG } from '../catalog';
 import { AchievementsPanel } from '../components/Achievements';
 import { useOffice } from '../state';
+import { clock, errorHelp } from '../errorHelp';
 
 const COLORS = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
 const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
@@ -172,7 +173,9 @@ export function Agents() {
               <strong>{a.name}{a.isHead && <span title="Jefe de departamento"> 👑</span>}</strong>
               <small>{a.role}{a.assistants?.length ? ` · 👥 ${a.assistants.map((x) => x.focus).join(', ')}` : ''}</small>
               <small className="muted"><span className={`dot ${a.live ? 'dot--live' : 'dot--demo'}`} /> {a.provider} · {a.model}</small>
-              {a.live && a.health?.ok === false && <small className="danger" title={a.health.error}>⚠️ Con fallas: no recibe trabajo hasta que vuelva a responder</small>}
+              {a.live && a.health?.ok === false && (a.health.quota
+                ? <small className="warn" title={a.health.error}>⏳ Sin cupo: descansa{a.health.until ? ` hasta las ${clock(a.health.until)}` : ''} y luego vuelve sola</small>
+                : <small className="danger" title={a.health.error}>{errorHelp(a.health.kind, a.health.error || '').icon} Con fallas ({errorHelp(a.health.kind, a.health.error || '').title.toLowerCase()}): no recibe trabajo hasta que vuelva a responder</small>)}
               <Meters agentId={a.id} />
               <small className="muted">{dept(a.department)?.emoji} {dept(a.department)?.name} · {a.stats?.tasks || 0} {a.stats?.tasks === 1 ? 'trabajo' : 'trabajos'} · {a.knowledge?.length || 0} {a.knowledge?.length === 1 ? 'lección' : 'lecciones'}</small>
             </div>

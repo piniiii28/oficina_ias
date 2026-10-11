@@ -1,7 +1,7 @@
 // Rutinas: tareas que el Cerebro Central ejecuta solo, a una hora y en los
 // días elegidos, mientras la oficina esté encendida.
 import { Store } from './store.js';
-import { runTask } from './orchestrator.js';
+import { runTask, resumeTask } from './orchestrator.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -47,6 +47,10 @@ export function startScheduler(store, notes) {
           store.save();
         })
         .catch((err) => console.error('[rutina]', err));
+    }
+    // Tareas en espera (sin cupo, sin conexión o cortadas por un reinicio): se retoman solas.
+    for (const t of store.data.tasks || []) {
+      if (t.status === 'waiting' && Date.parse(t.resume?.at || 0) <= Date.now()) resumeTask(store, notes, t)?.catch((err) => console.error('[tarea]', err));
     }
   };
   const id = setInterval(tick, 20000);

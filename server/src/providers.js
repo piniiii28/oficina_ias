@@ -12,6 +12,9 @@ import path from 'node:path';
 import { simulate } from './demo.js';
 import { FREE_MODELS, RETIRED_MODELS } from './freeModels.js';
 import { ollamaOrder, ensureUp, markDown, markUp, track, isDownError } from './ollama.js';
+import { isQuotaError, isRetiredModel, isOverloaded, isCliModelError, classifyError, retryAfterMs } from './errors.js';
+
+export { isQuotaError, isRetiredModel, isOverloaded, isCliModelError };
 
 // tier: 'gratis' (tiene plan gratis), 'mixto' (modelos gratis y de pago),
 // 'suscripcion' (usa un plan que ya pagas) o 'pago' (cobra por uso).
@@ -113,12 +116,6 @@ export function credentials(settings, provider, accountId = null) {
   return all;
 }
 
-/** ¿El error dice que el modelo ya no existe o dejó de ser gratis? */
-export const isRetiredModel = (msg) => /not included in your free usage|requires? (a )?(paid|pro) (plan|subscription)|no longer available|does not exist|model_not_found|is not found|not found for API|not supported for generateContent|unavailable for free|decommissioned|has been (deprecated|retired|shut ?down)|not a valid model|invalid model/i.test(String(msg));
-/** ¿El modelo está saturado en este momento (se arregla solo en un rato)? */
-export const isOverloaded = (msg) => /high demand|overloaded|temporarily unavailable|try again later|\b503\b|\bUNAVAILABLE\b|server is busy|unexpected server error/i.test(String(msg));
-/** ¿Una CLI rechazó el modelo que se le pidió (p. ej. Codex con cuenta de ChatGPT)? */
-export const isCliModelError = (msg) => /model.{0,80}(not supported|not available|not found|unknown|invalid|does not exist)|(unknown|invalid|unsupported) model/i.test(String(msg));
 
 const modelLists = new Map();
 /** Modelos que ofrece hoy un proveedor compatible con OpenAI (se guarda 10 minutos). */
@@ -246,8 +243,6 @@ async function withRecovery(provider, cred, model, run, wrote, onSwitch) {
   }
 }
 
-/** ¿El error indica que la cuenta se quedó sin cupo? */
-export const isQuotaError = (msg) => /\b429\b|quota|rate.?limit|l[ií]mite de uso|usage limit|limit reached|exhausted|too many requests|insufficient/i.test(String(msg));
 
 function envKey(provider) {
   const names = {
@@ -301,7 +296,10 @@ export async function callModel(settings, params) {
     if (agentId) callSink?.({ agentId, ok: true, simulated: r.simulated, inChars, ms: Date.now() - t0 });
     return r;
   } catch (err) {
-    if (agentId && err.message !== 'Cancelada') callSink?.({ agentId, ok: false, quota: isQuotaError(err.message), error: err.message.slice(0, 200), inChars, ms: Date.now() - t0 });
+    if (agentId && err.message !== 'Cancelada') {
+      const quota = isQuotaError(err.message);
+      callSink?.({ agentId, ok: false, quota, retryMs: quota ? retryAfterMs(err.message, err.retryAfterMs) : 0, kind: classifyError(err.message), error: err.message.slice(0, 300), inChars, ms: Date.now() - t0 });
+    }
     throw err;
   }
 }
@@ -427,6 +425,28 @@ async function callAnthropic(apiKey, model, system, messages, effort, onDelta, s
 
 }
 
+/**
+ * Error de una API por HTTP: su mensaje, el código (429, 401…) para saber qué
+ * pasó, y cuánto esperar si la respuesta trae Retry-After.
+ */
+async function httpError(label, res) {
+  const raw = await res.text().catch(() => '');
+  let data = {};
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* no era JSON */
+  }
+  if (Array.isArray(data)) data = data[0] || {};
+  const e = data.error;
+  const msg = String((typeof e === 'string' ? e : e?.message) || data.message || data.detail || raw.slice(0, 300) || res.statusText || 'error').trim();
+  const err = new Error(`${label}: ${msg}${new RegExp(`\\b${res.status}\\b`).test(msg) ? '' : ` (${res.status})`}`);
+  err.status = res.status;
+  const ra = res.headers.get('retry-after');
+  if (ra) err.retryAfterMs = /^\d+(\.\d+)?$/.test(ra) ? Number(ra) * 1000 : Math.max(0, Date.parse(ra) - Date.now()) || 0;
+  return err;
+}
+
 /** Lee un cuerpo SSE ("data: {...}") y entrega cada evento JSON. */
 async function readSSE(res, onEvent) {
   const decoder = new TextDecoder();
@@ -473,9 +493,8 @@ async function callOpenAICompatible(provider, cred, model, system, messages, onD
     }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
     const where = cred.server ? ` (${cred.server.label})` : '';
-    throw new Error(`${PROVIDERS[provider].label}${where}: ${data.error?.message || data.error || res.statusText}`);
+    throw await httpError(`${PROVIDERS[provider].label}${where}`, res);
   }
   let text = '';
   await readSSE(res, (e) => {
@@ -501,10 +520,7 @@ async function callGemini(apiKey, model, system, messages, onDelta, signal) {
       contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
     }),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(`Gemini: ${data.error?.message || res.statusText}`);
-  }
+  if (!res.ok) throw await httpError('Gemini', res);
   let text = '';
   await readSSE(res, (e) => {
     const d = e.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('');

@@ -9,27 +9,37 @@ import { callModel, hasKey } from './providers.js';
 const HOUR = 3600000;
 
 /** Registra una llamada (la conecta el servidor con setCallSink). */
-export function recordCall(store, { agentId, ok, simulated, inChars, ms, quota, error }) {
+export function recordCall(store, { agentId, ok, simulated, inChars, ms, quota, retryMs, kind, error }) {
   const all = (store.data.metrics ||= {});
   const m = (all[agentId] ||= { calls: 0, errors: 0, recent: [] });
   m.calls++;
   if (!ok) m.errors++;
-  m.recent.push({ at: Date.now(), ok, sim: Boolean(simulated), in: inChars, ms, quota: Boolean(quota), error: error || undefined });
+  const at = Date.now();
+  m.recent.push({ at, ok, sim: Boolean(simulated), in: inChars, ms, quota: Boolean(quota), until: quota ? at + (retryMs || 10 * 60000) : undefined, kind: kind || undefined, error: error || undefined });
   if (m.recent.length > 30) m.recent.splice(0, m.recent.length - 30);
   store.save();
 }
 
 /**
- * ¿La IA está funcionando? Si sus últimas 2 llamadas reales fallaron (y la
- * última hace menos de 6 horas), queda «con fallas» y no se le da trabajo
- * hasta que vuelva a responder (por ejemplo con «Revisar todas»).
+ * ¿La IA está funcionando?
+ * - Si se quedó sin cupo, descansa hasta que su proveedor lo devuelva
+ *   (`until`, según el error) y mientras tanto no recibe trabajo.
+ * - Si sus últimas 2 llamadas reales fallaron por otra cosa (y la última hace
+ *   menos de 6 horas), queda «con fallas» hasta que vuelva a responder (por
+ *   ejemplo con «Revisar todas»).
  */
 export function healthOf(store, agentId) {
   const recent = (store.data.metrics?.[agentId]?.recent || []).filter((r) => !r.sim);
-  const last = recent.slice(-2);
+  const lastOne = recent.at(-1);
+  if (lastOne && !lastOne.ok && lastOne.quota) {
+    const until = lastOne.until || lastOne.at + 10 * 60000;
+    if (Date.now() < until) return { ok: false, quota: true, until, kind: 'cupo', error: lastOne.error || 'Sin cupo por ahora', at: lastOne.at };
+    return { ok: true, rested: true };
+  }
+  const last = recent.filter((r) => r.ok || !r.quota).slice(-2);
   if (last.length < 2 || last.some((r) => r.ok)) return { ok: true };
   if (Date.now() - last[1].at > 6 * 3600000) return { ok: true, stale: true };
-  return { ok: false, error: last[1].error || 'Falló dos veces seguidas', at: last[1].at };
+  return { ok: false, kind: last[1].kind || null, error: last[1].error || 'Falló dos veces seguidas', at: last[1].at };
 }
 
 /** Cuánto tarda una IA en responder (promedio de sus últimas respuestas reales, en ms). */
@@ -47,6 +57,8 @@ export function accuracyOf(store, agent) {
   let done = 0, failed = 0, vSum = 0, vN = 0, jSum = 0, jN = 0;
   for (const t of store.data.tasks) {
     for (const s of t.steps) {
+      // Si falló y otra IA retomó su paso, cuenta como falla suya.
+      for (const f of s.failed || []) if (f.agentId === agent.id && !f.skipped && f.kind !== 'cancelada') failed++;
       if (s.agentId !== agent.id) continue;
       if (s.status === 'done') done++;
       else if (s.status === 'error' && s.error !== 'Cancelada') failed++;

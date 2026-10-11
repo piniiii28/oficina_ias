@@ -37,7 +37,7 @@ export type Agent = {
   paidBackup?: { provider: string; model: string };
   geminiBackup?: { provider: string; model: string };
   demoBackup?: { provider: string; model: string };
-  health?: { ok: boolean; error?: string; at?: number };
+  health?: { ok: boolean; error?: string; at?: number; quota?: boolean; until?: number; kind?: string | null };
   isHead?: boolean;
   delegate?: boolean;
   assistants?: AssistantDef[];
@@ -118,14 +118,21 @@ export type Step = {
   output: string;
   simulated: boolean;
   error: string | null;
+  errorKind?: string | null;
+  /** IAs que fallaron en este paso (otra lo retomó). `skipped`: se saltó porque seguía sin cupo. */
+  failed?: { agentId: string; error: string; kind: string; skipped?: boolean; at: string }[];
 };
 
 export type Task = {
   id: string;
   prompt: string;
   title: string;
-  status: 'planning' | 'working' | 'synthesizing' | 'reviewing' | 'done' | 'error';
+  status: 'planning' | 'working' | 'synthesizing' | 'reviewing' | 'waiting' | 'done' | 'error';
   plan: { analysis: string } | null;
+  /** En espera (sin cupo o sin conexión): cuándo se retoma sola y cuántos intentos van. */
+  resume?: { at?: string; attempts?: number };
+  /** Quién integró la respuesta (si no fue el Cerebro). */
+  synthBy?: string;
   steps: Step[];
   ms?: number;
   synthMs?: number;
@@ -279,6 +286,7 @@ export const api = {
     req<{ id: string }>('POST', '/api/tasks', { prompt, agentIds, parentId, attachments, flow, effort, fromNote }),
   deleteTask: (id: string) => req('DELETE', `/api/tasks/${id}`),
   cancelTask: (id: string) => req('POST', `/api/tasks/${id}/cancel`),
+  resumeTask: (id: string) => req('POST', `/api/tasks/${id}/resume`),
   rateStep: (id: string, agentId: string, value: number, comment = '') => req('POST', `/api/tasks/${id}/steps/${agentId}/rate`, { value, comment }),
 
   meetings: () => req<Meeting[]>('GET', '/api/meetings'),

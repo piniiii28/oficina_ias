@@ -9,6 +9,7 @@ import { Feed } from '../components/Feed';
 import { MicButton } from '../components/Voice';
 import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice, type Live } from '../state';
+import { clock } from '../errorHelp';
 
 const STATUS_LABEL: Record<string, string> = {
   idle: 'Disponible', thinking: 'Pensando…', working: 'Trabajando', talking: 'Hablando', done: '¡Listo!', error: 'Error',
@@ -63,7 +64,7 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
   const name = (id: string) => agents.find((a) => a.id === id)?.name || id;
   const done = task.steps.filter((s) => s.status === 'done' || s.status === 'error').length;
   const pct = task.status === 'done' ? 100 : task.steps.length ? Math.round((done / task.steps.length) * 85) + 5 : 5;
-  const label = { planning: 'Planificando', working: 'El equipo trabaja', synthesizing: 'Integrando', reviewing: 'Revisando calidad', done: 'Completada', error: 'Error' }[task.status];
+  const label = { planning: 'Planificando', working: 'El equipo trabaja', synthesizing: 'Integrando', reviewing: 'Revisando calidad', waiting: '⏳ En espera (sin cupo)', done: 'Completada', error: 'Error' }[task.status];
   return (
     <div className="task-progress">
       <div className="task-progress-head">
@@ -80,6 +81,11 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
           </span>
         ))}
       </div>
+      {task.status === 'waiting' && (
+        <p className="small warn">⏳ Ninguna IA tiene cupo ahora: se retoma sola{task.resume?.at ? ` a las ${clock(task.resume.at)}` : ''}.{' '}
+          <button className="link small" onClick={() => api.resumeTask(task.id).catch((e) => alert(e.message))}>▶ Retomar ya</button>
+        </p>
+      )}
       {task.status !== 'done' && task.status !== 'error' && (
         <button className="link danger small" onClick={() => api.cancelTask(task.id)}>✖ Cancelar tarea</button>
       )}

@@ -2418,3 +2418,138 @@ test('nodos: «Probar conexión» explica qué falla (dirección, llegada, códi
     srv.close();
   }
 });
+
+test('errores de las IAs: tipo, explicación y cuánto esperar', async () => {
+  const { classifyError, retryAfterMs, isTemporaryError } = await import('../src/errors.js');
+  assert.equal(classifyError('Groq: Rate limit reached for model. Please try again in 7m12.5s. (429)'), 'cupo');
+  assert.equal(classifyError('OpenRouter: Invalid API key (401)'), 'clave');
+  assert.equal(classifyError('Gemini: models/gemini-2.5-pro is no longer available'), 'modelo');
+  assert.equal(classifyError('fetch failed'), 'red');
+  assert.equal(classifyError('Cerebras: Service Unavailable (503)'), 'saturado');
+  assert.equal(classifyError('No encontré el comando «codex»'), 'programa');
+  assert.equal(classifyError('Cancelada'), 'cancelada');
+  assert.ok(isTemporaryError('too many requests') && !isTemporaryError('Invalid API key (401)'));
+  assert.equal(retryAfterMs('Please try again in 7m12.5s'), (7 * 60 + 12.5) * 1000 + 2000);
+  assert.equal(retryAfterMs('Please retry in 41.2s'), Math.ceil(41.2 * 1000) + 2000);
+  assert.equal(retryAfterMs('x', 30000), 30000, 'el encabezado Retry-After manda');
+  assert.equal(retryAfterMs('Rate limit exceeded: free-models-per-day'), 120 * 60000);
+  assert.equal(retryAfterMs('Rate limit'), 10 * 60000);
+});
+
+/** Proveedor falso compatible con OpenAI: responde según el modelo pedido. */
+async function fakeModels(rules) {
+  const http = await import('node:http');
+  const calls = [];
+  const srv = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      const { model } = JSON.parse(body || '{}');
+      calls.push(model);
+      const rule = rules[model] || 'ok';
+      if (rule === 'cupo') {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Rate limit reached for model. Please try again in 1m30s.' } }));
+      }
+      if (rule === 'cae') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Internal error' } }));
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `Respuesta de ${model}` } }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  srv.listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+  return { srv, calls, url: `http://127.0.0.1:${srv.address().port}/v1` };
+}
+
+/** Oficina con solo unas IAs reales (Groq y Ollama apuntan al proveedor falso). */
+async function liveOffice(url, team) {
+  const { PROVIDERS } = await import('../src/providers.js');
+  const store = new Store(tmp());
+  createApp(store);
+  store.data.settings.apiKeys = { groq: 'clave', ollamaEnabled: true, ollamaUrl: url };
+  store.data.settings.headsReview = false;
+  const original = PROVIDERS.groq.baseUrl;
+  PROVIDERS.groq.baseUrl = url;
+  for (const a of store.data.agents) {
+    const t = team[a.id];
+    a.enabled = Boolean(t || a.isBrain);
+    if (t) Object.assign(a, t, { assistants: [] });
+  }
+  return { store, restore: () => (PROVIDERS.groq.baseUrl = original) };
+}
+
+test('si una IA falla o se queda sin cupo, otra retoma su paso', async () => {
+  const { healthOf } = await import('../src/metrics.js');
+  const fake = await fakeModels({ 'sin-cupo': 'cupo' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'sin-cupo' },
+    perplexity: { provider: 'ollama', model: 'suplente' },
+  });
+  try {
+    const t = await runTask(store, new Notes(store), { prompt: 'Escribe un saludo', agentIds: ['chatgpt'], saveNotes: false });
+    assert.equal(t.status, 'done', t.final);
+    assert.equal(t.steps.length, 1);
+    assert.equal(t.steps[0].agentId, 'perplexity', 'la IA suplente hizo el paso');
+    assert.equal(t.steps[0].failed[0].agentId, 'chatgpt');
+    assert.equal(t.steps[0].failed[0].kind, 'cupo');
+    assert.match(t.final, /Respuesta de suplente/);
+    const h = healthOf(store, 'chatgpt');
+    assert.equal(h.ok, false, 'sin cupo: descansa un rato');
+    assert.ok(h.quota && h.until > Date.now() + 60000);
+    assert.equal(healthOf(store, 'perplexity').ok, true);
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
+
+test('sin cupo en ninguna IA: la tarea espera y se retoma sola con lo que faltó', async () => {
+  const { resumeTask } = await import('../src/orchestrator.js');
+  const rules = { 'a-sin-cupo': 'cupo', 'b-sin-cupo': 'cupo' };
+  const fake = await fakeModels(rules);
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'a-sin-cupo' },
+    perplexity: { provider: 'ollama', model: 'b-sin-cupo' },
+  });
+  try {
+    const t = await runTask(store, new Notes(store), { prompt: 'Resume esto', agentIds: ['chatgpt'], saveNotes: false });
+    assert.equal(t.status, 'waiting', t.final);
+    assert.ok(Date.parse(t.resume.at) > Date.now(), 'tiene hora para retomarse');
+    assert.equal(t.resume.attempts, 1);
+    assert.match(t.final, /Sin cupo/);
+    // Vuelve el cupo: el proveedor responde y termina la espera.
+    delete rules['a-sin-cupo'];
+    for (const m of Object.values(store.data.metrics)) for (const r of m.recent) if (r.until) r.until = Date.now() - 1;
+    const done = await resumeTask(store, new Notes(store), t);
+    assert.equal(done.status, 'done', done.final);
+    assert.match(done.final, /Respuesta de a-sin-cupo/);
+    assert.equal(done.resume, undefined, 'ya no guarda el contexto para retomarla');
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
+
+test('si el Cerebro falla al integrar, lo suple otra IA (el trabajo no se pierde)', async () => {
+  const fake = await fakeModels({ 'cerebro-caido': 'cae' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro-caido' },
+    chatgpt: { provider: 'groq', model: 'redactor' },
+    perplexity: { provider: 'ollama', model: 'investigador' },
+  });
+  try {
+    const t = await runTask(store, new Notes(store), { prompt: 'Plan de un viaje', agentIds: ['perplexity', 'chatgpt'], saveNotes: false });
+    assert.equal(t.status, 'done', t.final);
+    assert.equal(t.steps.filter((s) => s.status === 'done').length, 2);
+    assert.ok(['chatgpt', 'perplexity'].includes(t.synthBy), `integró ${t.synthBy}`);
+    assert.match(t.final, /Respuesta de (redactor|investigador)/);
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
