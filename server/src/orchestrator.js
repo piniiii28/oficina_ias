@@ -363,10 +363,10 @@ async function executeTask(store, notes, task, run) {
       let replacing = null;
       // Si la IA del plan ya no está o sigue sin cupo, el paso arranca con otra.
       const health = agent && isLive(settings, agent) ? healthOf(store, agent.id) : { ok: true };
-      if (!agent || !health.ok) {
+      if (!agent || !agent.enabled || !health.ok) {
         const alt = pickReplacement(store, task, agent, tried);
         if (alt) {
-          (step.failed ||= []).push({ agentId: step.agentId, error: agent ? health.error : 'Ya no está en la oficina', kind: agent ? health.kind || 'otro' : 'otro', skipped: true, at: new Date().toISOString() });
+          (step.failed ||= []).push({ agentId: step.agentId, error: !agent ? 'Ya no está en la oficina' : !agent.enabled ? 'Está desactivada' : health.error, kind: agent?.enabled ? health.kind || 'otro' : 'otro', skipped: true, at: new Date().toISOString() });
           replacing = agent;
           swapAgent(task, step, alt.id);
           agent = alt;

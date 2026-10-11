@@ -41,7 +41,7 @@ export function Tasks() {
         {tasks.map((t) => (
           <button key={t.id} className={`task-item ${current?.id === t.id ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
             <strong>{t.title}</strong>
-            <small className="muted">{new Date(t.createdAt).toLocaleString()} · {t.steps.length} IAs</small>
+            <small className="muted">{new Date(t.createdAt).toLocaleString()} · {t.steps.length} IAs{t.ms ? ` · ⏱ ${fmtSecs(t.ms)}` : ''}</small>
             <span className={`pill pill--${t.status}`} title={t.status === 'waiting' && t.resume?.at ? `Se retoma sola a las ${clock(t.resume.at)}` : undefined}>{t.status === 'waiting' ? '⏳ ' : ''}{STATUS_ES[t.status]}</span>
           </button>
         ))}
@@ -133,7 +133,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
                       const who = <b>{agent(f.agentId)?.name || f.agentId}</b>;
                       return (
                         <span key={i} className="swap" title={`${f.error}\n\n${h.fix}`}>
-                          {f.skipped ? <>⏭ {who} seguía con {h.title.toLowerCase()}</> : s.status === 'done' && f.agentId !== s.agentId ? <>🔁 Reemplazó a {who} · {h.icon} {h.title.toLowerCase()}</> : <>{h.icon} {who}: {h.title.toLowerCase()}</>}
+                          {f.skipped ? <>⏭ Saltó a {who} ({(h.kind === 'otro' ? f.error : h.title).toLowerCase()})</> : s.status === 'done' && f.agentId !== s.agentId ? <>🔁 Reemplazó a {who} · {h.icon} {h.title.toLowerCase()}</> : <>{h.icon} {who}: {h.title.toLowerCase()}</>}
                         </span>
                       );
                     })}
