@@ -302,6 +302,10 @@ export function createApp(store) {
     const { apiKeys, demoMode, maxParallel, ollamaEnabled, ollamaUrl, cli, reviewFinal, maxTeam, webSearch, autoCards, hubs, cadPaths, accessEnabled } = req.body || {};
     if (accessEnabled !== undefined) s.accessEnabled = Boolean(accessEnabled);
     if (req.body?.onlyLive !== undefined) s.onlyLive = Boolean(req.body.onlyLive);
+    // Pedidos a la vez por cuenta de un proveedor gratis (más = más rápido, pero agota antes el límite por minuto).
+    if (req.body?.perAccount !== undefined) s.perAccount = Math.max(1, Math.min(6, Number(req.body.perAccount) || 2));
+    // ¿Las tareas en espera (sin cupo) se retoman solas?
+    if (req.body?.autoResume !== undefined) s.autoResume = Boolean(req.body.autoResume);
     if (req.body?.video && typeof req.body.video === 'object') {
       const v = (s.video ||= {});
       if (req.body.video.service !== undefined) v.service = VIDEO_SERVICES[req.body.video.service] ? req.body.video.service : null;

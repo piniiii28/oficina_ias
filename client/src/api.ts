@@ -192,6 +192,8 @@ export type ChatMessage = {
 
 export type Settings = {
   demoMode: 'auto' | 'always';
+  perAccount?: number;
+  autoResume?: boolean;
   reviewFinal?: boolean;
   maxTeam?: number;
   webSearch?: boolean;

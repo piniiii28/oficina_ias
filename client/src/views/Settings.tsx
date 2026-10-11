@@ -61,7 +61,14 @@ export function Settings() {
           <label>IAs trabajando a la vez
             <input type="number" min={1} max={10} value={s.maxParallel} onChange={(e) => save({ maxParallel: Number(e.target.value) })} />
           </label>
+          <label title="Los planes gratis limitan los pedidos por minuto: con más a la vez va más rápido, pero se agota antes el cupo">Pedidos a la vez por cuenta gratis
+            <input type="number" min={1} max={6} value={s.perAccount || 2} onChange={(e) => save({ perAccount: Number(e.target.value) })} />
+          </label>
         </div>
+        <label className="check" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={s.autoResume !== false} onChange={(e) => save({ autoResume: e.target.checked })} />
+          Retomar solas las tareas en espera: si ninguna IA tiene cupo, la tarea espera y sigue sola cuando vuelve (lo hecho se conserva)
+        </label>
         <label className="check" style={{ marginTop: 10 }}>
           <input type="checkbox" checked={s.onlyLive !== false} onChange={(e) => save({ onlyLive: e.target.checked }, e.target.checked ? '🟢 Solo trabajan las IAs conectadas' : '✅ Ajustes guardados')} />
           Solo IAs conectadas: las de modo demo no trabajan en tareas ni reuniones y no aparecen en la oficina hasta que las conectes (si aún no hay ninguna conectada, trabajan todas en demo)

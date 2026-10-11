@@ -49,8 +49,10 @@ export function startScheduler(store, notes) {
         .catch((err) => console.error('[rutina]', err));
     }
     // Tareas en espera (sin cupo, sin conexión o cortadas por un reinicio): se retoman solas.
-    for (const t of store.data.tasks || []) {
-      if (t.status === 'waiting' && Date.parse(t.resume?.at || 0) <= Date.now()) resumeTask(store, notes, t)?.catch((err) => console.error('[tarea]', err));
+    if (store.data.settings.autoResume !== false) {
+      for (const t of store.data.tasks || []) {
+        if (t.status === 'waiting' && Date.parse(t.resume?.at || 0) <= Date.now()) resumeTask(store, notes, t)?.catch((err) => console.error('[tarea]', err));
+      }
     }
   };
   const id = setInterval(tick, 20000);

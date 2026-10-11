@@ -160,10 +160,11 @@ const shortWait = () => Number(process.env.OFICINA_SHORT_WAIT_MS ?? 12000);
 // peticiones por minuto, y varias IAs del mismo proveedor en paralelo las agotan.
 const slots = new Map();
 const PER_PROVIDER = { ovh: 1, cohere: 1 };
-function limitFor(provider) {
+function limitFor(provider, settings = {}) {
   const p = PROVIDERS[provider];
   if (!p || p.keyless) return Infinity; // Ollama ya pone en fila sus pedidos
-  return Number(process.env.OFICINA_MAX_PER_PROVIDER) || PER_PROVIDER[provider] || (p.tier === 'pago' ? 4 : 2);
+  if (p.tier === 'pago') return 4;
+  return Number(process.env.OFICINA_MAX_PER_PROVIDER) || PER_PROVIDER[provider] || Number(settings.perAccount) || 2;
 }
 /** Espera turno para esta cuenta; devuelve la función que lo libera. */
 async function acquire(key, limit, signal) {
@@ -385,7 +386,7 @@ async function callModelInner(settings, { provider, model, system, messages, age
       emit(d);
     };
     const ollama = cred.server;
-    const free = await acquire(`${provider}:${cred.id}`, limitFor(provider), signal);
+    const free = await acquire(`${provider}:${cred.id}`, limitFor(provider, settings), signal);
     const done = ollama ? track(ollama.id) : null;
     try {
       if (ollama?.nodeId) await ensureUp(ollama); // un nodo apagado puede tardar mucho en fallar

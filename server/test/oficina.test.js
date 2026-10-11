@@ -2759,3 +2759,14 @@ test('una tarea cortada por un reinicio queda en espera para retomarse (si guard
   assert.ok(Date.parse(a.resume.at) <= Date.now() + 10000);
   assert.equal(again.data.tasks.find((t) => t.id === 't_b').status, 'error', 'sin contexto guardado no se puede retomar');
 });
+
+test('ajustes: pedidos a la vez por cuenta gratis y retomar solas las tareas en espera', async () => {
+  const store = new Store(tmp());
+  await withApp(store, async (call) => {
+    let r = await call('PUT', '/api/settings', { perAccount: 9, autoResume: false });
+    assert.equal(r.status, 200);
+    r = await call('GET', '/api/settings');
+    assert.equal(r.data.perAccount, 6, 'con tope');
+    assert.equal(r.data.autoResume, false);
+  });
+});
