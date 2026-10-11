@@ -133,7 +133,16 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
 
       {task.status === 'done' && <FollowUp task={task} onSent={onFollow} />}
 
-      <h3>Aportes del equipo</h3>
+      <div className="row between">
+        <h3>Aportes del equipo</h3>
+        {task.status === 'done' && task.steps.some((s) => s.status === 'error' && s.error !== 'Cancelada') && (
+          <button className="btn btn--ghost small" title="Una continuación: las IAs disponibles hacen solo las partes que fallaron" onClick={async () => {
+            const missing = task.steps.filter((s) => s.status === 'error' && s.error !== 'Cancelada').map((s) => s.instruction);
+            const { id } = await api.runTask(`Completa las partes que no se pudieron hacer: ${missing.join('; ')}`, undefined, task.id);
+            onFollow(id);
+          }}>🔁 Completar lo que faltó</button>
+        )}
+      </div>
       {task.steps.map((s) => {
         const a = agent(s.agentId);
         return (
