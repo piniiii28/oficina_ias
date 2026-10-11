@@ -9,6 +9,7 @@ import { saveAsPdf } from '../pdf';
 import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice } from '../state';
 import { clock, errorHelp } from '../errorHelp';
+import { fmtClock, useElapsed } from '../useElapsed';
 
 export const STATUS_ES: Record<string, string> = {
   planning: 'planificando', working: 'trabajando', synthesizing: 'integrando', reviewing: 'revisando', done: 'lista', error: 'error', pending: 'en cola', waiting: 'en espera',
@@ -83,6 +84,7 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
           <button className="btn btn--danger small" onClick={onDelete}>Borrar</button>
         </div>
       </header>
+      <LiveTimer task={task} />
       {parent && <p className="small">↩ Continúa <a href="#" onClick={(e) => { e.preventDefault(); onOpen(parent.id); }}>{parent.title}</a></p>}
       <blockquote>{task.prompt}</blockquote>
       {task.status === 'waiting' && (
@@ -171,6 +173,19 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
         );
       })}
     </main>
+  );
+}
+
+/** Mientras el equipo trabaja: cuánto lleva y en qué va. */
+function LiveTimer({ task }: { task: Task }) {
+  const running = ['planning', 'working', 'synthesizing', 'reviewing'].includes(task.status);
+  const elapsed = useElapsed(task.createdAt, running);
+  if (!running) return null;
+  const done = task.steps.filter((s) => s.status === 'done').length;
+  return (
+    <p className="small muted tabular">
+      ⏱ {fmtClock(elapsed)} · {STATUS_ES[task.status]}{task.steps.length ? ` · ${done} de ${task.steps.length} aportes listos` : ''}
+    </p>
   );
 }
 

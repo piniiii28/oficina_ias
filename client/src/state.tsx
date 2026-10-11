@@ -167,7 +167,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
             ms,
           );
         }
-        if (e.status === 'done') reloadAgents();
+        // Tras terminar o fallar, se refresca el estado de las IAs (salud, cupo); agrupado para no pedirlo de más.
+        if (e.status === 'done' || e.status === 'error') {
+          clearTimeout(timers.current._reload);
+          timers.current._reload = window.setTimeout(() => reloadAgents(), 800);
+        }
         if (e.status === 'done') play('pop');
         if (e.status === 'error') play('error');
       } else if (e.type === 'task') {

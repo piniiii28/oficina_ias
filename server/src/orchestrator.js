@@ -458,7 +458,7 @@ async function executeTask(store, notes, task, run) {
     const tSynth = Date.now();
     const synth = await synthesize(store, task, { ok, run, effort, signal, nameOf });
     task.synthMs = Date.now() - tSynth;
-    if (synth.by) task.synthBy = synth.by;
+    if (synth.by && synth.by !== brainOf(store).id) task.synthBy = synth.by;
     task.final = synth.text;
     // Las imágenes que generaron las IAs no se pierden en el resumen final.
     const imgs = [...new Set(ok.flatMap((s) => (s.output || '').match(/!?\[[^\]]*\]\(\/api\/(?:images|videos)\/[\w.-]+\)/g) || []))].filter((m) => !task.final.includes(m.match(/\(([^)]+)\)/)[1]));
@@ -830,7 +830,7 @@ export async function dailySummary(store, notes, date = new Date()) {
   const meetings = (store.data.meetings || []).filter((m) => sameDay(m.createdAt) && m.status === 'done');
   const ideas = store.data.notes.filter((n) => n.type === 'idea' && sameDay(n.createdAt));
   if (!tasks.length && !meetings.length) throw new Error('Hoy todavía no hay tareas ni reuniones terminadas.');
-  const brain = brainOf(store);
+  const brain = actingBrain(store);
   const titleOf = (id) => store.data.notes.find((n) => n.id === id)?.title;
   agentStatus(brain.id, 'thinking', 'Escribiendo el resumen del día…');
   const res = await callModel(store.data.settings, {

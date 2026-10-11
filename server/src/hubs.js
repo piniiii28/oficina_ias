@@ -3,9 +3,9 @@
 // formando su perfil, se le pueden hacer preguntas con solo sus notas y se
 // detectan los temas que comparten para interconectarlos.
 import { Store } from './store.js';
-import { callModel, hasKey } from './providers.js';
+import { callModel, isLive } from './providers.js';
 import { tokens, relatedNotes, keywordSuggestions } from './librarian.js';
-import { agentStatus, buildSystem, streamer } from './orchestrator.js';
+import { agentStatus, buildSystem, streamer, actingBrain } from './orchestrator.js';
 
 export const DEFAULT_HUBS = [
   { id: 'cerebro', name: 'Cerebro', emoji: '🧠', color: '#c084fc' },
@@ -101,7 +101,8 @@ export function crossHubSuggestions(notes, limit = 12) {
   return keywordSuggestions(notes, 400).filter((s) => hubById.get(s.from) !== hubById.get(s.to)).slice(0, limit);
 }
 
-const brainOf = (store) => store.data.agents.find((a) => a.isBrain) || store.data.agents[0];
+// El Cerebro o, si no puede trabajar (sin clave o sin cupo), la IA que lo suple.
+const brainOf = (store) => actingBrain(store);
 
 /** Pregunta a un núcleo: el cerebro responde usando solo las notas de ese núcleo. */
 export async function askHub(store, hubId, question) {
@@ -144,7 +145,7 @@ export async function writeHubProfile(store, notes, hubId) {
   const bridges = hubBridges(store.data.notes, hubs).filter((b) => b.a === hubId || b.b === hubId);
   const brain = brainOf(store);
   const { settings } = store.data;
-  const live = settings.demoMode !== 'always' && hasKey(settings, brain.provider);
+  const live = isLive(settings, brain);
   let summary = `${hub.name} tiene ${stats.notes} notas. Sus temas más frecuentes son ${stats.topics.slice(0, 5).map((t) => t.word).join(', ') || '—'}.`;
   if (live) {
     agentStatus(brain.id, 'thinking', `Escribiendo el perfil de ${hub.name}…`);

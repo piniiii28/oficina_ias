@@ -1687,7 +1687,8 @@ export function createApp(store) {
     const message = String(req.body?.message || '').trim().slice(0, 4000);
     if (!message) return res.status(400).json({ error: 'Escribe tu pregunta' });
     const s = store.data.settings;
-    const brain = store.data.agents.find((a) => a.isBrain) || store.data.agents[0];
+    // Responde el Cerebro o, si no está conectado, la IA conectada que lo suple.
+    const brain = actingBrain(store);
     const clis = await detectClis();
     const status = Object.entries(PROVIDERS).map(([id, p]) => {
       const users = store.data.agents.filter((a) => a.provider === id).map((a) => a.name);

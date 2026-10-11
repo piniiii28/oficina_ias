@@ -10,6 +10,7 @@ import { MicButton } from '../components/Voice';
 import { PlanDiagram } from '../components/PlanDiagram';
 import { useOffice, type Live } from '../state';
 import { clock } from '../errorHelp';
+import { fmtClock, useElapsed } from '../useElapsed';
 
 const STATUS_LABEL: Record<string, string> = {
   idle: 'Disponible', thinking: 'Pensando…', working: 'Trabajando', talking: 'Hablando', done: '¡Listo!', error: 'Error',
@@ -65,19 +66,24 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
   const done = task.steps.filter((s) => s.status === 'done' || s.status === 'error').length;
   const pct = task.status === 'done' ? 100 : task.steps.length ? Math.round((done / task.steps.length) * 85) + 5 : 5;
   const label = { planning: 'Planificando', working: 'El equipo trabaja', synthesizing: 'Integrando', reviewing: 'Revisando calidad', waiting: '⏳ En espera (sin cupo)', done: 'Completada', error: 'Error' }[task.status];
+  const running = ['planning', 'working', 'synthesizing', 'reviewing'].includes(task.status);
+  const elapsed = useElapsed(task.createdAt, running);
   return (
     <div className="task-progress">
       <div className="task-progress-head">
         <strong>{task.title}</strong>
-        <span className={`pill pill--${task.status}`}>{label}</span>
+        <span className="row">
+          {running && <small className="muted tabular" title="Tiempo desde que la enviaste">⏱ {fmtClock(elapsed)}</small>}
+          <span className={`pill pill--${task.status}`}>{label}</span>
+        </span>
       </div>
       <div className="progress"><div style={{ width: `${pct}%` }} /></div>
       {task.plan && <p className="muted small">{task.plan.analysis}</p>}
       {task.status !== 'done' && task.steps.some((s) => s.dependsOn?.length) && <PlanDiagram task={task} agents={agents} />}
       <div className="step-chips">
         {task.steps.map((s) => (
-          <span key={s.agentId} className={`chip chip--${s.status}`} title={s.dependsOn?.length ? `Trabaja sobre la entrega de ${s.dependsOn.map(name).join(', ')}` : 'Trabaja en paralelo'}>
-            {s.dependsOn?.length ? '↳ ' : ''}{name(s.agentId)}
+          <span key={s.agentId} className={`chip chip--${s.status}`} title={s.error || (s.dependsOn?.length ? `Trabaja sobre la entrega de ${s.dependsOn.map(name).join(', ')}` : 'Trabaja en paralelo')}>
+            {{ done: '✓ ', error: '✗ ', working: '● ', pending: '' }[s.status]}{s.dependsOn?.length ? '↳ ' : ''}{name(s.agentId)}{s.failed?.some((f) => !f.skipped) && s.status !== 'error' ? ' 🔁' : ''}
           </span>
         ))}
       </div>
