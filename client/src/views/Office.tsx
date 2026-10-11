@@ -203,6 +203,12 @@ export function Office() {
   async function send() {
     const p = prompt.trim();
     if (!p) return;
+    // La primera vez se pide permiso para avisar cuando termine (las tareas pueden tardar).
+    try {
+      if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+    } catch {
+      /* sin notificaciones */
+    }
     try {
       await api.runTask(p, picking && pick.length ? pick : undefined, undefined, files.length ? files : undefined, flow || undefined, effort);
       setPrompt('');

@@ -50,6 +50,18 @@ const OfficeCtx = createContext<Ctx | null>(null);
 // Tras terminar, cada IA vuelve a su estado de reposo.
 const SETTLE_MS: Partial<Record<AgentState, number>> = { done: 4500, error: 6000, talking: 5000 };
 
+
+/** Notificación del sistema (si diste permiso y la pestaña no está a la vista). */
+function notifyTask(t: Task) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+    const title = t.status === 'done' ? '✅ Tarea lista' : t.status === 'waiting' ? '⏳ Tarea en espera (sin cupo): se retoma sola' : '⚠️ La tarea no se pudo hacer';
+    new Notification(title, { body: t.title, tag: t.id });
+  } catch {
+    /* el navegador no deja notificar */
+  }
+}
+
 export function OfficeProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -113,6 +125,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     }
   });
   const timers = useRef<Record<string, number>>({});
+  const taskStatus = useRef<Record<string, string>>({});
 
   const setView = useCallback((v: View) => {
     setViewState(v);
@@ -176,6 +189,10 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         if (e.status === 'error') play('error');
       } else if (e.type === 'task') {
         if (e.task.status === 'done') play('ding');
+        // Aviso del sistema si la tarea termina (o queda en espera) mientras miras otra cosa.
+        const prev = taskStatus.current[e.task.id];
+        taskStatus.current[e.task.id] = e.task.status;
+        if (prev && prev !== e.task.status && ['done', 'error', 'waiting'].includes(e.task.status)) notifyTask(e.task);
         setTasks((ts) => {
           const i = ts.findIndex((t) => t.id === e.task.id);
           if (i === -1) return [e.task, ...ts];
