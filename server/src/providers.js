@@ -167,6 +167,7 @@ function limitFor(provider) {
 }
 /** Espera turno para esta cuenta; devuelve la función que lo libera. */
 async function acquire(key, limit, signal) {
+  if (signal?.aborted) throw new Error('Cancelada');
   const s = slots.get(key) || slots.set(key, { busy: 0, queue: [] }).get(key);
   const release = () => {
     const next = s.queue.shift();
