@@ -1037,7 +1037,8 @@ export function createApp(store) {
   // Activar las IAs en demo con los proveedores gratis que ya conectaste.
   app.post('/api/agents/rescue', (_req, res) => {
     const s = store.data.settings;
-    const connected = (p) => s.demoMode !== 'always' && hasKey(s, p);
+    // No se pasan IAs a un proveedor cuya clave está siendo rechazada.
+    const connected = (p) => s.demoMode !== 'always' && hasKey(s, p) && store.data.providerHealth?.[p]?.kind !== 'clave';
     const changes = rescuePlan(store.data.agents, connected);
     for (const c of changes) {
       const a = agentById(c.id);
