@@ -351,9 +351,11 @@ export async function callModel(settings, params) {
     if (agentId && err.message !== 'Cancelada') {
       const kind = classifyError(err.message);
       const quota = kind === 'cupo';
-      // Con una sola cuenta, una clave rechazada vale para todas las IAs de ese proveedor.
+      // Con una sola cuenta, una clave rechazada (o el cupo del día o los créditos agotados)
+      // vale para todas las IAs de ese proveedor: así no se gasta una llamada en cada una.
       const single = credentials(settings, params.provider).length <= 1;
-      callSink?.({ agentId, provider: params.provider, providerDown: kind === 'clave' && single, ok: false, quota, retryMs: quota ? retryAfterMs(err.message, err.retryAfterMs) : 0, kind, error: err.message.slice(0, 300), inChars, ms: Date.now() - t0 });
+      const wholeAccount = kind === 'clave' || (quota && /per.?day|daily|por d[ií]a|free-models-per-day|credit|balance|insufficient|month/i.test(err.message));
+      callSink?.({ agentId, provider: params.provider, providerDown: wholeAccount && single, ok: false, quota, retryMs: quota ? retryAfterMs(err.message, err.retryAfterMs) : 0, kind, error: err.message.slice(0, 300), inChars, ms: Date.now() - t0 });
     }
     throw err;
   }

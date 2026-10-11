@@ -2684,6 +2684,10 @@ test('cupo por segundos: espera y reintenta; máximo 2 llamadas a la vez por cue
     assert.equal(healthOf(store, 'c').ok, true);
     await ask('x', settings, store.data.agents[1]);
     assert.equal(healthOf(store, 'a').ok, true, 'cuando una vuelve a responder, se levanta para todas');
+    // Cupo del día agotado: tampoco se prueba con las demás IAs de ese proveedor hasta que vuelva.
+    recordCall(store, { agentId: 'a', provider: 'groq', providerDown: true, ok: false, quota: true, retryMs: 60000, kind: 'cupo', error: 'free-models-per-day' });
+    assert.equal(healthOf(store, 'b').quota, true);
+    assert.ok(healthOf(store, 'b').until > Date.now());
   } finally {
     setCallSink(null);
     PROVIDERS.groq.baseUrl = original;

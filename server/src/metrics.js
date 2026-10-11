@@ -12,7 +12,7 @@ const HOUR = 3600000;
 export function recordCall(store, { agentId, provider, providerDown, ok, simulated, inChars, ms, quota, retryMs, kind, error }) {
   // Clave rechazada: todas las IAs de ese proveedor quedan con fallas hasta que una vuelva a responder.
   if (provider && ok) delete store.data.providerHealth?.[provider];
-  if (provider && providerDown) (store.data.providerHealth ||= {})[provider] = { kind: 'clave', error: error || '', at: Date.now(), agentId };
+  if (provider && providerDown) (store.data.providerHealth ||= {})[provider] = { kind: kind || 'clave', error: error || '', at: Date.now(), until: quota ? Date.now() + (retryMs || 10 * 60000) : undefined, agentId };
   const all = (store.data.metrics ||= {});
   const m = (all[agentId] ||= { calls: 0, errors: 0, recent: [] });
   m.calls++;
@@ -34,7 +34,9 @@ export function recordCall(store, { agentId, provider, providerDown, ok, simulat
 export function healthOf(store, agentId) {
   const agent = store.data.agents?.find((a) => a.id === agentId);
   const down = agent && store.data.providerHealth?.[agent.provider];
-  if (down && Date.now() - down.at < 6 * 3600000) return { ok: false, kind: down.kind, error: down.error, at: down.at, provider: true };
+  if (down?.until) {
+    if (Date.now() < down.until) return { ok: false, quota: true, until: down.until, kind: 'cupo', error: down.error, at: down.at, provider: true };
+  } else if (down && Date.now() - down.at < 6 * 3600000) return { ok: false, kind: down.kind, error: down.error, at: down.at, provider: true };
   const recent = (store.data.metrics?.[agentId]?.recent || []).filter((r) => !r.sim);
   const lastOne = recent.at(-1);
   if (lastOne && !lastOne.ok && lastOne.quota) {
