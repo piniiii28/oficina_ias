@@ -2770,3 +2770,21 @@ test('ajustes: pedidos a la vez por cuenta gratis y retomar solas las tareas en 
     assert.equal(r.data.autoResume, false);
   });
 });
+
+test('reunión donde ninguna IA puede hablar: lo explica en vez de resumir una charla vacía', async () => {
+  const { runMeeting } = await import('../src/meetings.js');
+  const fake = await fakeModels({ x1: 'cae', x2: 'cae', c: 'cae' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'c' },
+    chatgpt: { provider: 'groq', model: 'x1' },
+    perplexity: { provider: 'ollama', model: 'x2' },
+  });
+  try {
+    const m = await runMeeting(store, new Notes(store), { topic: 'Precios', agentIds: ['chatgpt', 'perplexity'], rounds: 1 });
+    assert.equal(m.status, 'error');
+    assert.match(m.summary, /ninguna IA pudo intervenir/);
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});

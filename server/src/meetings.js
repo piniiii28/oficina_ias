@@ -102,6 +102,10 @@ export async function runMeeting(store, notes, { topic, agentIds, rounds = 2, hu
 
     // Resume el Cerebro (o su suplente); si nadie puede, queda la conversación completa.
     const spoke = meeting.transcript.filter((t) => !t.error && !t.simulated).map((t) => t.agentId);
+    // Nadie pudo hablar (todas sin cupo o fallando): se explica en vez de resumir una charla vacía.
+    if (!spoke.length && meeting.transcript.length && meeting.transcript.every((t) => t.error)) {
+      throw new Error(`ninguna IA pudo intervenir. ${[...new Map(meeting.transcript.map((t) => [t.agentId, t])).values()].map((t) => `${t.name}: ${explainError(t.error).title.toLowerCase()}`).join('; ')}. Prueba más tarde o con otras IAs.`);
+    }
     const closers = [actingBrain(store, spoke), ...agents.filter((a) => !muted.has(a.id))].filter((a, i, all) => all.indexOf(a) === i).slice(0, 3);
     const convo = meeting.transcript.map((t) => `**${t.name}:** ${t.text}`).join('\n\n');
     let res = null;
