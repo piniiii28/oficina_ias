@@ -1,5 +1,5 @@
 // La oficina: el Cerebro Central al frente y los departamentos con sus IAs.
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { api, type Agent, type Task } from '../api';
 import { Chibi } from '../components/Chibi';
 import { AgentPanel } from '../components/AgentPanel';
@@ -347,6 +347,13 @@ export function Office() {
           {liveCount > 0 && <TeamHealth agents={agents} />}
           <WhatsNew />
           {latest && <TaskProgress task={latest} agents={agents} />}
+          {active.length > 1 && (
+            <p className="small muted">
+              + {active.length - 1} {active.length - 1 === 1 ? 'tarea más' : 'tareas más'} en curso o en espera:{' '}
+              {active.slice(1, 4).map((t) => <span key={t.id} className="pill" title={t.prompt}>{t.status === 'waiting' ? '⏳ ' : '● '}{t.title.slice(0, 30)}</span>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' ', el] : [el]), [])}
+              {' '}<button className="link small" onClick={() => setView('tareas')}>ver todas</button>
+            </p>
+          )}
         </div>
       </section>
 
