@@ -560,10 +560,14 @@ function failuresOf(task) {
 function finishWithoutContributions(store, task, emitTask, nameOf) {
   const fails = failuresOf(task);
   const attempts = task.resume?.attempts || 0;
-  const lines = [...new Map(fails.map((f) => [f.agentId, f])).values()].map((f) => {
+  // Agrupado por tipo de error: quiénes fallaron así y qué hacer (una vez por tipo).
+  const byKind = new Map();
+  for (const f of new Map(fails.map((x) => [x.agentId, x])).values()) {
     const e = explainError(f.error);
-    return `- **${nameOf(f.agentId)}** — ${e.icon} ${e.title}: ${f.error.slice(0, 200)}${e.fix ? `\n  ${e.fix}` : ''}`;
-  });
+    const g = byKind.get(e.kind) || byKind.set(e.kind, { e, names: [], sample: f.error }).get(e.kind);
+    g.names.push(nameOf(f.agentId));
+  }
+  const lines = [...byKind.values()].map(({ e, names, sample }) => `- ${e.icon} **${e.title}** — ${names.join(', ')}${e.fix ? `\n  ${e.fix}` : ''}\n  Detalle: \`${sample.slice(0, 160).replace(/`/g, "'")}\``);
   if (fails.some((f) => isTemporaryError(f.error)) && attempts < RESUME_BACKOFF_MIN.length) {
     // Si alguna de estas IAs recupera su cupo antes, se retoma en ese momento.
     const soon = fails.map((f) => healthOf(store, f.agentId).until).filter(Boolean);

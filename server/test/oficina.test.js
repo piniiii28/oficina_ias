@@ -46,6 +46,13 @@ test('grafo: enlaces, fantasmas y backlinks; renombrar actualiza enlaces', () =>
   assert.equal(notes.create({ title: 'Alfa' }).title, 'Alfa (2)');
 });
 
+test('el planificador de respaldo nunca deja la tarea sin equipo', () => {
+  const pool = DEFAULT_AGENTS.filter((a) => ['brisa', 'granito', 'llamita'].includes(a.id));
+  const plan = demoPlan('zzz qqq', pool);
+  assert.ok(plan.subtasks.length >= 1, 'sin coincidencias ni generalistas disponibles, usa a las que hay');
+  assert.ok(plan.subtasks.every((s) => pool.some((a) => a.id === s.agentId)));
+});
+
 test('el planificador demo reparte según habilidades', () => {
   const plan = demoPlan('Necesito código en react y una campaña de marketing con seo', DEFAULT_AGENTS);
   const ids = plan.subtasks.map((s) => s.agentId);

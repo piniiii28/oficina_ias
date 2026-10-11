@@ -116,9 +116,10 @@ export function demoPlan(task, agents, max = 5) {
 
   let chosen = scored.filter((s) => s.score > 0).slice(0, max).map((s) => s.a);
   if (chosen.length === 0) {
-    // Sin coincidencias: un equipo generalista.
+    // Sin coincidencias: un equipo generalista; si esas IAs no están disponibles, las primeras que haya.
     const pick = ['perplexity', 'estratega', 'chatgpt'];
     chosen = agents.filter((a) => pick.includes(a.id) && a.enabled);
+    if (!chosen.length) chosen = scored.slice(0, Math.min(3, max)).map((s) => s.a);
   }
   // Orden natural de trabajo: investigar → crear → revisar.
   const rank = (a) => (REVIEWERS.has(a.id) ? 2 : RESEARCH.has(a.id) ? 0 : 1);
