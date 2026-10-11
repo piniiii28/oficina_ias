@@ -32,6 +32,17 @@ export function Agents() {
   const [browsing, setBrowsing] = useState(false);
   const [q, setQ] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
+  // Filtro por estado; la Oficina puede abrir Equipo ya filtrado (p. ej. «con fallas»).
+  const [stateFilter, setStateFilter] = useState<'' | 'conectadas' | 'demo' | 'fallas'>(() => {
+    try {
+      const v = sessionStorage.getItem('equipo.filtro');
+      sessionStorage.removeItem('equipo.filtro');
+      return v === 'conectadas' || v === 'demo' || v === 'fallas' ? v : '';
+    } catch {
+      return '';
+    }
+  });
+  const byState = (a: Agent) => !stateFilter || (stateFilter === 'conectadas' ? a.live && a.health?.ok !== false : stateFilter === 'demo' ? !a.live : a.live && a.health?.ok === false);
   const [form, setForm] = useState({ name: '', role: '', department: 'personas', provider: 'groq', model: 'openai/gpt-oss-120b', skills: '', system: '' });
   const [avatar, setAvatar] = useState(randomAvatar);
   const dept = (id: string) => departments.find((d) => d.id === id);
@@ -165,8 +176,15 @@ export function Agents() {
           {departments.map((d) => <button key={d.id} className={deptFilter === d.id ? 'on' : ''} onClick={() => setDeptFilter(d.id)} title={d.name}>{d.emoji}</button>)}
         </div>
       </div>
+      <div className="type-filter state-filter">
+        {([['', 'Todas'], ['conectadas', '🟢 Listas'], ['fallas', '⚠️ Con fallas o sin cupo'], ['demo', '🎭 En demo']] as const).map(([id, label]) => (
+          <button key={id} className={stateFilter === id ? 'on' : ''} onClick={() => setStateFilter(id)}>
+            {label} <small className="muted">{agents.filter((a) => !id || (id === 'conectadas' ? a.live && a.health?.ok !== false : id === 'demo' ? !a.live : a.live && a.health?.ok === false)).length}</small>
+          </button>
+        ))}
+      </div>
       <div className="agent-cards">
-        {agents.filter((a) => (!deptFilter || a.department === deptFilter) && (!q.trim() || `${a.name} ${a.role} ${a.skills.join(' ')} ${a.model} ${a.provider}`.toLowerCase().includes(q.trim().toLowerCase()))).map((a, i) => (
+        {agents.filter((a) => (!deptFilter || a.department === deptFilter) && byState(a) && (!q.trim() || `${a.name} ${a.role} ${a.skills.join(' ')} ${a.model} ${a.provider}`.toLowerCase().includes(q.trim().toLowerCase()))).map((a, i) => (
           <button key={a.id} className={`agent-card ${a.enabled ? '' : 'off'}`} onClick={() => setSelected(a)} style={{ ['--room' as string]: dept(a.department)?.color }}>
             <Chibi avatar={a.avatar} size={70} seed={i} state={live[a.id]?.status || 'idle'} />
             <div>

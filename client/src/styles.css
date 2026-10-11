@@ -939,3 +939,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .provider-card .tier { flex-shrink: 0; white-space: nowrap; }
 .provider-health { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .board-empty { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin: 4px 0; }
+.state-filter { margin: 8px 0 4px; flex-wrap: wrap; }
+.state-filter button { flex: 0 0 auto; }

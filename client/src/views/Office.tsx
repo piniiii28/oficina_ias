@@ -120,7 +120,7 @@ function TeamHealth({ agents }: { agents: Agent[] }) {
     <div className="team-health">
       <span className="th-item th-ok" title={names(ok)}>🟢 <b>{ok.length}</b> listas</span>
       {resting.length > 0 && <span className="th-item th-rest" title={names(resting)}>⏳ <b>{resting.length}</b> sin cupo{back ? ` · vuelven ${clock(back)}` : ''}</span>}
-      {failing.length > 0 && <button className="th-item th-bad" title={failing.map((a) => `${a.name}: ${a.health?.error || ''}`).join('\n')} onClick={() => setView('agentes')}>⚠️ <b>{failing.length}</b> con fallas</button>}
+      {failing.length > 0 && <button className="th-item th-bad" title={failing.map((a) => `${a.name}: ${a.health?.error || ''}`).join('\n')} onClick={() => { try { sessionStorage.setItem('equipo.filtro', 'fallas'); } catch { /* sin almacenamiento */ } setView('agentes'); }}>⚠️ <b>{failing.length}</b> con fallas</button>}
       {demo.length > 0 && <span className="th-item th-demo" title={names(demo)}>🎭 <b>{demo.length}</b> en demo</span>}
       <span className="th-actions">
         <button className="link small" disabled={!!busy} onClick={async () => {
