@@ -2892,3 +2892,21 @@ test('si el Cerebro no puede planificar, planifica otra IA conectada (no el plan
     fake.srv.close();
   }
 });
+
+test('si eliges IAs que no están disponibles, el plan dice cuáles se quedaron fuera', async () => {
+  const fake = await fakeModels({});
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'a' },
+    perplexity: { provider: 'ollama', model: 'b' },
+  });
+  try {
+    store.data.metrics = { chatgpt: { calls: 1, errors: 1, recent: [{ at: Date.now(), ok: false, quota: true, until: Date.now() + 600000, kind: 'cupo', error: '429' }] } };
+    const t = await runTask(store, new Notes(store), { prompt: 'Hola', agentIds: ['chatgpt', 'perplexity'], saveNotes: false });
+    assert.match(t.plan.analysis, /no disponibles ahora: ChatGPT/);
+    assert.deepEqual(t.steps.map((s) => s.agentId), ['perplexity']);
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});

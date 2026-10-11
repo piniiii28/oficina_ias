@@ -75,15 +75,18 @@ function parseJson(text) {
 async function makePlan(store, task, forced, template) {
   const { settings, agents } = store.data;
   const usable = usableFilter(settings, agents, (a) => healthOf(store, a.id).ok);
-  // Las IAs en modo demo no trabajan (salvo que se desactive «solo IAs conectadas»).
+  // Las IAs en modo demo no trabajan (salvo que se desactive «solo IAs conectadas»),
+  // ni las que están sin cupo o con fallas: se avisa cuáles se quedaron fuera.
+  const left = forced?.length ? forced.filter((id) => !usable(agents.find((a) => a.id === id))) : [];
   if (forced?.length) forced = forced.filter((id) => usable(agents.find((a) => a.id === id)));
+  const leftNote = left.length ? ` (no disponibles ahora: ${left.map((id) => agents.find((a) => a.id === id)?.name || id).join(', ')})` : '';
   const pool = agents.filter((a) => !a.isBrain && a.enabled && usable(a) && (!forced?.length || forced.includes(a.id)));
   if (forced?.length) {
     // Respeta el orden elegido (y, al continuar una tarea, sus dependencias).
     const byId = new Map(pool.map((a) => [a.id, a]));
     const deps = new Map((template || []).map((s) => [s.agentId, s.dependsOn || []]));
     return sanitizeDeps({
-      analysis: template ? (template.some((t) => t.dependsOn?.length) ? 'Flujo de relevos: cada IA trabaja sobre la entrega anterior.' : 'El mismo equipo retoma la tarea con tu ajuste.') : 'Trabajan las IAs elegidas.',
+      analysis: (template ? (template.some((t) => t.dependsOn?.length) ? 'Flujo de relevos: cada IA trabaja sobre la entrega anterior.' : 'El mismo equipo retoma la tarea con tu ajuste.') : 'Trabajan las IAs elegidas.') + leftNote,
       subtasks: forced.filter((id) => byId.has(id)).map((id) => ({
         agentId: id,
         dependsOn: deps.get(id) || [],
@@ -95,7 +98,11 @@ async function makePlan(store, task, forced, template) {
   const brain = actingBrain(store);
   const live = isLive(settings, brain);
   const maxTeam = settings.maxTeam || 5;
-  if (!live) return demoPlan(task, pool, maxTeam);
+  if (!live) {
+    const p = demoPlan(task, pool, maxTeam);
+    if (leftNote) p.analysis += leftNote;
+    return p;
+  }
 
   const secs = (a) => {
     const ms = speedOf(store, a.id);
@@ -123,20 +130,24 @@ async function makePlan(store, task, forced, template) {
     plan.by = planner.id;
     return sanitizeDeps(plan);
   };
+  const withNote = (plan) => {
+    if (leftNote) plan.analysis = `${plan.analysis}${leftNote}`;
+    return plan;
+  };
   try {
-    return await ask(brain);
+    return withNote(await ask(brain));
   } catch (err) {
     // Si el planificador falló (p. ej. sin cupo), prueba otra IA conectada antes del plan por palabras clave.
     const alt = actingBrain(store, [], new Set([brain.id]));
     if (alt && alt.id !== brain.id && isLive(settings, alt)) {
       try {
-        return await ask(alt);
+        return withNote(await ask(alt));
       } catch (e2) {
         console.warn('[cerebro] El suplente tampoco pudo planificar:', e2.message);
       }
     }
     console.warn('[cerebro] Plan en vivo falló, uso planificador local:', err.message);
-    return demoPlan(task, pool, maxTeam);
+    return withNote(demoPlan(task, pool, maxTeam));
   }
 }
 
