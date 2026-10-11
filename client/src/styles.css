@@ -924,3 +924,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .agent-health { margin: 4px 0; }
 .agent-health p { margin: 2px 0; }
 .tabular { font-variant-numeric: tabular-nums; }
+.taller-demo { flex-basis: 100%; margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 9%, transparent); }

@@ -18,7 +18,7 @@ const APPS: { kind: CadKind; label: string; flow: string; hint: string }[] = [
 const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1000))} KB`);
 
 export function Taller() {
-  const { agents, tasks, cadTools, cadVersion, toast, setView, live } = useOffice();
+  const { agents, tasks, cadTools, cadVersion, toast, setView, live, reloadAgents } = useOffice();
   const [tools, setTools] = useState<Record<string, string | boolean | null> | null>(null);
   const [ai3d, setAi3d] = useState({ prompt: '', image: '' as string, busy: false });
   const [jobs, setJobs] = useState<CadJob[]>([]);
@@ -83,6 +83,16 @@ export function Taller() {
           </div>
         ))}
         {!team.length && <p className="muted small">No hay IAs del taller. Ve a Equipo → Restaurar plantilla para contratarlas.</p>}
+        {team.some((a) => !a.live) && agents.some((a) => a.live && !a.isBrain) && (
+          <p className="small taller-demo">
+            🎭 {team.filter((a) => !a.live).length} de {team.length} están en modo demo: mientras tanto, las piezas las hacen otras IAs conectadas.{' '}
+            <button className="link small" onClick={async () => {
+              const r = await api.rescueAgents();
+              await reloadAgents();
+              toast(r.changed ? `🔁 ${r.changed} IAs pasaron a proveedores conectados` : 'Conecta un proveedor gratis en Ajustes para activarlas');
+            }}>🔁 Activarlas con un proveedor gratis</button>
+          </p>
+        )}
       </section>
 
       <PrinterPanel />
