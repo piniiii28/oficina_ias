@@ -58,9 +58,13 @@ export function Board() {
             }}
           >
             <h3>{col.emoji} {col.label} <span className="muted">{shown.filter((c) => c.column === col.id).length}</span></h3>
+            {!shown.length && col.id === 'todo' && (
+              <p className="small muted board-empty">Escribe arriba lo que hay que hacer, o pasa las «Ideas clave» de una tarea con 📋. Luego, con «🧠 Enviar al equipo», las IAs la hacen y la tarjeta avanza sola.</p>
+            )}
             {shown.filter((c) => c.column === col.id).map((c) => {
               const task = c.taskId ? tasks.find((t) => t.id === c.taskId) : null;
-              const running = task && task.status !== 'done' && task.status !== 'error';
+              const running = task && !['done', 'error', 'waiting'].includes(task.status);
+              const waiting = task?.status === 'waiting';
               return (
                 <article key={c.id} className="kcard" draggable onDragStart={() => setDragging(c.id)} onDragEnd={() => setDragging(null)}>
                   {c.project && <span className="pill">{c.project}</span>}
@@ -71,6 +75,7 @@ export function Board() {
                       <button className="btn btn--primary small" onClick={async () => { await api.runCard(c.id); toast('🧠 El equipo tomó la tarjeta'); }}>🧠 Enviar al equipo</button>
                     )}
                     {running && <span className="pill pill--working">el equipo trabaja…</span>}
+                    {waiting && <span className="pill pill--waiting" title="Ninguna IA tiene cupo ahora: se retoma sola">⏳ en espera</span>}
                     {c.noteId && <button className="btn btn--ghost small" onClick={() => openNote({ id: c.noteId! })}>📝 Resultado</button>}
                     <button className="link danger" onClick={() => api.deleteCard(c.id)}>Borrar</button>
                   </div>

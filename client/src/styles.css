@@ -938,3 +938,4 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .provider-card > .row.between { flex-wrap: nowrap; align-items: flex-start; gap: 8px; }
 .provider-card .tier { flex-shrink: 0; white-space: nowrap; }
 .provider-health { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.board-empty { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin: 4px 0; }

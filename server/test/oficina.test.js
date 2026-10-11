@@ -2740,3 +2740,22 @@ test('respuesta vacía: otra IA retoma el paso; el razonamiento <think> no queda
     fake.srv.close();
   }
 });
+
+test('una tarea cortada por un reinicio queda en espera para retomarse (si guardó su contexto)', () => {
+  const dir = tmp();
+  const store = new Store(dir);
+  createApp(store);
+  store.data.tasks.unshift(
+    { id: 't_a', prompt: 'A', title: 'A', status: 'working', plan: { analysis: '' }, steps: [{ agentId: 'chatgpt', status: 'done', output: 'listo' }, { agentId: 'lexi', status: 'working', output: '' }], final: '', resume: { context: 'adjuntos', background: '' }, createdAt: new Date().toISOString() },
+    { id: 't_b', prompt: 'B', title: 'B', status: 'working', plan: null, steps: [], final: '', createdAt: new Date().toISOString() },
+  );
+  store.flush();
+  const again = new Store(dir);
+  createApp(again);
+  const a = again.data.tasks.find((t) => t.id === 't_a');
+  assert.equal(a.status, 'waiting');
+  assert.equal(a.steps[0].status, 'done', 'lo hecho se conserva');
+  assert.equal(a.steps[1].status, 'pending');
+  assert.ok(Date.parse(a.resume.at) <= Date.now() + 10000);
+  assert.equal(again.data.tasks.find((t) => t.id === 't_b').status, 'error', 'sin contexto guardado no se puede retomar');
+});
