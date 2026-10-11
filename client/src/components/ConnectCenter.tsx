@@ -84,12 +84,23 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
         }}>🔁 Activar las {inDemo} de demo</button>}
         {rescued > 0 && <button className="link" onClick={async () => { const r = await api.undoRescue(); await refresh(); toast(`↩️ ${r.restored} IAs volvieron a su proveedor anterior`); }}>deshacer</button>}
         <button className="btn btn--ghost small" title="Copia un informe (sin claves) del estado de cada IA y sus últimos errores, para pegárselo a Claude" onClick={async () => {
+          let text = '';
           try {
-            const text = await api.diagnostics();
+            text = await api.diagnostics();
             await navigator.clipboard.writeText(text);
             toast('📋 Diagnóstico copiado: pégalo en el chat con Claude');
           } catch (e) {
-            toast(`No pude copiarlo: ${(e as Error).message}`);
+            if (!text) return toast(`No pude armarlo: ${(e as Error).message}`);
+            // Sin portapapeles (p. ej. desde otro computador por http): se abre para copiarlo a mano.
+            const w = window.open('', '_blank');
+            if (w) {
+              w.document.title = 'Diagnóstico de la Oficina';
+              const pre = w.document.createElement('pre');
+              pre.style.cssText = 'white-space:pre-wrap;font:13px/1.5 monospace;padding:16px';
+              pre.textContent = text;
+              w.document.body.appendChild(pre);
+            }
+            toast('Selecciona el texto (Ctrl+A) y cópialo (Ctrl+C)');
           }
         }}>📋 Copiar diagnóstico</button>
       </div>
