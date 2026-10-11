@@ -96,6 +96,56 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
   );
 }
 
+/**
+ * Estado del equipo de un vistazo: cuántas IAs responden, cuáles descansan
+ * por falta de cupo (y hasta cuándo), cuáles fallan y cuántas siguen en demo.
+ */
+function TeamHealth({ agents }: { agents: Agent[] }) {
+  const { reloadAgents, toast, setView } = useOffice();
+  const [busy, setBusy] = useState('');
+  const team = agents.filter((a) => a.enabled);
+  const resting = team.filter((a) => a.live && a.health?.ok === false && a.health.quota);
+  const failing = team.filter((a) => a.live && a.health?.ok === false && !a.health.quota);
+  const ok = team.filter((a) => a.live && a.health?.ok !== false);
+  const demo = team.filter((a) => !a.live);
+  const back = resting.map((a) => a.health?.until || 0).filter(Boolean).sort((x, y) => x - y)[0];
+  const names = (list: Agent[]) => list.slice(0, 12).map((a) => a.name).join(', ') + (list.length > 12 ? '…' : '');
+  return (
+    <div className="team-health">
+      <span className="th-item th-ok" title={names(ok)}>🟢 <b>{ok.length}</b> listas</span>
+      {resting.length > 0 && <span className="th-item th-rest" title={names(resting)}>⏳ <b>{resting.length}</b> sin cupo{back ? ` · vuelven ${clock(back)}` : ''}</span>}
+      {failing.length > 0 && <button className="th-item th-bad" title={failing.map((a) => `${a.name}: ${a.health?.error || ''}`).join('\n')} onClick={() => setView('agentes')}>⚠️ <b>{failing.length}</b> con fallas</button>}
+      {demo.length > 0 && <span className="th-item th-demo" title={names(demo)}>🎭 <b>{demo.length}</b> en demo</span>}
+      <span className="th-actions">
+        <button className="link small" disabled={!!busy} onClick={async () => {
+          setBusy('check');
+          try {
+            const r = await api.checkAgents();
+            await reloadAgents();
+            toast(r.failed ? `⚠️ ${r.failed} de ${r.checked} IAs fallan (en Equipo ves por qué)` : r.resting ? `⏳ ${r.resting} sin cupo por ahora; las demás responden` : `✅ Las ${r.checked} IAs conectadas responden`);
+          } catch (e) {
+            toast((e as Error).message);
+          } finally {
+            setBusy('');
+          }
+        }}>{busy === 'check' ? '🩺 Revisando…' : '🩺 Revisar'}</button>
+        {demo.length > 0 && (
+          <button className="link small" disabled={!!busy} title="Las IAs en demo pasan a un proveedor gratis que ya conectaste" onClick={async () => {
+            setBusy('rescue');
+            try {
+              const r = await api.rescueAgents();
+              await reloadAgents();
+              toast(r.changed ? `🔁 ${r.changed} IAs pasaron a proveedores conectados` : 'No hay proveedores gratis conectados para pasarlas: conéctalos en Ajustes');
+            } finally {
+              setBusy('');
+            }
+          }}>🔁 Activar las de demo</button>
+        )}
+      </span>
+    </div>
+  );
+}
+
 export function Office() {
   const { agents, departments, live, tasks, toast, setView, flows } = useOffice();
   const [flow, setFlow] = useState('');
@@ -172,6 +222,7 @@ export function Office() {
               <div className="hq-name">
                 <strong>{brain.name}</strong>
                 <small>Cerebro Central · {brain.model}</small>
+                {brain.actingId && <small className="acting" title="El Cerebro no está conectado o no tiene cupo: esta IA planifica e integra por él">🔁 Hoy lo suple {agents.find((a) => a.id === brain.actingId)?.name || brain.actingId}</small>}
               </div>
             </>
           )}
@@ -239,6 +290,7 @@ export function Office() {
               🎭 Todas las IAs están en <b>modo demo</b> (respuestas simuladas). <a href="#" onClick={(e) => { e.preventDefault(); setView('ajustes'); }}>Conecta tus claves</a> para que respondan de verdad.
             </p>
           )}
+          {liveCount > 0 && <TeamHealth agents={agents} />}
           {latest && <TaskProgress task={latest} agents={agents} />}
         </div>
       </section>

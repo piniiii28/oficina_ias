@@ -9,6 +9,7 @@ import { Notes } from './notes.js';
 import { DEFAULT_AGENTS, DEPARTMENTS } from './agents.js';
 import { PROVIDERS, cloudflareAccount, hasKey, isLive, usableFilter, detectClis, cliCommand, callModel, setUsageSink, setCallSink } from './providers.js';
 import { recordCall, accuracyOf, loadOf, juryReport, juryStep, healthOf } from './metrics.js';
+import { classifyError } from './errors.js';
 import { normalizeAutomation, runAutomation } from './automations.js';
 import { connectPrinter, PRINTER_COMMANDS } from './bambu.js';
 import { addNode, diagnoseNode, nodeById, nodeCall, nodeModels, printerCamera, printerCommand, printerNow, publicNode, pushNodeModels, savePrinter, startNodeModelSync, startNodePrinterPoll, updateNodes } from './devices.js';
@@ -21,7 +22,7 @@ import { requestAccess } from './access.js';
 import { resolveDataDir, moveDataTo, setDataDir } from './datadir.js';
 import { updateStatus, applyUpdate, RESTART_CODE } from './updater.js';
 import { COOKIE, cookieOf, createUser, hashPassword, hostAllowed, login, logout, needsAdmin, publicUser, tailscaleAddresses, userFromSession } from './auth.js';
-import { bus, runTask, resumeTask, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
+import { bus, runTask, resumeTask, actingBrain, chatWithAgent, selfTrain, dailySummary, running, streamer, agentStatus, buildSystem } from './orchestrator.js';
 import { FREE_MODELS, freePlan, healAgents, rescuePlan } from './freeModels.js';
 import { CAD_TOOLS, detectCad, runCad, openInApp, openInBambu, sliceJob, extractCadBlocks, listFiles } from './cad.js';
 import { hubsOf, normalizeHubs, hubStats, hubBridges, crossHubSuggestions, askHub, writeHubProfile } from './hubs.js';
@@ -384,7 +385,9 @@ export function createApp(store) {
     const healthy = (a) => healthOf(store, a.id).ok;
     const usable = usableFilter(s, store.data.agents, healthy);
     // usable: trabaja en tareas y se ve en el edificio (con «solo IAs conectadas», las demo no).
-    res.json(store.data.agents.map((a) => ({ ...a, live: isLive(s, a), usable: a.isBrain || usable(a), health: healthOf(store, a.id) })));
+    // Si el Cerebro no puede trabajar (sin clave, sin cupo o con fallas), se dice quién lo suple.
+    const acting = actingBrain(store);
+    res.json(store.data.agents.map((a) => ({ ...a, live: isLive(s, a), usable: a.isBrain || usable(a), health: healthOf(store, a.id), ...(a.isBrain && acting.id !== a.id ? { actingId: acting.id } : {}) })));
   });
   app.post('/api/agents', (req, res) => {
     const b = req.body || {};
@@ -961,14 +964,14 @@ export function createApp(store) {
         } catch (err) {
           // Una segunda falla la deja «con fallas» (healthOf).
           const again = await callModel(s, { provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(60000), system: 'Responde OK.', messages: [{ role: 'user', content: 'OK' }] }).then(() => null, (e) => e);
-          results.push({ id: a.id, name: a.name, provider: a.provider, model: a.model, ok: !again, ms: Date.now() - t0, error: again ? String(again.message).slice(0, 240) : undefined, firstError: again ? undefined : String(err.message).slice(0, 160) });
+          results.push({ id: a.id, name: a.name, provider: a.provider, model: a.model, ok: !again, ms: Date.now() - t0, error: again ? String(again.message).slice(0, 240) : undefined, kind: again ? classifyError(again.message) : undefined, firstError: again ? undefined : String(err.message).slice(0, 160) });
         }
       }
     };
     await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
     store.save();
     results.sort((x, y) => Number(x.ok) - Number(y.ok) || x.name.localeCompare(y.name));
-    res.json({ checked: results.length, failed: results.filter((r) => !r.ok).length, results });
+    res.json({ checked: results.length, failed: results.filter((r) => !r.ok && r.kind !== 'cupo').length, resting: results.filter((r) => r.kind === 'cupo').length, results });
   });
 
   // Activar las IAs en demo con los proveedores gratis que ya conectaste.

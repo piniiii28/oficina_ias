@@ -38,6 +38,8 @@ export type Agent = {
   geminiBackup?: { provider: string; model: string };
   demoBackup?: { provider: string; model: string };
   health?: { ok: boolean; error?: string; at?: number; quota?: boolean; until?: number; kind?: string | null };
+  /** Solo el Cerebro: la IA que lo suple hoy (si él no puede trabajar). */
+  actingId?: string;
   isHead?: boolean;
   delegate?: boolean;
   assistants?: AssistantDef[];
@@ -50,7 +52,7 @@ export type Meter = {
 
 export type PrinterState = { estado: string; codigo: string | null; archivo: string | null; progreso: number | null; restante: number | null; capa: number | null; capas: number | null; boquilla: number | null; boquillaMeta: number | null; cama: number | null; camaMeta: number | null; luz: boolean | null; error: string | null };
 export type VideosInfo = { services: Record<string, { label: string; tier: string; hint: string; keyUrl: string }>; active: string; files: string[]; ffmpeg: boolean };
-export type CheckResult = { id: string; name: string; provider: string; model: string; ok: boolean; ms: number; error?: string; firstError?: string; changedModel?: string };
+export type CheckResult = { id: string; name: string; provider: string; model: string; ok: boolean; ms: number; error?: string; firstError?: string; changedModel?: string; kind?: string };
 export type ImageService = { label: string; tier: string; hint: string; keyUrl: string; model: string };
 export type ImagesInfo = { services: Record<string, ImageService>; active: string | null; files: string[] };
 export type McpService = { name: string; label: string; what: string; url: string; site: string; plan: string; status: 'conectado' | 'falta-sesion' | 'no-agregado' | 'sin-claude'; detail: string; claudeEnabled: boolean; login: string };
@@ -375,7 +377,7 @@ export const api = {
 
   videos: () => req<VideosInfo>('GET', '/api/videos'),
   generateVideo: (prompt: string, service?: string, formato?: string) => req<{ file: string; url: string; service: string }>('POST', '/api/videos', { prompt, service, formato }),
-  checkAgents: () => req<{ checked: number; failed: number; results: CheckResult[] }>('POST', '/api/agents/check'),
+  checkAgents: () => req<{ checked: number; failed: number; resting?: number; results: CheckResult[] }>('POST', '/api/agents/check'),
   rescueAgents: () => req<{ changed: number; stillDemo: number; changes: { id: string; to: { provider: string; model: string } }[] }>('POST', '/api/agents/rescue'),
   undoRescue: () => req<{ restored: number }>('POST', '/api/agents/rescue/undo'),
   images: () => req<ImagesInfo>('GET', '/api/images'),

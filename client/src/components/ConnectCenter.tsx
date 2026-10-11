@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type CheckResult, TIER_LABEL, type ChatMessage, type Provider, type Settings, type Tier } from '../api';
 import { Markdown } from './Markdown';
 import { useOffice } from '../state';
+import { errorHelp } from '../errorHelp';
 
 // Qué IAs de la plantilla encajan con cada herramienta de línea de comandos.
 export const CLI_MATCH: Record<string, string[]> = {
@@ -70,7 +71,7 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
             const r = await api.checkAgents();
             setCheck({ busy: false, results: r.results });
             await refresh();
-            toast(r.failed ? `⚠️ ${r.failed} de ${r.checked} IAs están fallando: no recibirán trabajo hasta que vuelvan a responder` : `✅ Las ${r.checked} IAs conectadas responden`);
+            toast(r.failed ? `⚠️ ${r.failed} de ${r.checked} IAs están fallando: no recibirán trabajo hasta que vuelvan a responder` : r.resting ? `⏳ ${r.resting} IAs están sin cupo por ahora (vuelven solas); las demás responden` : `✅ Las ${r.checked} IAs conectadas responden`);
           } catch (err) {
             setCheck({ busy: false, results: null });
             toast(`❌ ${(err as Error).message}`);
@@ -86,10 +87,20 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
       {check.results && (
         <ul className="check-results">
           {check.results.map((r) => (
-            <li key={r.id} className={r.ok ? 'ok' : 'bad'}>
-              {r.ok ? '✅' : '❌'} <b>{r.name}</b> <span className="muted small">{r.provider} / {r.model}{r.ok ? ` · ${(r.ms / 1000).toFixed(1)} s` : ''}</span>
+            <li key={r.id} className={r.ok ? 'ok' : r.kind === 'cupo' ? 'rest' : 'bad'}>
+              {r.ok ? '✅' : r.kind === 'cupo' ? '⏳' : '❌'} <b>{r.name}</b> <span className="muted small">{r.provider} / {r.model}{r.ok ? ` · ${(r.ms / 1000).toFixed(1)} s` : ''}</span>
               {r.changedModel && <span className="small muted"> · cambió de {r.changedModel} (ya no existía)</span>}
-              {r.error && <div className="small danger">{r.error}</div>}
+              {r.error && (() => {
+                const h = errorHelp(r.kind, r.error);
+                const p = providers.find((x) => x.id === r.provider);
+                return (
+                  <div className="small">
+                    <span className={h.kind === 'cupo' ? 'warn' : 'danger'}>{h.icon} {h.title}</span>{h.fix ? ` — ${h.fix}` : ''}
+                    {p && (h.kind === 'clave' || h.kind === 'programa') && <> <button className="link" onClick={() => { setGroup(GROUPS.find((g) => g.tiers.includes(p.tier))!.id); setOpen(p.id); }}>{h.kind === 'clave' ? 'Revisar la clave' : 'Instalar'}</button></>}
+                    <details><summary className="muted">Detalle técnico</summary><code>{r.error}</code></details>
+                  </div>
+                );
+              })()}
             </li>
           ))}
         </ul>
