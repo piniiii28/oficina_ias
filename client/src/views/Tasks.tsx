@@ -119,16 +119,16 @@ function TaskDetail({ task, agent, onDelete, openNote, onFollow, parent, onOpen 
       {task.steps.map((s) => {
         const a = agent(s.agentId);
         return (
-          <details key={s.agentId} className="card step" open={task.steps.length <= 2 || s.status === 'working'}>
+          <details key={s.agentId} className={`card step step--${s.status}`} open={task.steps.length <= 2 || s.status === 'working'}>
             <summary>
               {a && <Chibi avatar={a.avatar} size={36} state={s.status === 'working' ? 'working' : s.status === 'error' ? 'error' : 'idle'} />}
               <div>
                 <strong>{a?.name || s.agentId}</strong> {a?.isHead && <span title="Jefe de departamento">👑</span>} <small className="muted">{s.review ? 'Revisión del jefe de departamento' : a?.role}</small>
                 <div className="small muted">{s.instruction}</div>
                 {s.dependsOn?.length ? <div className="small">↳ Trabajó sobre la entrega de {s.dependsOn.map((d) => agent(d)?.name || d).join(', ')}</div> : null}
-                {s.failed?.length ? (
+                {s.failed?.some((f) => !(s.status === 'error' && f.agentId === s.agentId)) ? (
                   <div className="small swaps">
-                    {s.failed.map((f, i) => {
+                    {s.failed!.filter((f) => !(s.status === 'error' && f.agentId === s.agentId)).map((f, i) => {
                       const h = errorHelp(f.kind, f.error);
                       const who = <b>{agent(f.agentId)?.name || f.agentId}</b>;
                       return (

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Chibi } from './Chibi';
 import { useOffice } from '../state';
+import { errorHelp } from '../errorHelp';
 
 const VERB: Record<string, string> = { thinking: 'está pensando', working: 'trabaja en', talking: 'dice', done: 'terminó', error: 'tuvo un error' };
 
@@ -21,7 +22,11 @@ export function Feed() {
             return (
               <li key={`${e.at}-${i}`} className={`feed-${e.status}`}>
                 {a && <Chibi avatar={a.avatar} size={24} />}
-                <span><strong>{a?.name || e.agentId}</strong> {VERB[e.status] || e.status}{e.message ? ':' : ''} <span className="muted">{e.message.slice(0, 140)}</span></span>
+                {e.status === 'error' ? (() => {
+                  // El error en palabras simples; el texto técnico queda en el globo.
+                  const h = errorHelp(null, e.message);
+                  return <span title={e.message}><strong>{a?.name || e.agentId}</strong> <span className="danger">{h.icon} {h.title.toLowerCase()}</span> <span className="muted">· {e.message.slice(0, 90)}</span></span>;
+                })() : <span><strong>{a?.name || e.agentId}</strong> {VERB[e.status] || e.status}{e.message ? ':' : ''} <span className="muted">{e.message.slice(0, 140)}</span></span>}
                 <time className="muted small">{new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
               </li>
             );
