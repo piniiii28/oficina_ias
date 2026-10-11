@@ -501,7 +501,8 @@ async function httpError(label, res) {
   }
   if (Array.isArray(data)) data = data[0] || {};
   const e = data.error;
-  const msg = String((typeof e === 'string' ? e : e?.message) || data.message || data.detail || raw.slice(0, 300) || res.statusText || 'error').trim();
+  // Cada proveedor lo dice distinto: {error:{message}}, {error:"…"}, {message}, {detail}, {errors:[{message}]} (Cloudflare)…
+  const msg = String((typeof e === 'string' ? e : e?.message) || data.message || data.detail || data.errors?.[0]?.message || raw.slice(0, 300) || res.statusText || 'error').trim();
   const err = new Error(`${label}: ${msg}${new RegExp(`\\b${res.status}\\b`).test(msg) ? '' : ` (${res.status})`}`);
   err.status = res.status;
   const ra = res.headers.get('retry-after');
