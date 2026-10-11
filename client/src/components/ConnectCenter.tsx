@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type CheckResult, TIER_LABEL, type ChatMessage, type Provider, type Settings, type Tier } from '../api';
 import { Markdown } from './Markdown';
 import { useOffice } from '../state';
-import { errorHelp } from '../errorHelp';
+import { clock, errorHelp } from '../errorHelp';
 
 // Qué IAs de la plantilla encajan con cada herramienta de línea de comandos.
 export const CLI_MATCH: Record<string, string[]> = {
@@ -131,6 +131,19 @@ export function ConnectCenter({ s, setS }: { s: Settings; setS: (s: Settings) =>
               </div>
               <small className="muted">{p.hint}</small>
               <small>{connected(p) ? <span className="ok">● Conectado{extra ? ` · ${extra + 1} cuentas` : ''}</span> : <span className="muted">○ Sin conectar</span>} · {users.length} {users.length === 1 ? 'IA' : 'IAs'}</small>
+              {connected(p) && (() => {
+                // Cómo le va hoy a este proveedor: sin cupo (y hasta cuándo) o con fallas.
+                const resting = users.filter((a) => a.health?.ok === false && a.health.quota);
+                const failing = users.filter((a) => a.health?.ok === false && !a.health.quota);
+                const back = resting.map((a) => a.health?.until || 0).filter(Boolean).sort((x, y) => x - y)[0];
+                if (!resting.length && !failing.length) return null;
+                return (
+                  <small className="provider-health">
+                    {resting.length > 0 && <span className="warn">⏳ {resting.length} sin cupo{back ? ` hasta las ${clock(back)}` : ''}</span>}
+                    {failing.length > 0 && <span className="danger" title={failing.map((a) => `${a.name}: ${a.health?.error || ''}`).join('\n')}>{errorHelp(failing[0].health?.kind, failing[0].health?.error || '').icon} {failing.length} con fallas ({errorHelp(failing[0].health?.kind, failing[0].health?.error || '').title.toLowerCase()})</span>}
+                  </small>
+                );
+              })()}
             </button>
           );
         })}

@@ -935,3 +935,6 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .card.step.step--working { border-left-color: var(--accent); }
 .card.step.step--error { border-left-color: var(--danger); }
 .card.step.step--pending { border-left-style: dashed; }
+.provider-card > .row.between { flex-wrap: nowrap; align-items: flex-start; gap: 8px; }
+.provider-card .tier { flex-shrink: 0; white-space: nowrap; }
+.provider-health { display: flex; flex-wrap: wrap; gap: 4px 10px; }
