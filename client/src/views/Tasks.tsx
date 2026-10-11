@@ -18,26 +18,44 @@ export const STATUS_ES: Record<string, string> = {
 /** 75000 → «1 min 15 s». */
 const fmtSecs = (ms: number) => (ms < 60000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
 
+const RUNNING = ['planning', 'working', 'synthesizing', 'reviewing'];
+const FILTERS: { id: string; label: string; test: (t: Task) => boolean }[] = [
+  { id: '', label: 'Todas', test: () => true },
+  { id: 'curso', label: '● En curso', test: (t) => RUNNING.includes(t.status) },
+  { id: 'espera', label: '⏳ En espera', test: (t) => t.status === 'waiting' },
+  { id: 'error', label: '✗ Con error', test: (t) => t.status === 'error' },
+  { id: 'listas', label: '✓ Listas', test: (t) => t.status === 'done' },
+];
+
 export function Tasks() {
-  const { tasks, agents, reloadTasks, openNote } = useOffice();
+  const { tasks: all, agents, reloadTasks, openNote } = useOffice();
+  const [filter, setFilter] = useState('');
+  const tasks = all.filter(FILTERS.find((f) => f.id === filter)!.test);
   const [openId, setOpenId] = useState<string | null>(null);
-  const current = tasks.find((t) => t.id === openId) || tasks[0];
+  const current = all.find((t) => t.id === openId) || tasks[0];
   // Al lanzar una continuación, se abre la nueva tarea (por su id, no por su padre:
   // la misma tarea puede tener varias continuaciones).
   const [followId, setFollowId] = useState<string | null>(null);
   useEffect(() => {
-    if (followId && tasks.some((t) => t.id === followId)) {
+    if (followId && all.some((t) => t.id === followId)) {
       setOpenId(followId);
       setFollowId(null);
     }
-  }, [tasks, followId]);
+  }, [all, followId]);
   const agent = (id: string) => agents.find((a) => a.id === id);
 
   return (
     <div className="tasks">
       <aside className="tasks-list">
         <Routines />
-        {!tasks.length && <p className="muted small center">Todavía no hay tareas. Ve a la Oficina y pídele algo al Cerebro Central.</p>}
+        {all.length > 0 && (
+          <div className="type-filter task-filter">
+            {FILTERS.filter((f) => !f.id || all.some(f.test)).map((f) => (
+              <button key={f.id} className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>{f.label} <small className="muted">{all.filter(f.test).length}</small></button>
+            ))}
+          </div>
+        )}
+        {!all.length ? <p className="muted small center">Todavía no hay tareas. Ve a la Oficina y pídele algo al Cerebro Central.</p> : !tasks.length ? <p className="muted small center">No hay tareas con ese filtro.</p> : null}
         {tasks.map((t) => (
           <button key={t.id} className={`task-item ${current?.id === t.id ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
             <strong>{t.title}</strong>
@@ -47,7 +65,7 @@ export function Tasks() {
         ))}
       </aside>
       {!current && <div className="empty">Aquí verás el plan del cerebro, el aporte de cada IA y la respuesta integrada.</div>}
-      {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} onFollow={setFollowId} parent={tasks.find((t) => t.id === current.parentId)} onOpen={setOpenId} />}
+      {current && <TaskDetail task={current} agent={agent} onDelete={async () => { await api.deleteTask(current.id); setOpenId(null); reloadTasks(); }} openNote={openNote} onFollow={(id) => { setFilter(''); setFollowId(id); }} parent={all.find((t) => t.id === current.parentId)} onOpen={(id) => { setFilter(''); setOpenId(id); }} />}
     </div>
   );
 }

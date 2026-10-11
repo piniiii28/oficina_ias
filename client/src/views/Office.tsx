@@ -8,6 +8,7 @@ import { Building } from '../building/Building';
 import { Feed } from '../components/Feed';
 import { MicButton } from '../components/Voice';
 import { PlanDiagram } from '../components/PlanDiagram';
+import { Markdown } from '../components/Markdown';
 import { useOffice, type Live } from '../state';
 import { clock } from '../errorHelp';
 import { fmtClock, useElapsed } from '../useElapsed';
@@ -61,7 +62,7 @@ function Desk({ agent, live, index, onClick, dim }: { agent: Agent; live?: Live;
 }
 
 function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
-  const { openNote } = useOffice();
+  const { openNote, toast } = useOffice();
   const name = (id: string) => agents.find((a) => a.id === id)?.name || id;
   const done = task.steps.filter((s) => s.status === 'done' || s.status === 'error').length;
   const pct = task.status === 'done' ? 100 : task.steps.length ? Math.round((done / task.steps.length) * 85) + 5 : 5;
@@ -87,6 +88,15 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
           </span>
         ))}
       </div>
+      {task.status === 'error' && task.final && !/^Cancelada/.test(task.final) && (
+        <div className="small task-error">
+          <Markdown text={task.final.length > 600 ? `${task.final.slice(0, 600)}…` : task.final} />
+          <button className="btn btn--primary small" onClick={async () => {
+            await api.runTask(task.prompt, task.steps.map((s) => s.agentId));
+            toast('🔁 Lo intento de nuevo (con las IAs que estén disponibles)');
+          }}>🔁 Reintentar</button>
+        </div>
+      )}
       {task.status === 'waiting' && (
         <p className="small warn">⏳ Ninguna IA tiene cupo ahora: se retoma sola{task.resume?.at ? ` a las ${clock(task.resume.at)}` : ''}.{' '}
           <button className="link small" onClick={() => api.resumeTask(task.id).catch((e) => alert(e.message))}>▶ Retomar ya</button>

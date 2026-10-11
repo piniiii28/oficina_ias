@@ -941,3 +941,7 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .board-empty { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin: 4px 0; }
 .state-filter { margin: 8px 0 4px; flex-wrap: wrap; }
 .state-filter button { flex: 0 0 auto; }
+.task-error { border-left: 3px solid var(--danger); padding: 4px 10px; margin: 6px 0; border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.task-error .markdown p, .task-error .markdown li { margin: 2px 0; }
+.task-filter { flex-wrap: wrap; margin: 6px 0; }
+.task-filter button { flex: 0 0 auto; font-size: 12px; }
