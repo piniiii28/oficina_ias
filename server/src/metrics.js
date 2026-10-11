@@ -4,7 +4,7 @@
 // - 🔥 Carga: las condiciones que empeoran sus respuestas (la IA no se estresa
 //   como una persona): mucho texto de entrada, varias tareas a la vez, errores
 //   recientes, memoria o chat muy largos.
-import { callModel, hasKey } from './providers.js';
+import { callModel, isLive } from './providers.js';
 
 const HOUR = 3600000;
 
@@ -137,7 +137,7 @@ export function loadOf(store, agent, busy = 0) {
 /** Quién verifica: Sonnet (QA) si está conectado; si no, el cerebro. */
 function verifierOf(store) {
   const s = store.data.settings;
-  const live = (a) => a && a.enabled && s.demoMode !== 'always' && hasKey(s, a.provider);
+  const live = (a) => a && a.enabled && isLive(s, a) && healthOf(store, a.id).ok;
   const qa = store.data.agents.find((a) => a.id === 'sonnet-qa');
   const brain = store.data.agents.find((a) => a.isBrain);
   return live(qa) ? qa : live(brain) ? brain : null;
@@ -187,7 +187,8 @@ const median = (xs) => {
 export function pickJudges(store, authorId, size = 2) {
   const s = store.data.settings;
   const author = store.data.agents.find((a) => a.id === authorId);
-  const live = store.data.agents.filter((a) => a.enabled && a.id !== authorId && s.demoMode !== 'always' && hasKey(s, a.provider));
+  // Solo jueces que responden de verdad y están sanos (sin fallas ni falta de cupo).
+  const live = store.data.agents.filter((a) => a.enabled && a.id !== authorId && isLive(s, a) && healthOf(store, a.id).ok);
   const given = new Map();
   for (const t of store.data.tasks.slice(0, 60)) for (const st of t.steps) for (const v of st.jury?.votes || []) given.set(v.judgeId, (given.get(v.judgeId) || 0) + 1);
   return live
