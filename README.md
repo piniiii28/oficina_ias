@@ -249,7 +249,7 @@ Y mientras trabajan, la oficina se cuida sola de los errores:
 - **Tarea en espera**: si ninguna IA pudo trabajar por algo pasajero (sin cupo, saturadas, sin conexión), la tarea queda **⏳ en espera** y **se retoma sola** cuando vuelve el cupo, sin perder lo que ya estaba hecho. También puedes darle **▶ Retomar ya**. Si la oficina se cierra a mitad de una tarea, al abrirla se retoma.
 - **El Cerebro tiene suplente**: si no está conectado o no tiene cupo, planifica e integra la mejor IA conectada (la Oficina dice quién). Si nadie puede integrar, se entregan los aportes tal cual: el trabajo del equipo no se pierde.
 - **Chat y reuniones**: si el motor de una IA falla (o está en demo), responde con el de otra IA conectada sin dejar de ser ella.
-- Cada proveedor gratis recibe **máximo 2 pedidos a la vez por cuenta**, para no agotar su límite por minuto, y si un proveedor se queda callado 2½ minutos se corta para que otra IA siga.
+- Cada proveedor gratis recibe **máximo 2 pedidos a la vez por cuenta**, para no agotar su límite por minuto, y si un proveedor se queda callado 4 minutos se corta para que otra IA siga.
 - Los errores se explican en palabras simples (🔑 clave, ⏳ cupo, 🧩 modelo, 📡 conexión…) con qué hacer, y cada IA tiene **🩺 Probar ahora** en su perfil.
 
 ## Undermind: artículos científicos

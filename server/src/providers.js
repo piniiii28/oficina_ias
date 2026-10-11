@@ -533,7 +533,7 @@ function watchdog(signal, ms, label) {
 }
 
 /** Cuánto esperar sin recibir nada: Ollama puede tardar en cargar el modelo. */
-const idleMs = (local) => Number(process.env.OFICINA_IDLE_MS) || (local ? 300000 : 150000);
+const idleMs = (local) => Number(process.env.OFICINA_IDLE_MS) || (local ? 300000 : 240000);
 
 /** Lee un cuerpo SSE ("data: {...}") y entrega cada evento JSON. */
 async function readSSE(res, onEvent, onChunk = () => {}) {
