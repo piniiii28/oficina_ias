@@ -112,6 +112,38 @@ function TaskProgress({ task, agents }: { task: Task; agents: Agent[] }) {
   );
 }
 
+/** Novedades de esta versión (se cierra y no vuelve a salir). */
+function WhatsNew() {
+  const KEY = 'oficina.novedades.fallas-v1';
+  const [open, setOpen] = useState(() => {
+    try {
+      return !localStorage.getItem(KEY);
+    } catch {
+      return false;
+    }
+  });
+  if (!open) return null;
+  return (
+    <div className="callout whats-new">
+      <strong>🆕 La oficina ahora se cuida sola de los errores de las IAs</strong>
+      <ul className="small">
+        <li>Si una IA falla o se queda sin cupo, <b>otra retoma su parte</b> (y ves a quién reemplazó).</li>
+        <li>Si ninguna tiene cupo, la tarea queda <b>⏳ en espera y sigue sola</b> cuando vuelve, sin perder lo hecho.</li>
+        <li>Los errores se explican con qué hacer; en Equipo puedes filtrar las que fallan y <b>🩺 probarlas</b>.</li>
+        <li>¿Algo raro? En Ajustes → Conectar las IAs, <b>📋 Copiar diagnóstico</b> y pégaselo a Claude.</li>
+      </ul>
+      <button className="link small" onClick={() => {
+        setOpen(false);
+        try {
+          localStorage.setItem(KEY, '1');
+        } catch {
+          /* sin almacenamiento local */
+        }
+      }}>Entendido</button>
+    </div>
+  );
+}
+
 /**
  * Estado del equipo de un vistazo: cuántas IAs responden, cuáles descansan
  * por falta de cupo (y hasta cuándo), cuáles fallan y cuántas siguen en demo.
@@ -313,6 +345,7 @@ export function Office() {
             </p>
           )}
           {liveCount > 0 && <TeamHealth agents={agents} />}
+          <WhatsNew />
           {latest && <TaskProgress task={latest} agents={agents} />}
         </div>
       </section>

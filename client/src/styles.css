@@ -946,3 +946,7 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .task-filter { flex-wrap: wrap; margin: 6px 0; }
 .task-filter button { flex: 0 0 auto; font-size: 12px; }
 .msg.pending { opacity: 0.75; border-style: dashed; }
+.whats-new { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+.whats-new ul { margin: 4px 0; padding-left: 18px; }
+.whats-new li { margin: 2px 0; }
+.whats-new .link { align-self: flex-start; }
