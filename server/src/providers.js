@@ -602,7 +602,8 @@ async function streamOpenAI(provider, base, headers, model, system, messages, on
       onDelta(d);
     }
   }, dog.alive);
-  return provider === 'minimax' ? text.replace(/<think>[\s\S]*?<\/think>\s*/g, '') : text;
+  // Modelos que razonan en voz alta (DeepSeek R1, Qwen 3, MiniMax…): el razonamiento no va en la respuesta.
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
 }
 
 async function callGemini(apiKey, model, system, messages, onDelta, signal) {

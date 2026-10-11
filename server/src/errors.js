@@ -18,11 +18,12 @@ const isAuthError = (msg) => /\b401\b|\b403\b|unauthori[sz]ed|forbidden|invalid.
 const isNetworkError = (msg) => /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|EHOSTUNREACH|ENETUNREACH|socket hang up|fetch failed|network/i.test(String(msg));
 const isMissingProgram = (msg) => /no encontré el comando|is not recognized|no se reconoce|command not found|ENOENT/i.test(String(msg));
 const isTimeout = (msg) => /no respondió en|dejó de responder|timed? ?out|ETIMEDOUT|tard[oó] demasiado/i.test(String(msg));
+const isEmpty = (msg) => /respondió vacío|empty (response|completion)|no devolvió texto/i.test(String(msg));
 const isServerError = (msg) => /\b50[0-9]\b|internal server error|bad gateway|gateway timeout/i.test(String(msg));
 
 /**
  * Tipo de error: 'cancelada' | 'cupo' | 'clave' | 'modelo' | 'saturado' |
- * 'red' | 'tiempo' | 'servidor' | 'programa' | 'otro'.
+ * 'red' | 'tiempo' | 'servidor' | 'vacio' | 'programa' | 'otro'.
  */
 export function classifyError(msg) {
   const m = String(msg || '');
@@ -32,6 +33,7 @@ export function classifyError(msg) {
   if (isQuotaError(m)) return 'cupo';
   if (isAuthError(m)) return 'clave';
   if (isOverloaded(m)) return 'saturado';
+  if (isEmpty(m)) return 'vacio';
   if (isMissingProgram(m)) return 'programa';
   if (isTimeout(m)) return 'tiempo';
   if (isNetworkError(m)) return 'red';
@@ -48,6 +50,7 @@ export const ERROR_HELP = {
   red: { icon: '📡', title: 'Sin conexión', fix: 'No se pudo llegar al proveedor: revisa internet, el firewall o que el programa (Ollama, la CLI o el nodo) esté abierto.' },
   tiempo: { icon: '🐢', title: 'Tardó demasiado', fix: 'La IA no respondió a tiempo. Prueba con una tarea más corta o con un modelo más rápido.' },
   servidor: { icon: '🛠️', title: 'Falla del proveedor', fix: 'El servidor del proveedor tuvo un error. Suele arreglarse solo; se vuelve a intentar más tarde.' },
+  vacio: { icon: '🫥', title: 'Respuesta vacía', fix: 'El modelo respondió sin texto (pasa con algunos modelos de razonamiento). Si se repite, cámbialo por otro en el perfil de la IA (⚙️).' },
   programa: { icon: '🧰', title: 'Programa no instalado', fix: 'Falta instalar la herramienta de esta IA (por ejemplo la CLI de Claude, Codex o Gemini). Instálala desde Ajustes → Conectar las IAs.' },
   cancelada: { icon: '✖', title: 'Cancelada', fix: '' },
   otro: { icon: '⚠️', title: 'Error', fix: 'Prueba la conexión de esta IA en Ajustes → Conectar las IAs (🩺 Revisar todas).' },

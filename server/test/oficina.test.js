@@ -2460,6 +2460,11 @@ async function fakeModels(rules) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: { message: 'Internal error' } }));
       }
+      if (rule === 'vacio' || rule === 'piensa') {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        const content = rule === 'piensa' ? '<think>pensando en voz alta…</think>\n\nRespuesta limpia' : '';
+        return res.end(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`);
+      }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `Respuesta de ${model}` } }] })}\n\ndata: [DONE]\n\n`);
     });
@@ -2707,6 +2712,25 @@ test('probar una sola IA desde su perfil', async () => {
       assert.equal(r.status, 400, 'en demo no hay nada que probar');
       assert.match(r.data.error, /modo demo/);
     });
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});
+
+test('respuesta vacía: otra IA retoma el paso; el razonamiento <think> no queda en la respuesta', async () => {
+  const fake = await fakeModels({ mudo: 'vacio', pensador: 'piensa' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'mudo' },
+    perplexity: { provider: 'ollama', model: 'pensador' },
+  });
+  try {
+    const t = await runTask(store, new Notes(store), { prompt: 'Hola', agentIds: ['chatgpt'], saveNotes: false });
+    assert.equal(t.status, 'done', t.final);
+    assert.equal(t.steps[0].agentId, 'perplexity');
+    assert.equal(t.steps[0].failed[0].kind, 'vacio');
+    assert.equal(t.steps[0].output, 'Respuesta limpia');
   } finally {
     restore();
     fake.srv.close();

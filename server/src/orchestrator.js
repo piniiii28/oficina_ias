@@ -401,23 +401,30 @@ async function executeTask(store, notes, task, run) {
               content: `${replacing ? `(Reemplazas a ${replacing.name}, ${replacing.role}, que no pudo hacer esta parte.)\n\n` : ''}${step.instruction}\n\n${inputs ? `Trabajo previo de tus compañeros (úsalo y mejóralo):\n\n${inputs}\n\n` : ''}Contexto completo de la tarea: ${run.background}${prompt}${run.context}`,
             }],
           }, { taskKey: `task:${task.id}:${agent.id}`, allowDemoDelegation: true });
+          // Algunos modelos (de razonamiento, sobre todo) a veces devuelven la respuesta vacía.
+          if (!res.simulated && !String(res.text || '').trim()) throw new Error(`${agent.name} respondió vacío: el modelo no devolvió texto`);
           if (res.assistants) step.assistants = res.assistants;
           step.output = res.text;
           step.simulated = res.simulated;
           step.status = 'done';
           remember(store, agent, `Tarea "${task.title}": ${step.instruction}`);
+          onDelta.end();
           // Opcional: un verificador le pone nota al aporte (alimenta el medidor de acierto).
-          if (settings.jury?.enabled && !signal.aborted) {
-            // Jurado: otras IAs califican el aporte a ciegas.
-            agentStatus(agent.id, 'thinking', 'El jurado está revisando mi aporte…');
-            const j = await juryStep(store, task, step, settings.jury.size || 2);
-            if (j) step.jury = j;
-          } else if (settings.verifySteps && !signal.aborted) {
-            const v = await verifyStep(store, task, step);
-            if (v) step.verify = v;
+          // Si el jurado falla, el aporte sigue siendo válido.
+          try {
+            if (settings.jury?.enabled && !signal.aborted) {
+              // Jurado: otras IAs califican el aporte a ciegas.
+              agentStatus(agent.id, 'thinking', 'El jurado está revisando mi aporte…');
+              const j = await juryStep(store, task, step, settings.jury.size || 2);
+              if (j) step.jury = j;
+            } else if (settings.verifySteps && !signal.aborted) {
+              const v = await verifyStep(store, task, step);
+              if (v) step.verify = v;
+            }
+          } catch (e) {
+            console.warn('[jurado]', e.message);
           }
           agentStatus(agent.id, 'done', res.text.replace(/[#*>`]/g, '').slice(0, 140));
-          onDelta.end();
           break;
         } catch (err) {
           onDelta.end();
@@ -610,6 +617,7 @@ async function synthesize(store, task, { ok, run, effort, signal, nameOf }) {
       });
       synthDelta.end();
       if (r.simulated) return { text: demoSynthesis(task.prompt, ok, nameOf), simulated: true, by: who.id };
+      if (!String(r.text || '').trim()) throw new Error(`${who.name} respondió vacío: el modelo no devolvió texto`);
       return { text: r.text, simulated: false, by: who.id };
     } catch (err) {
       synthDelta.end();
@@ -739,11 +747,15 @@ export async function chatWithAgent(store, agentId, message) {
   history.push({ role: 'user', content: message, at: new Date().toISOString() });
   agentStatus(agentId, 'thinking', 'Pensando…');
   // Con su propio motor o, si no puede, con el de otra IA conectada (sigue siendo ella: su rol y su memoria).
-  const ask = (engine, onDelta) => (engine === agent ? callWithAssistants : callWithAccess)(store, {
-    provider: engine.provider, model: engine.model, agent: engine, onDelta,
-    system: buildSystem(agent) + (engine === agent ? '' : `\n\n(Hoy respondes con el motor de ${engine.name} porque el tuyo no está disponible; sigues siendo ${agent.name}, con tu rol.)`),
-    messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
-  });
+  const ask = async (engine, onDelta) => {
+    const r = await (engine === agent ? callWithAssistants : callWithAccess)(store, {
+      provider: engine.provider, model: engine.model, agent: engine, onDelta,
+      system: buildSystem(agent) + (engine === agent ? '' : `\n\n(Hoy respondes con el motor de ${engine.name} porque el tuyo no está disponible; sigues siendo ${agent.name}, con tu rol.)`),
+      messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
+    });
+    if (!r.simulated && !String(r.text || '').trim()) throw new Error(`${engine.name} respondió vacío: el modelo no devolvió texto`);
+    return r;
+  };
   let onDelta = streamer(`chat:${agentId}`);
   let res;
   let via = null;

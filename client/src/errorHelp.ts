@@ -1,5 +1,5 @@
 // Errores de las IAs explicados en palabras simples (el servidor manda el tipo).
-export type ErrorKind = 'cupo' | 'clave' | 'modelo' | 'saturado' | 'red' | 'tiempo' | 'servidor' | 'programa' | 'cancelada' | 'otro';
+export type ErrorKind = 'cupo' | 'clave' | 'modelo' | 'saturado' | 'red' | 'tiempo' | 'servidor' | 'vacio' | 'programa' | 'cancelada' | 'otro';
 
 export const ERROR_HELP: Record<ErrorKind, { icon: string; title: string; fix: string }> = {
   cupo: { icon: '⏳', title: 'Sin cupo por ahora', fix: 'Se acabó el cupo gratis de este proveedor (por minuto o por día). La oficina le pasa el trabajo a otra IA y vuelve a probar con esta más tarde. Si pasa seguido, agrega otra cuenta o pásala a otro proveedor gratis.' },
@@ -9,6 +9,7 @@ export const ERROR_HELP: Record<ErrorKind, { icon: string; title: string; fix: s
   red: { icon: '📡', title: 'Sin conexión', fix: 'No se pudo llegar al proveedor: revisa internet, el firewall o que el programa (Ollama, la CLI o el nodo) esté abierto.' },
   tiempo: { icon: '🐢', title: 'Tardó demasiado', fix: 'La IA no respondió a tiempo. Prueba con una tarea más corta o con un modelo más rápido.' },
   servidor: { icon: '🛠️', title: 'Falla del proveedor', fix: 'El servidor del proveedor tuvo un error. Suele arreglarse solo; se vuelve a intentar más tarde.' },
+  vacio: { icon: '🫥', title: 'Respuesta vacía', fix: 'El modelo respondió sin texto (pasa con algunos modelos de razonamiento). Si se repite, cámbialo por otro en el perfil de la IA (⚙️).' },
   programa: { icon: '🧰', title: 'Programa no instalado', fix: 'Falta instalar la herramienta de esta IA (por ejemplo la CLI de Claude, Codex o Gemini). Instálala desde Ajustes → Conectar las IAs.' },
   cancelada: { icon: '✖', title: 'Cancelada', fix: '' },
   otro: { icon: '⚠️', title: 'Error', fix: 'Prueba la conexión de esta IA en Ajustes → Conectar las IAs (🩺 Revisar todas).' },
@@ -23,7 +24,8 @@ export function errorHelp(kind?: string | null, message = '') {
       : /no longer available|does not exist|not found|retired|decommissioned|invalid model/i.test(m) ? 'modelo'
         : /\b401\b|\b403\b|unauthori|invalid.{0,20}(api.?key|token)|no es válida/i.test(m) ? 'clave'
           : /overloaded|high demand|\b503\b|unavailable/i.test(m) ? 'saturado'
-            : /no respondió|timeout|timed out/i.test(m) ? 'tiempo'
+            : /no respondió|dejó de responder|timeout|timed out/i.test(m) ? 'tiempo'
+              : /respondió vacío/i.test(m) ? 'vacio'
               : /ECONNREFUSED|ENOTFOUND|fetch failed|network/i.test(m) ? 'red'
                 : 'otro';
   return { kind: k, ...ERROR_HELP[k] };
