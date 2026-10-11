@@ -377,6 +377,7 @@ export const api = {
 
   videos: () => req<VideosInfo>('GET', '/api/videos'),
   generateVideo: (prompt: string, service?: string, formato?: string) => req<{ file: string; url: string; service: string }>('POST', '/api/videos', { prompt, service, formato }),
+  checkAgent: (id: string) => req<CheckResult & { health: Agent['health'] }>('POST', `/api/agents/${id}/check`),
   checkAgents: () => req<{ checked: number; failed: number; resting?: number; results: CheckResult[] }>('POST', '/api/agents/check'),
   rescueAgents: () => req<{ changed: number; stillDemo: number; changes: { id: string; to: { provider: string; model: string } }[] }>('POST', '/api/agents/rescue'),
   undoRescue: () => req<{ restored: number }>('POST', '/api/agents/rescue/undo'),

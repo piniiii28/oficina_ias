@@ -921,3 +921,5 @@ kbd { font: 700 10px ui-monospace, monospace; background: var(--panel-2); border
 .th-actions { display: inline-flex; gap: 10px; margin-left: auto; }
 @media (max-width: 520px) { .th-actions { margin-left: 0; width: 100%; } }
 .acting { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.agent-health { margin: 4px 0; }
+.agent-health p { margin: 2px 0; }

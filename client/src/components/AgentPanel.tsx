@@ -6,7 +6,7 @@ import { Chibi, ACCESSORIES, COSTUMES, EYE_STYLES, HAIR_STYLES } from './Chibi';
 import { Markdown } from './Markdown';
 import { MicButton, SpeakButton } from './Voice';
 import { useOffice } from '../state';
-import { errorHelp } from '../errorHelp';
+import { clock, errorHelp } from '../errorHelp';
 
 type Tab = 'chat' | 'entrenamiento' | 'asistentes' | 'memoria' | 'perfil';
 
@@ -30,6 +30,7 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
             <p className="small">
               <span className={`dot ${agent.live ? 'dot--live' : 'dot--demo'}`} /> {agent.live ? 'Conectada' : 'Modo demo'} · {agent.provider} / <code>{agent.model || '—'}</code>
             </p>
+            <AgentHealth agent={agent} />
             <Meters agentId={agent.id} full />
             <p className="small muted">{status} · {agent.stats?.tasks || 0} trabajos · {agent.knowledge?.length || 0} {agent.knowledge?.length === 1 ? 'lección' : 'lecciones'}</p>
           </div>
@@ -50,6 +51,42 @@ export function AgentPanel({ agent, onClose, status }: { agent: Agent; onClose: 
           {tab === 'perfil' && <ProfileTab agent={agent} onDeleted={onClose} />}
         </div>
       </aside>
+    </div>
+  );
+}
+
+/** ¿Está funcionando? Si no, qué pasó y qué hacer; y un botón para probarla ya. */
+function AgentHealth({ agent }: { agent: Agent }) {
+  const { reloadAgents } = useOffice();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const h = agent.health;
+  const bad = agent.live && h?.ok === false;
+  const help = bad ? errorHelp(h?.kind, h?.error || '') : null;
+  return (
+    <div className="agent-health small">
+      {bad && help && (
+        <p className={h?.quota ? 'warn' : 'danger'} title={h?.error}>
+          {h?.quota ? `⏳ Sin cupo: descansa${h.until ? ` hasta las ${clock(h.until)}` : ''} y luego vuelve sola.` : `${help.icon} ${help.title}: no recibe trabajo hasta que vuelva a responder.`}
+          {!h?.quota && help.fix ? <span className="muted"> {help.fix}</span> : null}
+        </p>
+      )}
+      {agent.live && (
+        <button className="link small" disabled={busy} onClick={async () => {
+          setBusy(true);
+          setResult(null);
+          try {
+            const r = await api.checkAgent(agent.id);
+            setResult(r.ok ? { ok: true, text: `✅ Responde (${(r.ms / 1000).toFixed(1)} s)${r.changedModel ? ` · pasó de ${r.changedModel} a ${r.model}` : ''}` } : { ok: false, text: `${errorHelp(r.kind, r.error).icon} ${errorHelp(r.kind, r.error).title}: ${r.error}` });
+            await reloadAgents();
+          } catch (e) {
+            setResult({ ok: false, text: (e as Error).message });
+          } finally {
+            setBusy(false);
+          }
+        }}>{busy ? '🩺 Probando…' : '🩺 Probar ahora'}</button>
+      )}
+      {result && <span className={result.ok ? 'ok' : 'danger'}> {result.text}</span>}
     </div>
   );
 }

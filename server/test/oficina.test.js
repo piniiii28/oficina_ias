@@ -2680,3 +2680,30 @@ test('cupo por segundos: espera y reintenta; máximo 2 llamadas a la vez por cue
     srv.close();
   }
 });
+
+test('probar una sola IA desde su perfil', async () => {
+  const fake = await fakeModels({ 'sin-cupo': 'cupo' });
+  const { store, restore } = await liveOffice(fake.url, {
+    cerebro: { provider: 'groq', model: 'cerebro' },
+    chatgpt: { provider: 'groq', model: 'sin-cupo' },
+    perplexity: { provider: 'ollama', model: 'bien' },
+    lexi: { provider: 'anthropic', model: 'claude-sonnet-5' },
+  });
+  try {
+    await withApp(store, async (call) => {
+      let r = await call('POST', '/api/agents/perplexity/check');
+      assert.equal(r.status, 200);
+      assert.equal(r.data.ok, true);
+      r = await call('POST', '/api/agents/chatgpt/check');
+      assert.equal(r.data.ok, false);
+      assert.equal(r.data.kind, 'cupo');
+      assert.equal(r.data.health.quota, true);
+      r = await call('POST', '/api/agents/lexi/check');
+      assert.equal(r.status, 400, 'en demo no hay nada que probar');
+      assert.match(r.data.error, /modo demo/);
+    });
+  } finally {
+    restore();
+    fake.srv.close();
+  }
+});

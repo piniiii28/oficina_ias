@@ -945,28 +945,39 @@ export function createApp(store) {
   });
   // Revisar todas las IAs conectadas: una pregunta cortita a cada una. Las que
   // fallan quedan «con fallas» y no reciben trabajo hasta que vuelvan a responder.
+  /** Prueba una IA con una pregunta corta (dos intentos: una segunda falla la deja «con fallas»). */
+  const checkAgent = async (a) => {
+    const s = store.data.settings;
+    const t0 = Date.now();
+    const before = a.model;
+    try {
+      await callModel(s, {
+        provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(90000),
+        system: 'Prueba de conexión. Responde solo con la palabra OK.', messages: [{ role: 'user', content: 'Di OK' }],
+      });
+      return { id: a.id, name: a.name, provider: a.provider, model: a.model, ok: true, ms: Date.now() - t0, changedModel: before !== a.model ? before : undefined };
+    } catch (err) {
+      const again = await callModel(s, { provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(60000), system: 'Responde OK.', messages: [{ role: 'user', content: 'OK' }] }).then(() => null, (e) => e);
+      return { id: a.id, name: a.name, provider: a.provider, model: a.model, ok: !again, ms: Date.now() - t0, error: again ? String(again.message).slice(0, 240) : undefined, kind: again ? classifyError(again.message) : undefined, firstError: again ? undefined : String(err.message).slice(0, 160) };
+    }
+  };
+  // Probar una sola IA (desde su perfil).
+  app.post('/api/agents/:id/check', async (req, res) => {
+    const a = agentById(req.params.id);
+    if (!a) return res.status(404).json({ error: 'No existe' });
+    if (!isLive(store.data.settings, a)) return res.status(400).json({ error: `${a.name} está en modo demo: conecta su proveedor (${PROVIDERS[a.provider]?.label || a.provider}) en Ajustes → Conectar las IAs.` });
+    const r = await checkAgent(a);
+    store.save();
+    bus.emit('event', { type: 'agent', agentId: a.id, status: r.ok ? 'done' : 'error', message: r.ok ? `Responde (${(r.ms / 1000).toFixed(1)} s)` : r.error, at: Date.now() });
+    res.json({ ...r, health: healthOf(store, a.id) });
+  });
   app.post('/api/agents/check', async (_req, res) => {
     const s = store.data.settings;
     const list = store.data.agents.filter((a) => a.enabled !== false && isLive(s, a));
     const results = [];
     let i = 0;
     const worker = async () => {
-      while (i < list.length) {
-        const a = list[i++];
-        const t0 = Date.now();
-        const before = a.model;
-        try {
-          await callModel(s, {
-            provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(90000),
-            system: 'Prueba de conexión. Responde solo con la palabra OK.', messages: [{ role: 'user', content: 'Di OK' }],
-          });
-          results.push({ id: a.id, name: a.name, provider: a.provider, model: a.model, ok: true, ms: Date.now() - t0, changedModel: before !== a.model ? before : undefined });
-        } catch (err) {
-          // Una segunda falla la deja «con fallas» (healthOf).
-          const again = await callModel(s, { provider: a.provider, model: a.model, agent: a, effort: 'low', signal: AbortSignal.timeout(60000), system: 'Responde OK.', messages: [{ role: 'user', content: 'OK' }] }).then(() => null, (e) => e);
-          results.push({ id: a.id, name: a.name, provider: a.provider, model: a.model, ok: !again, ms: Date.now() - t0, error: again ? String(again.message).slice(0, 240) : undefined, kind: again ? classifyError(again.message) : undefined, firstError: again ? undefined : String(err.message).slice(0, 160) });
-        }
-      }
+      while (i < list.length) results.push(await checkAgent(list[i++]));
     };
     await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
     store.save();
